@@ -1,0 +1,116 @@
+# Manifest for controlled imports from NCAR/MPAS-Workflow.
+#
+# Status values:
+#   reference_only  - documented but not copied into active runtime
+#   preserve        - scientific template should be preserved with provenance
+#   rewrite         - behavior should be reimplemented in Bash/Python
+#   defer           - not required for initial 3DVar-FGAT milestone
+#   reject          - not appropriate for MONAN-JEDI-WORKFLOW active runtime
+
+upstream:
+  repository: NCAR/MPAS-Workflow
+  default_branch: develop
+  local_target_project: MONAN-JEDI-WORKFLOW
+
+imports:
+  driver:
+    - upstream_path: Run.py
+      target_path: workflow/driver/
+      status: rewrite
+      rationale: >-
+        Useful as architecture reference, but contains NCAR/Derecho assumptions and generates
+        C-shell runtime artifacts. MONAN should eventually provide a cleaner driver interface.
+
+  python_initialization:
+    - upstream_path: initialize/
+      target_path: workflow/initialize_reference/
+      status: reference_only
+      rationale: >-
+        Contains the core mapping between scenario YAML nodes and Cylc task generation. Audit before
+        copying because it is tightly coupled to the original suite and config/auto C-shell files.
+
+  mpas_configuration:
+    - upstream_path: config/mpas/geovars.yaml
+      target_path: configs/mpas/geovars.yaml
+      status: preserve
+      rationale: >-
+        Scientific MPAS-JEDI geovariable configuration. Must be validated against the selected
+        mpas-bundle version before operational use.
+    - upstream_path: config/mpas/variables.csh
+      target_path: configs/mpas/variables.yaml
+      status: rewrite
+      rationale: >-
+        Scientific variable lists are essential, but shell-variable encoding should be converted to YAML
+        after validating substitution semantics.
+    - upstream_path: config/mpas/forecast/
+      target_path: configs/mpas/forecast/
+      status: preserve
+      rationale: Forecast namelist and stream templates are required for cycling experiments.
+    - upstream_path: config/mpas/variational/
+      target_path: configs/mpas/variational/
+      status: preserve
+      rationale: Required for 3DVar/FGAT variational runs.
+
+  jedi_configuration:
+    - upstream_path: config/jedi/applications/3dvar.yaml
+      target_path: configs/jedi/applications/3dvar.yaml
+      status: preserve
+      rationale: Baseline variational template for initial 3DVar experiments.
+    - upstream_path: config/jedi/applications/hofx.yaml
+      target_path: configs/jedi/applications/hofx.yaml
+      status: defer
+      rationale: Important for verification but not mandatory for the first variational smoke run.
+    - upstream_path: config/jedi/ObsPlugs/variational/
+      target_path: configs/jedi/obs_plugs/variational/
+      status: preserve
+      rationale: Observation stubs are required to build real JEDI observers.
+    - upstream_path: config/jedi/ObsPlugs/hofx/
+      target_path: configs/jedi/obs_plugs/hofx/
+      status: defer
+      rationale: Preserve after HofX milestone is enabled.
+
+  scenario_defaults:
+    - upstream_path: scenarios/defaults/model.yaml
+      target_path: configs/mpas/resources/model.yaml
+      status: preserve
+      rationale: Mesh/model resource settings are scientifically relevant; site paths must be separated.
+    - upstream_path: scenarios/defaults/forecast.yaml
+      target_path: configs/templates/resources/forecast.yaml
+      status: preserve
+      rationale: Useful for initial PBS sizing, but NCAR resource assumptions must be replaced for JACI.
+    - upstream_path: scenarios/defaults/variational.yaml
+      target_path: configs/templates/resources/variational.yaml
+      status: preserve
+      rationale: Contains covariance, localization and job-sizing rules; split scientific and site layers.
+    - upstream_path: scenarios/defaults/observations.yaml
+      target_path: configs/templates/resources/observations.yaml
+      status: preserve
+      rationale: Contains IODA naming and observation grouping rules; replace NCAR paths.
+
+  task_scripts:
+    - upstream_path: bin/PrepJEDI.csh
+      target_path: workflow/tasks/prep_jedi.sh
+      status: rewrite
+      rationale: Critical task. Convert only after creating equivalence tests.
+    - upstream_path: bin/Forecast.csh
+      target_path: workflow/tasks/forecast.sh
+      status: rewrite
+      rationale: Critical runtime wrapper for MPAS-Atmosphere.
+    - upstream_path: bin/Variational.csh
+      target_path: workflow/tasks/variational.sh
+      status: rewrite
+      rationale: Critical runtime wrapper for mpasjedi_variational.
+    - upstream_path: bin/HofX.csh
+      target_path: workflow/tasks/hofx.sh
+      status: defer
+      rationale: Add after initial variational cycle is stable.
+
+  deprecated_or_site_specific:
+    - upstream_path: env-setup/
+      target_path: configs/sites/ncar/
+      status: reference_only
+      rationale: Keep as NCAR reference, not active JACI runtime.
+    - upstream_path: submit.csh
+      target_path: scripts/run/submit_cylc.sh
+      status: rewrite
+      rationale: Replace with Bash wrapper and site-controlled Cylc platform.
