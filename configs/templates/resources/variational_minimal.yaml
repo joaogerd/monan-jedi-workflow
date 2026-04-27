@@ -1,0 +1,65 @@
+# Minimal variational resource template for MONAN-JEDI-WORKFLOW.
+#
+# Derived from the structure of NCAR/MPAS-Workflow scenarios/defaults/variational.yaml,
+# but intentionally stripped of active NCAR/Derecho `/glade` paths.
+#
+# The upstream file contains three major groups:
+#   1. ensemble forecast resources for EnVar/hybrid workflows;
+#   2. localization and background covariance resources;
+#   3. job-sizing resources for variational tasks.
+#
+# For the initial JACI milestone, only deterministic 3DVar/3DVar-FGAT is targeted.
+# Ensemble and hybrid resources are deferred.
+
+variational:
+  covariance:
+    # Control variables used by the upstream BUMP/SABER configuration.
+    # Validate against the selected MPAS-JEDI bundle and MONAN variable naming.
+    bumpCovControlVariables:
+      - air_horizontal_streamfunction
+      - air_horizontal_velocity_potential
+      - air_temperature
+      - water_vapor_mixing_ratio_wrt_moist_air
+      - air_pressure_at_surface
+
+    # File prefixes are kept generic; concrete directories must come from
+    # configs/sites/jaci/site.env or an experiment resource file.
+    bumpCovPrefix: mpas
+    bumpCovVBalPrefix: mpas
+
+    # JACI resources must fill these values before a real run.
+    resources:
+      jaci_placeholder:
+        bumpCovDir: ${MONAN_DATA_ROOT}/covariance/NICAS
+        bumpCovStdDevFile: ${MONAN_DATA_ROOT}/covariance/mpas.stddev.nc
+        bumpCovVBalDir: ${MONAN_DATA_ROOT}/covariance/VBAL
+
+  job:
+    defaults:
+      baseSeconds: 1500
+      secondsPerEnVarMember: 0
+      nodes: 1
+      PEPerNode: 128
+      memory: 235GB
+      retry: '0*PT30S'
+
+    # Initial JACI placeholders. These are not validated performance settings.
+    jaci:
+      120km:
+        3dvar:
+          nodes: 1
+          PEPerNode: 128
+          memory: 235GB
+          baseSeconds: 300
+      60km:
+        3dvar:
+          nodes: 2
+          PEPerNode: 128
+          memory: 235GB
+          baseSeconds: 600
+      30km:
+        3dvar:
+          nodes: 4
+          PEPerNode: 128
+          memory: 235GB
+          baseSeconds: 1500
