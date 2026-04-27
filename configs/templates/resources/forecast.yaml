@@ -1,0 +1,56 @@
+# Source: NCAR/MPAS-Workflow scenarios/defaults/forecast.yaml
+# Upstream branch audited: develop
+# Upstream blob SHA at import: 278b2324955a74cc45bb69ddc2d4587cbac849b7
+#
+# These are upstream forecast job-sizing defaults. They are useful as a starting point,
+# but must not be treated as validated JACI resource requests.
+#
+# JACI production settings should be defined through a site-specific resource layer.
+
+forecast:
+  # resource requirements (used for both Forecast and ExtendedForecast)
+  job:
+    defaults:
+      nodes: 1
+      PEPerNode: 128
+      baseSeconds: 60
+      secondsPerForecastHR: 500
+
+      # cylc retry string
+      retry: '0*PT30S'
+
+    #{{outerMesh}}:
+    #  baseSeconds: int
+    #  secondsPerForecastHR: int
+    #  nodes: int
+    #  PEPerNode: int
+    60-3km:
+      nodes: 4
+      PEPerNode: 128
+      baseSeconds: 60
+      secondsPerForecastHR: 340
+    15-3km:
+      nodes: 16
+      PEPerNode: 128
+      baseSeconds: 360
+      secondsPerForecastHR: 600
+    15km:
+      nodes: 4
+      PEPerNode: 128
+      baseSeconds: 60
+      secondsPerForecastHR: 240
+    30km:
+      nodes: 2
+      PEPerNode: 128
+      baseSeconds: 60
+      secondsPerForecastHR: 240
+    60km:
+      nodes: 1
+      PEPerNode: 128
+      baseSeconds: 60
+      secondsPerForecastHR: 70
+    120km:
+      nodes: 1
+      PEPerNode: 128
+      baseSeconds: 60
+      secondsPerForecastHR: 30

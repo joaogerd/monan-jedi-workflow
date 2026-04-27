@@ -1,10 +1,93 @@
-# Placeholder for migrated upstream config/jedi/applications/3dvar.yaml.
-# Keep this file synchronized with the selected MPAS-JEDI version.
+# Source: NCAR/MPAS-Workflow config/jedi/applications/3dvar.yaml
+# Upstream branch audited: develop
+# Upstream blob SHA at import: 834c05c436342b33c5a5dea8eab67de711357639
 #
-# The upstream template contains placeholders for:
-# - windowBegin/windowLength
-# - state and analysis variables
-# - SABER/BUMP covariance files
-# - observers
+# This template is preserved as a scientific JEDI-MPAS baseline.
+# It still contains upstream MPAS-Workflow placeholders such as {{windowBegin}},
+# {{AnalysisVariables}}, {{Observers}}, and SABER/BUMP placeholders.
 #
-# Import the exact upstream template before first scientific run.
+# Do not treat this file as directly executable until the MONAN template renderer
+# and JACI site resources are validated.
+
+# ObsAnchors and ObsErrorAnchors are automatically prepended above this line
+_iteration: &iterationConfig
+  geometry:
+    nml_file: {{InnerNamelistFile}}
+    streams_file: {{InnerStreamsFile}}{{StreamsFileMember}}
+    deallocate non-da fields: true
+  gradient norm reduction: 1e-3
+output:
+  filename: {{anStateDir}}{{MemberDir}}/{{anStatePrefix}}.$Y-$M-$D_$h.$m.$s.nc
+  stream name: analysis
+variational:
+  minimizer:
+{{VariationalMinimizer}}
+  iterations:
+{{VariationalIterations}}
+final:
+  diagnostics:
+    departures: oman
+cost function:
+  cost type: 3D-Var
+  time window:
+    begin: {{windowBegin}}
+    length: {{windowLength}}
+  geometry:
+    nml_file: {{OuterNamelistFile}}
+    streams_file: {{OuterStreamsFile}}{{StreamsFileMember}}
+    deallocate non-da fields: true
+  analysis variables: &incvars [{{AnalysisVariables}}]
+  background:
+    state variables: [{{StateVariables}}]
+    filename: {{bgStateDir}}{{MemberDir}}/{{bgStatePrefix}}.{{thisMPASFileDate}}.nc
+    date: &analysisDate {{thisISO8601Date}}
+  background error:
+    covariance model: SABER
+    no outer loop update: true
+    saber central block:
+      saber block name: BUMP_NICAS
+      active variables: &ctlvars [{{bumpCovControlVariables}}]
+      read:
+        io:
+          data directory: {{bumpCovDir}}
+          files prefix: {{bumpCovPrefix}}
+        drivers:
+          multivariate strategy: univariate
+          read local nicas: true
+        grids:
+          - model:
+              variables: [{{bump3dControlVariables}}]
+          - model:
+              variables: [{{bump2dControlVariables}}]
+    saber outer blocks:
+    - saber block name: StdDev
+      read:
+        model file:
+          filename: {{bumpCovStdDevFile}}
+          date: *analysisDate
+          stream name: control
+    - saber block name: BUMP_VerticalBalance
+      read:
+        io:
+          data directory: {{bumpCovVBalDir}}
+          files prefix: {{bumpCovVBalPrefix}}
+        drivers:
+          read local sampling: true
+          read vertical balance: true
+        vertical balance:
+          vbal:
+          - balanced variable: air_horizontal_velocity_potential
+            unbalanced variable: air_horizontal_streamfunction
+            diagonal regression: true
+          - balanced variable: air_temperature
+            unbalanced variable: air_horizontal_streamfunction
+          - balanced variable: air_pressure_at_surface
+            unbalanced variable: air_horizontal_streamfunction
+    linear variable change:
+      linear variable change name: Control2Analysis
+      input variables: *ctlvars
+      output variables: *incvars
+  observations:
+    obs perturbations: {{ObsPerturbations}}
+    observers:
+{{Observers}}
