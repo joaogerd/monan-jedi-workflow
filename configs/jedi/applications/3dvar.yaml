@@ -1,0 +1,10 @@
+# Placeholder for migrated upstream config/jedi/applications/3dvar.yaml.
+# Keep this file synchronized with the selected MPAS-JEDI version.
+#
+# The upstream template contains placeholders for:
+# - windowBegin/windowLength
+# - state and analysis variables
+# - SABER/BUMP covariance files
+# - observers
+#
+# Import the exact upstream template before first scientific run.

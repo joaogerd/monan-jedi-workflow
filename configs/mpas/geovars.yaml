@@ -1,0 +1,3 @@
+# Placeholder for MPAS-JEDI GeoVars.
+# Import upstream config/mpas/geovars.yaml after validating compatibility with the selected mpas-bundle.
+geovars: []

@@ -1,0 +1,18 @@
+[scheduler]
+    allow implicit tasks = True
+
+[scheduling]
+    [[graph]]
+        R1 = """
+            prep => forecast => variational
+        """
+
+[runtime]
+    [[prep]]
+        script = workflow/tasks/prep.sh
+
+    [[forecast]]
+        script = workflow/tasks/forecast.sh
+
+    [[variational]]
+        script = workflow/tasks/variational.sh

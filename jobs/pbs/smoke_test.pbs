@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#PBS -N monan_jedi_smoke
+#PBS -q normal
+#PBS -l select=1:ncpus=128:mpiprocs=128
+#PBS -l walltime=00:10:00
+#PBS -j oe
+
+set -euo pipefail
+
+cd "$PBS_O_WORKDIR"
+
+source scripts/env/load_jaci_env.sh configs/sites/jaci/site.env
+
+echo "[INFO] Running MONAN-JEDI smoke test on $(hostname)"
+echo "[INFO] MPI launcher: ${MPI_LAUNCHER}"
+echo "[INFO] MPAS atmosphere: ${MPAS_ATMOSPHERE_EXE}"
+echo "[INFO] JEDI variational: ${MPASJEDI_VARIATIONAL_EXE}"
+
+command -v cylc || true
+test -x "${MPASJEDI_VARIATIONAL_EXE}"

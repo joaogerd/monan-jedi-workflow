@@ -1,0 +1,10 @@
+[platforms]
+    [[pbs_cluster]]
+        hosts = localhost
+        job runner = pbs
+        install target = localhost
+
+[install]
+    [[symlink dirs]]
+        [[[localhost]]]
+            run = /scratch/$USER/cylc-run

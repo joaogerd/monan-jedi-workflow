@@ -1,0 +1,3 @@
+&nhyd_model
+    config_time_integration = 'split_explicit'
+/

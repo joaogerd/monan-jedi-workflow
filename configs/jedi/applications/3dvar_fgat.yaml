@@ -1,0 +1,9 @@
+# MONAN 3DVar-FGAT template placeholder.
+#
+# Derive this file from the validated 3DVar template after confirming the MPAS-JEDI FGAT
+# configuration pattern for the selected bundle version.
+#
+# Initial policy:
+# - six-hour window for first smoke test;
+# - hourly background states initially;
+# - no VarBC/radiances until conventional-only smoke test passes.

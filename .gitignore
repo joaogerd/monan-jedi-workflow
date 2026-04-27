@@ -1,0 +1,10 @@
+.env
+configs/sites/*/site.env
+cylc-run/
+run/
+logs/
+*.log
+*.out
+*.err
+__pycache__/
+.pytest_cache/
