@@ -1,0 +1,21 @@
+# MONAN variational observation plug: sfc
+#
+# Status: structural skeleton for renderer development.
+# This file is not yet a validated JEDI-MPAS observer configuration.
+
+- obs space:
+    name: sfc
+    obsdatain:
+      engine:
+        type: H5File
+        obsfile: {{obs.sfc.file}}
+    obsdataout:
+      engine:
+        type: H5File
+        obsfile: {{obs.sfc.feedback_file}}
+    simulated variables: [{{obs.sfc.simulated_variables}}]
+  obs operator:
+    name: SfcPCorrected
+  obs error:
+    covariance model: diagonal
+  obs filters: []

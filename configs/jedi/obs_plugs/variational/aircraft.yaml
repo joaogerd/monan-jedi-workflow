@@ -1,0 +1,21 @@
+# MONAN variational observation plug: aircraft
+#
+# Status: structural skeleton for renderer development.
+# This file is not yet a validated JEDI-MPAS observer configuration.
+
+- obs space:
+    name: aircraft
+    obsdatain:
+      engine:
+        type: H5File
+        obsfile: {{obs.aircraft.file}}
+    obsdataout:
+      engine:
+        type: H5File
+        obsfile: {{obs.aircraft.feedback_file}}
+    simulated variables: [{{obs.aircraft.simulated_variables}}]
+  obs operator:
+    name: VertInterp
+  obs error:
+    covariance model: diagonal
+  obs filters: []

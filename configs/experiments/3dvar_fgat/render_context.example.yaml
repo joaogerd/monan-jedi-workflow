@@ -17,12 +17,37 @@ paths:
   analysis_dir: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/analysis"
   background_dir: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/background"
   covariance_dir: "${MONAN_DATA_ROOT}/covariance"
+  obs_dir: "${MONAN_DATA_ROOT}/observations/ioda/2024081500"
+  feedback_dir: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback"
 
 mpas:
   outer_namelist: namelist.atmosphere.outer
   outer_streams: streams.atmosphere.outer
   inner_namelist: namelist.atmosphere.inner
   inner_streams: streams.atmosphere.inner
+
+obs:
+  aircraft:
+    file: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+    feedback_file: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/aircraft_oman_2024081500.h5"
+    simulated_variables:
+      - air_temperature
+      - eastward_wind
+      - northward_wind
+  sondes:
+    file: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/sondes_obs_2024081500.h5"
+    feedback_file: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/sondes_oman_2024081500.h5"
+    simulated_variables:
+      - air_temperature
+      - specific_humidity
+      - eastward_wind
+      - northward_wind
+  sfc:
+    file: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/sfc_obs_2024081500.h5"
+    feedback_file: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/sfc_oman_2024081500.h5"
+    simulated_variables:
+      - station_pressure
+      - air_temperature
 
 jedi:
   member_dir: ""

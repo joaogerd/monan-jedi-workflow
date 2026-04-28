@@ -1,0 +1,21 @@
+# MONAN variational observation plug: sondes
+#
+# Status: structural skeleton for renderer development.
+# This file is not yet a validated JEDI-MPAS observer configuration.
+
+- obs space:
+    name: sondes
+    obsdatain:
+      engine:
+        type: H5File
+        obsfile: {{obs.sondes.file}}
+    obsdataout:
+      engine:
+        type: H5File
+        obsfile: {{obs.sondes.feedback_file}}
+    simulated variables: [{{obs.sondes.simulated_variables}}]
+  obs operator:
+    name: VertInterp
+  obs error:
+    covariance model: diagonal
+  obs filters: []
