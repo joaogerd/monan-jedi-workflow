@@ -20,6 +20,7 @@ required_paths=(
   configs/experiments/3dvar_fgat/observers.yaml
   configs/experiments/3dvar_fgat/runtime_manifest.example.yaml
   configs/experiments/3dvar_fgat/run_command.example.yaml
+  configs/experiments/3dvar_fgat/pbs_job.example.yaml
   configs/jedi/applications/3dvar.yaml
   configs/jedi/applications/3dvar_fgat.yaml
   configs/jedi/obs_plugs/variational/aircraft.yaml
@@ -34,8 +35,10 @@ required_paths=(
   scripts/run/render_3dvar_fgat.sh
   scripts/run/prepare_3dvar_fgat_runtime.sh
   scripts/run/run_3dvar_fgat_variational.sh
+  scripts/run/render_3dvar_fgat_pbs.sh
   workflow/cylc/global.cylc.jaci.example
   jobs/pbs/smoke_test.pbs
+  jobs/pbs/3dvar_fgat.pbs.template
   tools/check_placeholders.py
   tools/render_template.py
   tools/render_observers.py
@@ -89,5 +92,11 @@ bash scripts/run/run_3dvar_fgat_variational.sh > /tmp/monan_jedi_variational_cmd
 grep -q "mpasjedi_variational" /tmp/monan_jedi_variational_cmd.txt
 grep -q "Dry-run mode" /tmp/monan_jedi_variational_cmd.txt
 grep -q "build/rendered/3dvar_fgat.yaml" build/rendered/mpasjedi_variational.command
+
+echo "[INFO] Rendering PBS job"
+bash scripts/run/render_3dvar_fgat_pbs.sh > /tmp/monan_jedi_pbs_render.txt
+grep -q "#PBS -N monan_3dvar_fgat" build/rendered/3dvar_fgat.pbs
+grep -q "#PBS -l select=1:ncpus=128:mpiprocs=128" build/rendered/3dvar_fgat.pbs
+grep -q "run_3dvar_fgat_variational.sh" build/rendered/3dvar_fgat.pbs
 
 echo "[INFO] Structure smoke check passed"
