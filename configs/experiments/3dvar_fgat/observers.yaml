@@ -1,0 +1,18 @@
+# Observation manifest for the initial MONAN 3DVar-FGAT structural smoke test.
+#
+# These entries select observation plug templates from:
+#
+#   configs/jedi/obs_plugs/variational/
+#
+# The templates are structural skeletons and must be scientifically validated before real use.
+
+observers:
+  - name: aircraft
+    template: configs/jedi/obs_plugs/variational/aircraft.yaml
+    enabled: true
+  - name: sondes
+    template: configs/jedi/obs_plugs/variational/sondes.yaml
+    enabled: true
+  - name: sfc
+    template: configs/jedi/obs_plugs/variational/sfc.yaml
+    enabled: true
