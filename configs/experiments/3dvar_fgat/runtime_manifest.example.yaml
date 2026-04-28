@@ -1,0 +1,67 @@
+# Runtime manifest for the MONAN/JEDI 3DVar-FGAT structural smoke workflow.
+#
+# This manifest describes the directories and files required before calling
+# `mpasjedi_variational.x`. It is intentionally explicit so that the runtime
+# preparation step can be tested without Cylc or MPAS-JEDI.
+#
+# Modes:
+#   dry-run: validate structure and show intended actions without requiring files;
+#   strict : require all source files and create links/copies.
+
+runtime:
+  experiment_name: jaci_3dvar_fgat_smoke
+  cycle: "2024081500"
+  work_dir: "build/runtime/jaci_3dvar_fgat_smoke/2024081500"
+
+  directories:
+    - analysis
+    - background
+    - feedback
+    - graph
+    - logs
+    - obs
+    - static
+    - covariance/NICAS
+    - covariance/VBAL
+
+  links:
+    # Background state used by the current structural template.
+    - name: background_state
+      source: "${MONAN_DATA_ROOT}/background/2024081500/mpasout.2024-08-15_00.00.00.nc"
+      target: "background/mpasout.2024-08-15_00.00.00.nc"
+      required: true
+
+    # Observation files referenced by the generated observers block.
+    - name: aircraft_ioda
+      source: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+      target: "obs/aircraft_obs_2024081500.h5"
+      required: true
+    - name: sondes_ioda
+      source: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/sondes_obs_2024081500.h5"
+      target: "obs/sondes_obs_2024081500.h5"
+      required: true
+    - name: sfc_ioda
+      source: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/sfc_obs_2024081500.h5"
+      target: "obs/sfc_obs_2024081500.h5"
+      required: true
+
+    # Covariance files/directories. These names are placeholders until the real
+    # JACI BUMP/SABER resources are installed and validated.
+    - name: bump_stddev
+      source: "${MONAN_DATA_ROOT}/covariance/mpas.stddev.nc"
+      target: "covariance/mpas.stddev.nc"
+      required: true
+
+    # MPAS graph/static files. These must match mesh and MPI layout.
+    - name: graph_info
+      source: "${MONAN_DATA_ROOT}/graph/graph.info.part.0128"
+      target: "graph/graph.info.part.0128"
+      required: false
+    - name: static_file
+      source: "${MONAN_DATA_ROOT}/static/x1.static.nc"
+      target: "static/x1.static.nc"
+      required: false
+
+  rendered:
+    jedi_yaml: "build/rendered/3dvar_fgat.yaml"
+    observers_yaml: "build/rendered/observers.yaml"
