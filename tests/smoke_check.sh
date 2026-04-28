@@ -17,8 +17,12 @@ required_paths=(
   configs/experiments/3dvar_fgat/experiment.yaml
   configs/experiments/3dvar_fgat/README.md
   configs/experiments/3dvar_fgat/render_context.example.yaml
+  configs/experiments/3dvar_fgat/observers.yaml
   configs/jedi/applications/3dvar.yaml
   configs/jedi/applications/3dvar_fgat.yaml
+  configs/jedi/obs_plugs/variational/aircraft.yaml
+  configs/jedi/obs_plugs/variational/sondes.yaml
+  configs/jedi/obs_plugs/variational/sfc.yaml
   configs/mpas/resources/model.yaml
   configs/templates/resources/forecast.yaml
   configs/templates/resources/variational_minimal.yaml
@@ -30,6 +34,7 @@ required_paths=(
   jobs/pbs/smoke_test.pbs
   tools/check_placeholders.py
   tools/render_template.py
+  tools/render_observers.py
 )
 
 for path in "${required_paths[@]}"; do
@@ -60,5 +65,11 @@ scripts/run/render_3dvar_fgat.sh \
 
 grep -q "cost type: 3D-Var" build/rendered/3dvar_fgat.yaml
 grep -q "2024-08-15T00:00:00Z" build/rendered/3dvar_fgat.yaml
+grep -q "name: aircraft" build/rendered/observers.yaml
+grep -q "name: sondes" build/rendered/observers.yaml
+grep -q "name: sfc" build/rendered/observers.yaml
+grep -q "aircraft_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
+grep -q "sondes_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
+grep -q "sfc_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
 
 echo "[INFO] Structure smoke check passed"
