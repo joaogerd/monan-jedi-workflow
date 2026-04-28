@@ -59,7 +59,7 @@ fi
 
 echo "[INFO] Rendering 3DVar-FGAT template smoke output"
 rm -rf build/rendered
-scripts/run/render_3dvar_fgat.sh \
+bash scripts/run/render_3dvar_fgat.sh \
   configs/experiments/3dvar_fgat/render_context.example.yaml \
   build/rendered/3dvar_fgat.yaml
 
