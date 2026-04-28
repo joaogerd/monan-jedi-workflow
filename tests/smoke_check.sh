@@ -19,6 +19,7 @@ required_paths=(
   configs/experiments/3dvar_fgat/render_context.example.yaml
   configs/experiments/3dvar_fgat/observers.yaml
   configs/experiments/3dvar_fgat/runtime_manifest.example.yaml
+  configs/experiments/3dvar_fgat/run_command.example.yaml
   configs/jedi/applications/3dvar.yaml
   configs/jedi/applications/3dvar_fgat.yaml
   configs/jedi/obs_plugs/variational/aircraft.yaml
@@ -32,12 +33,14 @@ required_paths=(
   scripts/setup/check_runtime.sh
   scripts/run/render_3dvar_fgat.sh
   scripts/run/prepare_3dvar_fgat_runtime.sh
+  scripts/run/run_3dvar_fgat_variational.sh
   workflow/cylc/global.cylc.jaci.example
   jobs/pbs/smoke_test.pbs
   tools/check_placeholders.py
   tools/render_template.py
   tools/render_observers.py
   tools/prepare_runtime.py
+  tools/run_variational.py
 )
 
 for path in "${required_paths[@]}"; do
@@ -80,5 +83,11 @@ bash scripts/run/prepare_3dvar_fgat_runtime.sh > /tmp/monan_jedi_runtime_prep.tx
 grep -q "DRY-RUN" /tmp/monan_jedi_runtime_prep.txt
 grep -q "background_state" /tmp/monan_jedi_runtime_prep.txt
 grep -q "aircraft_ioda" /tmp/monan_jedi_runtime_prep.txt
+
+echo "[INFO] Checking variational command dry-run"
+bash scripts/run/run_3dvar_fgat_variational.sh > /tmp/monan_jedi_variational_cmd.txt
+grep -q "mpasjedi_variational" /tmp/monan_jedi_variational_cmd.txt
+grep -q "Dry-run mode" /tmp/monan_jedi_variational_cmd.txt
+grep -q "build/rendered/3dvar_fgat.yaml" build/rendered/mpasjedi_variational.command
 
 echo "[INFO] Structure smoke check passed"
