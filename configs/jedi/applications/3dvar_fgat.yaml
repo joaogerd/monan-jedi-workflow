@@ -1,9 +1,97 @@
-# MONAN 3DVar-FGAT template placeholder.
+# MONAN/JEDI 3DVar-FGAT application template.
 #
-# Derive this file from the validated 3DVar template after confirming the MPAS-JEDI FGAT
-# configuration pattern for the selected bundle version.
+# This is a renderable MONAN-side template, not a direct upstream copy.
+# It is derived conceptually from the imported upstream 3DVar template in:
 #
-# Initial policy:
-# - six-hour window for first smoke test;
-# - hourly background states initially;
-# - no VarBC/radiances until conventional-only smoke test passes.
+#   configs/jedi/applications/3dvar.yaml
+#
+# Validation status:
+#   - suitable for template-rendering tests;
+#   - not yet scientifically validated on JACI;
+#   - FGAT background-time handling must be confirmed with the selected MPAS-JEDI bundle.
+
+_iteration: &iterationConfig
+  geometry:
+    nml_file: {{mpas.inner_namelist}}
+    streams_file: {{mpas.inner_streams}}{{jedi.streams_file_member}}
+    deallocate non-da fields: true
+  gradient norm reduction: 1e-3
+
+output:
+  filename: {{paths.analysis_dir}}{{jedi.member_dir}}/{{jedi.analysis_prefix}}.$Y-$M-$D_$h.$m.$s.nc
+  stream name: analysis
+
+variational:
+  minimizer:
+{{jedi.minimizer}}
+  iterations:
+{{jedi.iterations}}
+
+final:
+  diagnostics:
+    departures: oman
+
+cost function:
+  cost type: 3D-Var
+  time window:
+    begin: {{cycle.window.begin}}
+    length: {{cycle.window.length}}
+  geometry:
+    nml_file: {{mpas.outer_namelist}}
+    streams_file: {{mpas.outer_streams}}{{jedi.streams_file_member}}
+    deallocate non-da fields: true
+  analysis variables: &incvars [{{jedi.analysis_variables}}]
+  background:
+    state variables: [{{jedi.state_variables}}]
+    filename: {{paths.background_dir}}{{jedi.member_dir}}/{{jedi.background_prefix}}.{{cycle.mpas_file_date}}.nc
+    date: &analysisDate {{cycle.analysis_iso8601}}
+  background error:
+    covariance model: SABER
+    no outer loop update: true
+    saber central block:
+      saber block name: BUMP_NICAS
+      active variables: &ctlvars [{{jedi.bump_cov_control_variables}}]
+      read:
+        io:
+          data directory: {{jedi.bump_cov_dir}}
+          files prefix: {{jedi.bump_cov_prefix}}
+        drivers:
+          multivariate strategy: univariate
+          read local nicas: true
+        grids:
+          - model:
+              variables: [{{jedi.bump_3d_control_variables}}]
+          - model:
+              variables: [{{jedi.bump_2d_control_variables}}]
+    saber outer blocks:
+    - saber block name: StdDev
+      read:
+        model file:
+          filename: {{jedi.bump_cov_stddev_file}}
+          date: *analysisDate
+          stream name: control
+    - saber block name: BUMP_VerticalBalance
+      read:
+        io:
+          data directory: {{jedi.bump_cov_vbal_dir}}
+          files prefix: {{jedi.bump_cov_vbal_prefix}}
+        drivers:
+          read local sampling: true
+          read vertical balance: true
+        vertical balance:
+          vbal:
+          - balanced variable: air_horizontal_velocity_potential
+            unbalanced variable: air_horizontal_streamfunction
+            diagonal regression: true
+          - balanced variable: air_temperature
+            unbalanced variable: air_horizontal_streamfunction
+          - balanced variable: air_pressure_at_surface
+            unbalanced variable: air_horizontal_streamfunction
+    linear variable change:
+      linear variable change name: Control2Analysis
+      input variables: *ctlvars
+      output variables: *incvars
+  observations:
+    obs perturbations: {{jedi.obs_perturbations}}
+    observers:
+{{jedi.observers}}

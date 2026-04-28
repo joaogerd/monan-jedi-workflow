@@ -1,0 +1,71 @@
+# Example rendering context for MONAN/JEDI 3DVar-FGAT templates.
+#
+# This file is intentionally small. It is meant to validate the template-rendering layer, not to
+# define a complete scientific experiment.
+
+experiment:
+  name: jaci_3dvar_fgat_smoke
+
+cycle:
+  analysis_iso8601: "2024-08-15T00:00:00Z"
+  mpas_file_date: "2024-08-15_00.00.00"
+  window:
+    begin: "2024-08-14T21:00:00Z"
+    length: PT6H
+
+paths:
+  analysis_dir: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/analysis"
+  background_dir: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/background"
+  covariance_dir: "${MONAN_DATA_ROOT}/covariance"
+
+mpas:
+  outer_namelist: namelist.atmosphere.outer
+  outer_streams: streams.atmosphere.outer
+  inner_namelist: namelist.atmosphere.inner
+  inner_streams: streams.atmosphere.inner
+
+jedi:
+  member_dir: ""
+  analysis_prefix: analysis
+  background_prefix: mpasout
+  streams_file_member: ""
+  obs_perturbations: false
+  minimizer: |2
+      algorithm: DRIPCG
+  iterations: |2
+      - geometry:
+          <<: *iterationConfig
+        ninner: 60
+        gradient norm reduction: 1e-3
+  analysis_variables:
+    - air_temperature
+    - water_vapor_mixing_ratio_wrt_moist_air
+    - air_pressure_at_surface
+    - eastward_wind
+    - northward_wind
+  state_variables:
+    - air_temperature
+    - water_vapor_mixing_ratio_wrt_moist_air
+    - air_pressure_at_surface
+    - eastward_wind
+    - northward_wind
+  bump_cov_control_variables:
+    - air_horizontal_streamfunction
+    - air_horizontal_velocity_potential
+    - air_temperature
+    - water_vapor_mixing_ratio_wrt_moist_air
+    - air_pressure_at_surface
+  bump_3d_control_variables:
+    - air_horizontal_streamfunction
+    - air_horizontal_velocity_potential
+    - air_temperature
+    - water_vapor_mixing_ratio_wrt_moist_air
+  bump_2d_control_variables:
+    - air_pressure_at_surface
+  bump_cov_prefix: mpas
+  bump_cov_vbal_prefix: mpas
+  bump_cov_dir: "${MONAN_DATA_ROOT}/covariance/NICAS"
+  bump_cov_stddev_file: "${MONAN_DATA_ROOT}/covariance/mpas.stddev.nc"
+  bump_cov_vbal_dir: "${MONAN_DATA_ROOT}/covariance/VBAL"
+  observers: |2
+      []

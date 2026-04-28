@@ -15,6 +15,7 @@ This first version is intentionally conservative:
 - introduces an INPE/JACI-oriented directory layout;
 - adds Bash-first runtime helpers;
 - provides PBS and Cylc templates;
+- adds a small template-rendering layer for structural smoke tests;
 - does not claim to replace all original C-shell task scripts in one step.
 
 ## Quick start on JACI
@@ -40,3 +41,26 @@ cp workflow/cylc/global.cylc.jaci.example "$HOME/.cylc/flow/global.cylc"
 A real 3DVar-FGAT run requires validated MPAS/JEDI executables, MPAS mesh/static files,
 graph partition files, background states, observation files in IODA format, and SABER/BUMP
 covariance files.
+
+## Render a 3DVar-FGAT template smoke file
+
+The repository includes a small template-rendering layer that can be tested without MPAS/JEDI:
+
+```bash
+scripts/run/render_3dvar_fgat.sh
+```
+
+Default output:
+
+```text
+build/rendered/3dvar_fgat.yaml
+```
+
+This rendered file is a structural smoke output. It is not yet a validated scientific JEDI
+configuration for production use.
+
+For details, see:
+
+```text
+docs/template_rendering.md
+```
