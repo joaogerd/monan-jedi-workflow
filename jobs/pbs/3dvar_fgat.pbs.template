@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#PBS -N {{pbs.job_name}}
+#PBS -A {{pbs.project}}
+#PBS -q {{pbs.queue}}
+#PBS -l select={{pbs.nodes}}:ncpus={{pbs.ncpus}}:mpiprocs={{pbs.mpiprocs}}
+#PBS -l walltime={{pbs.walltime}}
+#PBS -l place={{pbs.place}}
+#PBS -j {{pbs.join_output}}
+#PBS -o {{pbs.log_dir}}/{{pbs.job_name}}.$PBS_JOBID.out
+
+set -euo pipefail
+
+cd {{runtime.repo_root}}
+
+source scripts/utils/logging.sh
+
+log_info "Starting MONAN/JEDI 3DVar-FGAT PBS job"
+log_info "PBS job id: ${PBS_JOBID:-unknown}"
+log_info "PBS workdir: ${PBS_O_WORKDIR:-unknown}"
+log_info "Repository: {{runtime.repo_root}}"
+
+if [[ -f "{{runtime.site_env}}" ]]; then
+  log_info "Loading site environment: {{runtime.site_env}}"
+  source scripts/env/load_jaci_env.sh "{{runtime.site_env}}"
+else
+  log_warn "Site environment file not found: {{runtime.site_env}}"
+fi
+
+mkdir -p "{{pbs.log_dir}}"
+
+if [[ "{{steps.render_yaml}}" == "true" ]]; then
+  log_info "Rendering 3DVar-FGAT YAML"
+  bash scripts/run/render_3dvar_fgat.sh
+fi
+
+if [[ "{{steps.prepare_runtime}}" == "true" ]]; then
+  log_info "Preparing runtime in strict mode"
+  bash scripts/run/prepare_3dvar_fgat_runtime.sh --strict
+fi
+
+if [[ "{{steps.run_variational}}" == "true" ]]; then
+  log_info "Running variational command"
+  bash scripts/run/run_3dvar_fgat_variational.sh --execute
+fi
+
+log_info "MONAN/JEDI 3DVar-FGAT PBS job finished"
