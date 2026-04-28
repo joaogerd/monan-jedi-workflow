@@ -18,6 +18,7 @@ required_paths=(
   configs/experiments/3dvar_fgat/README.md
   configs/experiments/3dvar_fgat/render_context.example.yaml
   configs/experiments/3dvar_fgat/observers.yaml
+  configs/experiments/3dvar_fgat/runtime_manifest.example.yaml
   configs/jedi/applications/3dvar.yaml
   configs/jedi/applications/3dvar_fgat.yaml
   configs/jedi/obs_plugs/variational/aircraft.yaml
@@ -30,11 +31,13 @@ required_paths=(
   scripts/env/load_jaci_env.sh
   scripts/setup/check_runtime.sh
   scripts/run/render_3dvar_fgat.sh
+  scripts/run/prepare_3dvar_fgat_runtime.sh
   workflow/cylc/global.cylc.jaci.example
   jobs/pbs/smoke_test.pbs
   tools/check_placeholders.py
   tools/render_template.py
   tools/render_observers.py
+  tools/prepare_runtime.py
 )
 
 for path in "${required_paths[@]}"; do
@@ -71,5 +74,11 @@ grep -q "name: sfc" build/rendered/observers.yaml
 grep -q "aircraft_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
 grep -q "sondes_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
 grep -q "sfc_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
+
+echo "[INFO] Checking runtime preparation dry-run"
+bash scripts/run/prepare_3dvar_fgat_runtime.sh > /tmp/monan_jedi_runtime_prep.txt
+grep -q "DRY-RUN" /tmp/monan_jedi_runtime_prep.txt
+grep -q "background_state" /tmp/monan_jedi_runtime_prep.txt
+grep -q "aircraft_ioda" /tmp/monan_jedi_runtime_prep.txt
 
 echo "[INFO] Structure smoke check passed"
