@@ -1,0 +1,20 @@
+# Variational command configuration for the MONAN/JEDI 3DVar-FGAT smoke workflow.
+#
+# This file describes how the workflow should assemble the `mpasjedi_variational.x` command.
+# It is intentionally separate from PBS submission and from runtime preparation.
+
+variational_run:
+  executable: "${MPASJEDI_VARIATIONAL_EXE}"
+  mpi_launcher: "${MPI_LAUNCHER}"
+  mpi_tasks: 128
+  threads: 1
+  work_dir: "build/runtime/jaci_3dvar_fgat_smoke/2024081500"
+  yaml: "build/rendered/3dvar_fgat.yaml"
+  log_file: "logs/mpasjedi_variational.log"
+
+  environment:
+    OMP_NUM_THREADS: "1"
+
+  # Extra arguments are appended after the YAML file.
+  # Keep empty until validated against the selected MPAS-JEDI executable.
+  extra_args: []
