@@ -1,0 +1,46 @@
+# Data layout for the MONAN/JEDI 3DVar-FGAT workflow.
+#
+# This file defines the directory tree expected by the current structural workflow.
+# It creates directories only. It does not create fake scientific files.
+
+data_layout:
+  root: "${MONAN_DATA_ROOT}"
+  cycle: "2024081500"
+  directories:
+    - background/2024081500
+    - observations/ioda/2024081500
+    - covariance
+    - covariance/NICAS
+    - covariance/VBAL
+    - graph
+    - static
+
+  expected_files:
+    # Background state
+    - path: background/2024081500/mpasout.2024-08-15_00.00.00.nc
+      required_for: 3dvar_fgat
+      status: missing_until_provided
+
+    # Conventional IODA observations
+    - path: observations/ioda/2024081500/aircraft_obs_2024081500.h5
+      required_for: aircraft
+      status: missing_until_provided
+    - path: observations/ioda/2024081500/sondes_obs_2024081500.h5
+      required_for: sondes
+      status: missing_until_provided
+    - path: observations/ioda/2024081500/sfc_obs_2024081500.h5
+      required_for: sfc
+      status: missing_until_provided
+
+    # Covariance resources
+    - path: covariance/mpas.stddev.nc
+      required_for: saber_bump
+      status: missing_until_provided
+
+    # MPAS mesh/static resources
+    - path: graph/graph.info.part.0128
+      required_for: mpi_layout_128
+      status: optional_for_current_smoke
+    - path: static/x1.static.nc
+      required_for: mpas_static
+      status: optional_for_current_smoke
