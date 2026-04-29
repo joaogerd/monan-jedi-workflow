@@ -26,6 +26,7 @@ required_paths=(
   configs/jedi/obs_plugs/variational/aircraft.yaml
   configs/jedi/obs_plugs/variational/sondes.yaml
   configs/jedi/obs_plugs/variational/sfc.yaml
+  configs/jedi/obs_plugs/variational/metadata.yaml
   configs/mpas/resources/model.yaml
   configs/templates/resources/forecast.yaml
   configs/templates/resources/variational_minimal.yaml
@@ -42,6 +43,7 @@ required_paths=(
   jobs/pbs/3dvar_fgat.pbs.template
   tools/check_placeholders.py
   tools/check_observer_manifest.py
+  tools/check_observer_metadata.py
   tools/render_template.py
   tools/render_observers.py
   tools/prepare_runtime.py
@@ -64,6 +66,11 @@ grep -q "Source: NCAR/MPAS-Workflow" configs/templates/resources/forecast.yaml
 
 echo "[INFO] Checking observer manifest"
 python3 tools/check_observer_manifest.py configs/experiments/3dvar_fgat/observers.yaml
+
+echo "[INFO] Checking observer metadata"
+python3 tools/check_observer_metadata.py \
+  --manifest configs/experiments/3dvar_fgat/observers.yaml \
+  --metadata configs/jedi/obs_plugs/variational/metadata.yaml
 
 echo "[INFO] Inspecting placeholders"
 python3 tools/check_placeholders.py configs/jedi/applications/3dvar.yaml configs/templates/resources/variational_minimal.yaml >/tmp/monan_jedi_placeholders.txt
