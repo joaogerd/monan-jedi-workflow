@@ -41,6 +41,7 @@ required_paths=(
   jobs/pbs/smoke_test.pbs
   jobs/pbs/3dvar_fgat.pbs.template
   tools/check_placeholders.py
+  tools/check_observer_manifest.py
   tools/render_template.py
   tools/render_observers.py
   tools/prepare_runtime.py
@@ -60,6 +61,9 @@ echo "[INFO] Checking imported template provenance"
 grep -q "Source: NCAR/MPAS-Workflow" configs/jedi/applications/3dvar.yaml
 grep -q "Source: NCAR/MPAS-Workflow" configs/mpas/resources/model.yaml
 grep -q "Source: NCAR/MPAS-Workflow" configs/templates/resources/forecast.yaml
+
+echo "[INFO] Checking observer manifest"
+python3 tools/check_observer_manifest.py configs/experiments/3dvar_fgat/observers.yaml
 
 echo "[INFO] Inspecting placeholders"
 python3 tools/check_placeholders.py configs/jedi/applications/3dvar.yaml configs/templates/resources/variational_minimal.yaml >/tmp/monan_jedi_placeholders.txt
