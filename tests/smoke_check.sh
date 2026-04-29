@@ -20,6 +20,7 @@ required_paths=(
   configs/experiments/3dvar_fgat/observers.yaml
   configs/experiments/3dvar_fgat/ioda_inventory.example.yaml
   configs/experiments/3dvar_fgat/data_layout.example.yaml
+  configs/experiments/3dvar_fgat/staging.example.yaml
   configs/experiments/3dvar_fgat/runtime_manifest.example.yaml
   configs/experiments/3dvar_fgat/run_command.example.yaml
   configs/experiments/3dvar_fgat/pbs_job.example.yaml
@@ -36,6 +37,7 @@ required_paths=(
   scripts/env/load_jaci_env.sh
   scripts/setup/check_runtime.sh
   scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
+  scripts/setup/stage_3dvar_fgat_inputs.sh
   scripts/setup/validate_3dvar_fgat_staged_inputs.sh
   scripts/run/render_3dvar_fgat.sh
   scripts/run/prepare_3dvar_fgat_runtime.sh
@@ -50,6 +52,7 @@ required_paths=(
   tools/check_observer_metadata.py
   tools/check_ioda_inventory.py
   tools/bootstrap_data_layout.py
+  tools/stage_inputs.py
   tools/validate_staged_inputs.py
   tools/render_template.py
   tools/render_observers.py
@@ -89,6 +92,10 @@ echo "[INFO] Checking data layout dry-run"
 bash scripts/setup/bootstrap_3dvar_fgat_data_layout.sh --dry-run > /tmp/monan_jedi_data_layout.txt
 grep -q "DRY-RUN" /tmp/monan_jedi_data_layout.txt
 grep -q "observations/ioda/2024081500" /tmp/monan_jedi_data_layout.txt
+
+echo "[INFO] Checking input staging dry-run"
+bash scripts/setup/stage_3dvar_fgat_inputs.sh --dry-run > /tmp/monan_jedi_input_staging.txt
+grep -q "Input staging completed" /tmp/monan_jedi_input_staging.txt
 
 echo "[INFO] Checking staged inputs in permissive mode"
 bash scripts/setup/validate_3dvar_fgat_staged_inputs.sh --allow-missing > /tmp/monan_jedi_staged_inputs.txt
