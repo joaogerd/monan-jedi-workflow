@@ -18,6 +18,9 @@ else
 fi
 
 if command -v start_conda >/dev/null 2>&1; then
+  # Clear positional parameters before calling start_conda. On JACI, start_conda
+  # may treat inherited positional arguments as a Conda environment path.
+  set --
   start_conda
 else
   printf '[WARN] start_conda command not available after loading anaconda.\n' >&2
