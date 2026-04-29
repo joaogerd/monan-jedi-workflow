@@ -1,0 +1,39 @@
+# Metadata registry for MONAN/JEDI variational observer plugs.
+#
+# This file separates structural rendering information from scientific validation status.
+# The current observer plug files are useful for rendering tests, but they are not yet
+# validated UFO/JEDI-MPAS configurations.
+
+observer_plugs:
+  aircraft:
+    template: configs/jedi/obs_plugs/variational/aircraft.yaml
+    status: structural_skeleton
+    category: conventional
+    expected_ioda_group: aircraft
+    requires_bias_correction: false
+    validated_on_jaci: false
+    notes: >-
+      Placeholder observer for rendering tests. UFO operator, simulated variables,
+      observation errors and filters must be validated against the selected MPAS-JEDI bundle.
+
+  sondes:
+    template: configs/jedi/obs_plugs/variational/sondes.yaml
+    status: structural_skeleton
+    category: conventional
+    expected_ioda_group: sondes
+    requires_bias_correction: false
+    validated_on_jaci: false
+    notes: >-
+      Placeholder observer for rendering tests. Specific humidity naming and vertical interpolation
+      behavior must be checked against the selected IODA files and UFO operator configuration.
+
+  sfc:
+    template: configs/jedi/obs_plugs/variational/sfc.yaml
+    status: structural_skeleton
+    category: conventional
+    expected_ioda_group: sfc
+    requires_bias_correction: false
+    validated_on_jaci: false
+    notes: >-
+      Placeholder observer for rendering tests. Surface pressure correction, station elevation,
+      variable naming and QC filters must be validated before scientific use.

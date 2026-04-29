@@ -23,10 +23,22 @@ Observer plug templates:
 configs/jedi/obs_plugs/variational/*.yaml
 ```
 
+Observer metadata registry:
+
+```text
+configs/jedi/obs_plugs/variational/metadata.yaml
+```
+
 Manifest checker:
 
 ```text
 tools/check_observer_manifest.py
+```
+
+Metadata checker:
+
+```text
+tools/check_observer_metadata.py
 ```
 
 ## Manifest contract
@@ -47,6 +59,30 @@ Rules:
 - `enabled` must be boolean;
 - disabled observers are skipped by the renderer;
 - the observer name must appear in the template text.
+
+## Metadata contract
+
+Every observer used in the experiment manifest must also appear in the metadata registry.
+
+Each metadata entry must define:
+
+```yaml
+observer_plugs:
+  aircraft:
+    template: configs/jedi/obs_plugs/variational/aircraft.yaml
+    status: structural_skeleton
+    category: conventional
+    expected_ioda_group: aircraft
+    requires_bias_correction: false
+    validated_on_jaci: false
+    notes: Placeholder observer for rendering tests.
+```
+
+The `status` field is deliberately explicit. Current allowed values are descriptive, not enforced:
+
+- `structural_skeleton`;
+- `candidate_for_validation`;
+- `validated_on_jaci`.
 
 ## Current structural plugs
 
