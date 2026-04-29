@@ -19,6 +19,7 @@ required_paths=(
   configs/experiments/3dvar_fgat/render_context.example.yaml
   configs/experiments/3dvar_fgat/observers.yaml
   configs/experiments/3dvar_fgat/ioda_inventory.example.yaml
+  configs/experiments/3dvar_fgat/data_layout.example.yaml
   configs/experiments/3dvar_fgat/runtime_manifest.example.yaml
   configs/experiments/3dvar_fgat/run_command.example.yaml
   configs/experiments/3dvar_fgat/pbs_job.example.yaml
@@ -34,6 +35,7 @@ required_paths=(
   configs/templates/import_manifest.yaml
   scripts/env/load_jaci_env.sh
   scripts/setup/check_runtime.sh
+  scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
   scripts/run/render_3dvar_fgat.sh
   scripts/run/prepare_3dvar_fgat_runtime.sh
   scripts/run/run_3dvar_fgat_variational.sh
@@ -46,6 +48,7 @@ required_paths=(
   tools/check_observer_manifest.py
   tools/check_observer_metadata.py
   tools/check_ioda_inventory.py
+  tools/bootstrap_data_layout.py
   tools/render_template.py
   tools/render_observers.py
   tools/prepare_runtime.py
@@ -79,6 +82,11 @@ python3 tools/check_ioda_inventory.py \
   --inventory configs/experiments/3dvar_fgat/ioda_inventory.example.yaml \
   --manifest configs/experiments/3dvar_fgat/observers.yaml \
   --metadata configs/jedi/obs_plugs/variational/metadata.yaml
+
+echo "[INFO] Checking data layout dry-run"
+bash scripts/setup/bootstrap_3dvar_fgat_data_layout.sh --dry-run > /tmp/monan_jedi_data_layout.txt
+grep -q "DRY-RUN" /tmp/monan_jedi_data_layout.txt
+grep -q "observations/ioda/2024081500" /tmp/monan_jedi_data_layout.txt
 
 echo "[INFO] Inspecting placeholders"
 python3 tools/check_placeholders.py configs/jedi/applications/3dvar.yaml configs/templates/resources/variational_minimal.yaml >/tmp/monan_jedi_placeholders.txt
