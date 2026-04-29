@@ -18,6 +18,7 @@ required_paths=(
   configs/experiments/3dvar_fgat/README.md
   configs/experiments/3dvar_fgat/render_context.example.yaml
   configs/experiments/3dvar_fgat/observers.yaml
+  configs/experiments/3dvar_fgat/ioda_inventory.example.yaml
   configs/experiments/3dvar_fgat/runtime_manifest.example.yaml
   configs/experiments/3dvar_fgat/run_command.example.yaml
   configs/experiments/3dvar_fgat/pbs_job.example.yaml
@@ -44,6 +45,7 @@ required_paths=(
   tools/check_placeholders.py
   tools/check_observer_manifest.py
   tools/check_observer_metadata.py
+  tools/check_ioda_inventory.py
   tools/render_template.py
   tools/render_observers.py
   tools/prepare_runtime.py
@@ -69,6 +71,12 @@ python3 tools/check_observer_manifest.py configs/experiments/3dvar_fgat/observer
 
 echo "[INFO] Checking observer metadata"
 python3 tools/check_observer_metadata.py \
+  --manifest configs/experiments/3dvar_fgat/observers.yaml \
+  --metadata configs/jedi/obs_plugs/variational/metadata.yaml
+
+echo "[INFO] Checking IODA inventory"
+python3 tools/check_ioda_inventory.py \
+  --inventory configs/experiments/3dvar_fgat/ioda_inventory.example.yaml \
   --manifest configs/experiments/3dvar_fgat/observers.yaml \
   --metadata configs/jedi/obs_plugs/variational/metadata.yaml
 

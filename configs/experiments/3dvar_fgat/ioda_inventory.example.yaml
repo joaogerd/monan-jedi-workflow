@@ -1,0 +1,34 @@
+# IODA inventory for the MONAN/JEDI 3DVar-FGAT smoke workflow.
+#
+# This file lists the observation files expected by the current observer manifest.
+# It is used for structural validation before running JEDI.
+#
+# The initial inventory mirrors the structural smoke context and does not imply that
+# the files are scientifically valid. Real IODA files must be validated on JACI.
+
+ioda_inventory:
+  cycle: "2024081500"
+  root: "${MONAN_DATA_ROOT}/observations/ioda/2024081500"
+  feedback_root: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback"
+
+  files:
+    - observer: aircraft
+      required: true
+      path: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/aircraft_oman_2024081500.h5"
+      expected_group: aircraft
+      status: structural_placeholder
+
+    - observer: sondes
+      required: true
+      path: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/sondes_obs_2024081500.h5"
+      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/sondes_oman_2024081500.h5"
+      expected_group: sondes
+      status: structural_placeholder
+
+    - observer: sfc
+      required: true
+      path: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/sfc_obs_2024081500.h5"
+      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/sfc_oman_2024081500.h5"
+      expected_group: sfc
+      status: structural_placeholder
