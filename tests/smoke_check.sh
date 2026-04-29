@@ -36,6 +36,7 @@ required_paths=(
   scripts/run/prepare_3dvar_fgat_runtime.sh
   scripts/run/run_3dvar_fgat_variational.sh
   scripts/run/render_3dvar_fgat_pbs.sh
+  scripts/run/validate_3dvar_fgat_experiment.sh
   workflow/cylc/global.cylc.jaci.example
   jobs/pbs/smoke_test.pbs
   jobs/pbs/3dvar_fgat.pbs.template
@@ -44,6 +45,7 @@ required_paths=(
   tools/render_observers.py
   tools/prepare_runtime.py
   tools/run_variational.py
+  tools/validate_experiment.py
 )
 
 for path in "${required_paths[@]}"; do
@@ -66,37 +68,8 @@ if [[ ! -s /tmp/monan_jedi_placeholders.txt ]]; then
   exit 1
 fi
 
-echo "[INFO] Rendering 3DVar-FGAT template smoke output"
-rm -rf build/rendered
-bash scripts/run/render_3dvar_fgat.sh \
-  configs/experiments/3dvar_fgat/render_context.example.yaml \
-  build/rendered/3dvar_fgat.yaml
-
-grep -q "cost type: 3D-Var" build/rendered/3dvar_fgat.yaml
-grep -q "2024-08-15T00:00:00Z" build/rendered/3dvar_fgat.yaml
-grep -q "name: aircraft" build/rendered/observers.yaml
-grep -q "name: sondes" build/rendered/observers.yaml
-grep -q "name: sfc" build/rendered/observers.yaml
-grep -q "aircraft_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
-grep -q "sondes_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
-grep -q "sfc_obs_2024081500.h5" build/rendered/3dvar_fgat.yaml
-
-echo "[INFO] Checking runtime preparation dry-run"
-bash scripts/run/prepare_3dvar_fgat_runtime.sh > /tmp/monan_jedi_runtime_prep.txt
-grep -q "DRY-RUN" /tmp/monan_jedi_runtime_prep.txt
-grep -q "background_state" /tmp/monan_jedi_runtime_prep.txt
-grep -q "aircraft_ioda" /tmp/monan_jedi_runtime_prep.txt
-
-echo "[INFO] Checking variational command dry-run"
-bash scripts/run/run_3dvar_fgat_variational.sh > /tmp/monan_jedi_variational_cmd.txt
-grep -q "mpasjedi_variational" /tmp/monan_jedi_variational_cmd.txt
-grep -q "Dry-run mode" /tmp/monan_jedi_variational_cmd.txt
-grep -q "build/rendered/3dvar_fgat.yaml" build/rendered/mpasjedi_variational.command
-
-echo "[INFO] Rendering PBS job"
-bash scripts/run/render_3dvar_fgat_pbs.sh > /tmp/monan_jedi_pbs_render.txt
-grep -q "#PBS -N monan_3dvar_fgat" build/rendered/3dvar_fgat.pbs
-grep -q "#PBS -l select=1:ncpus=128:mpiprocs=128" build/rendered/3dvar_fgat.pbs
-grep -q "run_3dvar_fgat_variational.sh" build/rendered/3dvar_fgat.pbs
+echo "[INFO] Running end-to-end structural experiment validation"
+bash scripts/run/validate_3dvar_fgat_experiment.sh > /tmp/monan_jedi_experiment_validation.txt
+grep -q "Experiment structural validation passed" /tmp/monan_jedi_experiment_validation.txt
 
 echo "[INFO] Structure smoke check passed"
