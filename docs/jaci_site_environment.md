@@ -30,11 +30,37 @@ ${EDITOR:-vi} configs/sites/jaci/site.env
 | `MPI_LAUNCHER` | MPI launcher command for JACI |
 | `CYLC_PLATFORM` | Cylc platform name, initially `pbs_cluster` |
 
+## Python on JACI
+
+The default `python3` available before loading Anaconda may be too old for the repository tools.
+One observed symptom is:
+
+```text
+SyntaxError: future feature annotations is not defined
+```
+
+Before running Python-based validation tools on JACI, load Anaconda and initialize Conda:
+
+```bash
+module load anaconda
+start_conda
+```
+
+In this repository, that startup is centralized in:
+
+```text
+configs/sites/jaci/modules.sh
+```
+
+The environment loader calls this file automatically.
+
 ## Load environment
 
 ```bash
 source scripts/env/load_jaci_env.sh configs/sites/jaci/site.env
 ```
+
+This should load the Anaconda module, run `start_conda`, and expose a newer Python runtime.
 
 ## Check environment
 
@@ -44,6 +70,22 @@ bash scripts/setup/check_runtime.sh configs/sites/jaci/site.env
 
 The check script reports missing commands, missing executables and missing data directories as
 warnings. Review all warnings before running a scientific experiment.
+
+## Expected JACI workspace
+
+The observed workspace during validation was:
+
+```text
+/p/projetos/monan_das/joao.gerd
+```
+
+The default example therefore uses:
+
+```text
+${MONAN_JACI_WORKSPACE}/projects/monan-jedi-workflow
+```
+
+for the repository checkout.
 
 ## Expected data layout
 
