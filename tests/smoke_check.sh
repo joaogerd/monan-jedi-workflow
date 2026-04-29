@@ -36,6 +36,7 @@ required_paths=(
   scripts/env/load_jaci_env.sh
   scripts/setup/check_runtime.sh
   scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
+  scripts/setup/validate_3dvar_fgat_staged_inputs.sh
   scripts/run/render_3dvar_fgat.sh
   scripts/run/prepare_3dvar_fgat_runtime.sh
   scripts/run/run_3dvar_fgat_variational.sh
@@ -49,6 +50,7 @@ required_paths=(
   tools/check_observer_metadata.py
   tools/check_ioda_inventory.py
   tools/bootstrap_data_layout.py
+  tools/validate_staged_inputs.py
   tools/render_template.py
   tools/render_observers.py
   tools/prepare_runtime.py
@@ -87,6 +89,10 @@ echo "[INFO] Checking data layout dry-run"
 bash scripts/setup/bootstrap_3dvar_fgat_data_layout.sh --dry-run > /tmp/monan_jedi_data_layout.txt
 grep -q "DRY-RUN" /tmp/monan_jedi_data_layout.txt
 grep -q "observations/ioda/2024081500" /tmp/monan_jedi_data_layout.txt
+
+echo "[INFO] Checking staged inputs in permissive mode"
+bash scripts/setup/validate_3dvar_fgat_staged_inputs.sh --allow-missing > /tmp/monan_jedi_staged_inputs.txt
+grep -q "Staged input validation passed" /tmp/monan_jedi_staged_inputs.txt
 
 echo "[INFO] Inspecting placeholders"
 python3 tools/check_placeholders.py configs/jedi/applications/3dvar.yaml configs/templates/resources/variational_minimal.yaml >/tmp/monan_jedi_placeholders.txt
