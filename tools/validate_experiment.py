@@ -52,6 +52,17 @@ def check_file_contains(path: Path, needles: list[str]) -> None:
     print(f"[INFO] {path}: content check passed")
 
 
+def check_file_contains_any(path: Path, alternatives: list[str], label: str) -> None:
+    """Check that a file contains at least one expected alternative string."""
+    if not path.is_file():
+        raise ValidationError(f"Missing file: {path}")
+    text = path.read_text(encoding="utf-8")
+    if not any(item in text for item in alternatives):
+        joined = " OR ".join(alternatives)
+        raise ValidationError(f"Missing expected {label} in {path}: {joined}")
+    print(f"[INFO] {path}: found {label}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate MONAN/JEDI experiment structure.")
     parser.add_argument(
@@ -91,9 +102,14 @@ def main() -> int:
             rendered / "observers.yaml",
             ["name: aircraft", "name: sondes", "name: sfc"],
         )
+        check_file_contains_any(
+            rendered / "mpasjedi_variational.command",
+            ["mpasjedi_variational", "MPASJEDI_VARIATIONAL_EXE"],
+            "variational executable reference",
+        )
         check_file_contains(
             rendered / "mpasjedi_variational.command",
-            ["mpasjedi_variational", "3dvar_fgat.yaml"],
+            ["3dvar_fgat.yaml"],
         )
         check_file_contains(
             rendered / "3dvar_fgat.pbs",
