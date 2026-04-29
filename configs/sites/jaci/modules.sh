@@ -8,7 +8,13 @@
 
 # JACI site-provided shell functions may reference variables that are unset when
 # repository scripts run with `set -u`. Temporarily disable nounset while loading
-# modules and starting Conda, then restore it before returning to the caller.
+# modules and starting Conda, then restore the previous shell option state before
+# returning to the caller.
+case "$-" in
+  *u*) monan_had_nounset=1 ;;
+  *) monan_had_nounset=0 ;;
+esac
+
 set +u
 
 if command -v module >/dev/null 2>&1; then
@@ -26,7 +32,12 @@ else
   printf '[WARN] start_conda command not available after loading anaconda.\n' >&2
 fi
 
-set -u
+if [[ "${monan_had_nounset}" == "1" ]]; then
+  set -u
+else
+  set +u
+fi
+unset monan_had_nounset
 
 if command -v python3 >/dev/null 2>&1; then
   printf '[INFO] Python3 runtime: %s\n' "$(command -v python3)"
