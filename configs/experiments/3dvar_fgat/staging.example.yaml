@@ -1,0 +1,64 @@
+# Input staging manifest for MONAN/JEDI 3DVar-FGAT.
+#
+# This file maps external scientific inputs into the canonical ${MONAN_DATA_ROOT}
+# layout used by the current workflow.
+#
+# It does not create or validate scientific content. It only declares how real files
+# should be linked or copied once they are available.
+
+input_staging:
+  cycle: "2024081500"
+  data_root: "${MONAN_DATA_ROOT}"
+
+  # Default action can be "link" or "copy".
+  default_action: link
+
+  files:
+    - name: background_state
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/background/2024081500/mpasout.2024-08-15_00.00.00.nc"
+      target: "background/2024081500/mpasout.2024-08-15_00.00.00.nc"
+      required: true
+      kind: netcdf
+      description: MPAS background state for the 3DVar-FGAT cycle.
+
+    - name: aircraft_ioda
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+      target: "observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+      required: true
+      kind: hdf5
+      description: IODA aircraft conventional observations.
+
+    - name: sondes_ioda
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2024081500/sondes_obs_2024081500.h5"
+      target: "observations/ioda/2024081500/sondes_obs_2024081500.h5"
+      required: true
+      kind: hdf5
+      description: IODA radiosonde/profile observations.
+
+    - name: sfc_ioda
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2024081500/sfc_obs_2024081500.h5"
+      target: "observations/ioda/2024081500/sfc_obs_2024081500.h5"
+      required: true
+      kind: hdf5
+      description: IODA surface observations.
+
+    - name: covariance_stddev
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/covariance/mpas.stddev.nc"
+      target: "covariance/mpas.stddev.nc"
+      required: true
+      kind: netcdf
+      description: Placeholder covariance resource used by the structural SABER/BUMP configuration.
+
+    - name: graph_info_128
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/graph/graph.info.part.0128"
+      target: "graph/graph.info.part.0128"
+      required: false
+      kind: text
+      description: MPAS graph partition file for 128 MPI tasks.
+
+    - name: static_file
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/static/x1.static.nc"
+      target: "static/x1.static.nc"
+      required: false
+      kind: netcdf
+      description: MPAS static file matching the experiment mesh.
