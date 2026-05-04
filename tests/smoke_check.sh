@@ -12,6 +12,7 @@ required_paths=(
   docs/jaci_setup.md
   docs/upstream_audit.md
   docs/upstream_configuration_map.md
+  docs/first_real_3dvar_fgat_case.md
   configs/sites/jaci/site.env.example
   configs/sites/jaci/README.md
   configs/experiments/3dvar_fgat/experiment.yaml
@@ -40,6 +41,7 @@ required_paths=(
   scripts/setup/audit_3dvar_fgat_scientific_inputs.sh
   scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
   scripts/setup/check_external_input_root.sh
+  scripts/setup/print_3dvar_fgat_next_steps.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
   scripts/setup/validate_3dvar_fgat_staged_inputs.sh
   scripts/run/render_3dvar_fgat.sh
@@ -105,6 +107,10 @@ grep -q "External input root" /tmp/monan_jedi_external_input_root.txt || grep -q
 echo "[INFO] Auditing scientific input checklist"
 bash scripts/setup/audit_3dvar_fgat_scientific_inputs.sh > /tmp/monan_jedi_scientific_inputs.txt
 grep -q "Scientific input checklist audit completed" /tmp/monan_jedi_scientific_inputs.txt
+
+echo "[INFO] Checking first-case next steps helper"
+bash scripts/setup/print_3dvar_fgat_next_steps.sh > /tmp/monan_jedi_next_steps.txt
+grep -q "First real MONAN/JEDI 3DVar-FGAT case" /tmp/monan_jedi_next_steps.txt
 
 echo "[INFO] Checking input staging dry-run"
 bash scripts/setup/stage_3dvar_fgat_inputs.sh --dry-run > /tmp/monan_jedi_input_staging.txt
