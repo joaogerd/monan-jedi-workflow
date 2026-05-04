@@ -28,6 +28,18 @@ source "$site_env"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 
+# Compatibility for older local configs/sites/jaci/site.env files created before
+# MONAN_EXTERNAL_DATA_ROOT was introduced. Keep explicit user/site values when
+# already defined, otherwise derive a safe default from MONAN_JACI_WORKSPACE.
+if [[ -z "${MONAN_EXTERNAL_DATA_ROOT:-}" ]]; then
+  if [[ -n "${MONAN_JACI_WORKSPACE:-}" ]]; then
+    export MONAN_EXTERNAL_DATA_ROOT="${MONAN_JACI_WORKSPACE}/external-inputs/3dvar_fgat"
+  else
+    export MONAN_EXTERNAL_DATA_ROOT="${repo_root}/external-inputs/3dvar_fgat"
+  fi
+  warn "MONAN_EXTERNAL_DATA_ROOT was not set; using default: ${MONAN_EXTERNAL_DATA_ROOT}"
+fi
+
 load_jaci_modules() {
   local modules_file="$1"
 
@@ -53,6 +65,7 @@ load_jaci_modules "$modules_file" || die "failed to load JACI modules from ${mod
 : "${MONAN_WORKFLOW_ROOT:?MONAN_WORKFLOW_ROOT is required}"
 : "${MPAS_BUNDLE_BUILD:?MPAS_BUNDLE_BUILD is required}"
 : "${CYLC_PLATFORM:?CYLC_PLATFORM is required}"
+: "${MONAN_EXTERNAL_DATA_ROOT:?MONAN_EXTERNAL_DATA_ROOT is required}"
 
 export PATH="${MPAS_BUNDLE_BUILD}/bin:${PATH}"
 export LD_LIBRARY_PATH="${MPAS_BUNDLE_BUILD}/lib:${LD_LIBRARY_PATH:-}"
@@ -61,6 +74,7 @@ log "MONAN_SITE=${MONAN_SITE}"
 log "MONAN_WORKFLOW_ROOT=${MONAN_WORKFLOW_ROOT}"
 log "MONAN_DATA_ROOT=${MONAN_DATA_ROOT:-unset}"
 log "MONAN_SCRATCH=${MONAN_SCRATCH:-unset}"
+log "MONAN_EXTERNAL_DATA_ROOT=${MONAN_EXTERNAL_DATA_ROOT}"
 log "MPAS_BUNDLE_BUILD=${MPAS_BUNDLE_BUILD}"
 log "MPASJEDI_VARIATIONAL_EXE=${MPASJEDI_VARIATIONAL_EXE:-unset}"
 log "MPI_LAUNCHER=${MPI_LAUNCHER:-unset}"

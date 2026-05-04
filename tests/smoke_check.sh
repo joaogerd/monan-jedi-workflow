@@ -37,6 +37,7 @@ required_paths=(
   scripts/env/load_jaci_env.sh
   scripts/setup/check_runtime.sh
   scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
+  scripts/setup/check_external_input_root.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
   scripts/setup/validate_3dvar_fgat_staged_inputs.sh
   scripts/run/render_3dvar_fgat.sh
@@ -52,6 +53,7 @@ required_paths=(
   tools/check_observer_metadata.py
   tools/check_ioda_inventory.py
   tools/bootstrap_data_layout.py
+  tools/check_external_input_root.py
   tools/stage_inputs.py
   tools/validate_staged_inputs.py
   tools/render_template.py
@@ -92,6 +94,10 @@ echo "[INFO] Checking data layout dry-run"
 bash scripts/setup/bootstrap_3dvar_fgat_data_layout.sh --dry-run > /tmp/monan_jedi_data_layout.txt
 grep -q "DRY-RUN" /tmp/monan_jedi_data_layout.txt
 grep -q "observations/ioda/2024081500" /tmp/monan_jedi_data_layout.txt
+
+echo "[INFO] Checking external input root in permissive mode"
+bash scripts/setup/check_external_input_root.sh --allow-missing > /tmp/monan_jedi_external_input_root.txt
+grep -q "External input root" /tmp/monan_jedi_external_input_root.txt || grep -q "MONAN_EXTERNAL_DATA_ROOT" /tmp/monan_jedi_external_input_root.txt
 
 echo "[INFO] Checking input staging dry-run"
 bash scripts/setup/stage_3dvar_fgat_inputs.sh --dry-run > /tmp/monan_jedi_input_staging.txt
