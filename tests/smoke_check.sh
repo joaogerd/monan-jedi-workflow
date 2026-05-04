@@ -21,6 +21,7 @@ required_paths=(
   configs/experiments/3dvar_fgat/ioda_inventory.example.yaml
   configs/experiments/3dvar_fgat/data_layout.example.yaml
   configs/experiments/3dvar_fgat/staging.example.yaml
+  configs/experiments/3dvar_fgat/scientific_input_checklist.yaml
   configs/experiments/3dvar_fgat/runtime_manifest.example.yaml
   configs/experiments/3dvar_fgat/run_command.example.yaml
   configs/experiments/3dvar_fgat/pbs_job.example.yaml
@@ -36,6 +37,7 @@ required_paths=(
   configs/templates/import_manifest.yaml
   scripts/env/load_jaci_env.sh
   scripts/setup/check_runtime.sh
+  scripts/setup/audit_3dvar_fgat_scientific_inputs.sh
   scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
   scripts/setup/check_external_input_root.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
@@ -52,6 +54,7 @@ required_paths=(
   tools/check_observer_manifest.py
   tools/check_observer_metadata.py
   tools/check_ioda_inventory.py
+  tools/audit_scientific_inputs.py
   tools/bootstrap_data_layout.py
   tools/check_external_input_root.py
   tools/stage_inputs.py
@@ -98,6 +101,10 @@ grep -q "observations/ioda/2024081500" /tmp/monan_jedi_data_layout.txt
 echo "[INFO] Checking external input root in permissive mode"
 bash scripts/setup/check_external_input_root.sh --allow-missing > /tmp/monan_jedi_external_input_root.txt
 grep -q "External input root" /tmp/monan_jedi_external_input_root.txt || grep -q "MONAN_EXTERNAL_DATA_ROOT" /tmp/monan_jedi_external_input_root.txt
+
+echo "[INFO] Auditing scientific input checklist"
+bash scripts/setup/audit_3dvar_fgat_scientific_inputs.sh > /tmp/monan_jedi_scientific_inputs.txt
+grep -q "Scientific input checklist audit completed" /tmp/monan_jedi_scientific_inputs.txt
 
 echo "[INFO] Checking input staging dry-run"
 bash scripts/setup/stage_3dvar_fgat_inputs.sh --dry-run > /tmp/monan_jedi_input_staging.txt
