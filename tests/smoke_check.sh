@@ -17,6 +17,7 @@ required_paths=(
   configs/sites/jaci/README.md
   configs/experiments/3dvar_fgat/experiment.yaml
   configs/experiments/3dvar_fgat/README.md
+  configs/experiments/3dvar_fgat/input_sources.example.yaml
   configs/experiments/3dvar_fgat/render_context.example.yaml
   configs/experiments/3dvar_fgat/observers.yaml
   configs/experiments/3dvar_fgat/ioda_inventory.example.yaml
@@ -38,6 +39,7 @@ required_paths=(
   configs/templates/import_manifest.yaml
   scripts/env/load_jaci_env.sh
   scripts/setup/check_runtime.sh
+  scripts/setup/audit_3dvar_fgat_input_sources.sh
   scripts/setup/audit_3dvar_fgat_scientific_inputs.sh
   scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
   scripts/setup/check_external_input_root.sh
@@ -56,6 +58,7 @@ required_paths=(
   tools/check_observer_manifest.py
   tools/check_observer_metadata.py
   tools/check_ioda_inventory.py
+  tools/audit_input_sources.py
   tools/audit_scientific_inputs.py
   tools/bootstrap_data_layout.py
   tools/check_external_input_root.py
@@ -103,6 +106,10 @@ grep -q "observations/ioda/2024081500" /tmp/monan_jedi_data_layout.txt
 echo "[INFO] Checking external input root in permissive mode"
 bash scripts/setup/check_external_input_root.sh --allow-missing > /tmp/monan_jedi_external_input_root.txt
 grep -q "External input root" /tmp/monan_jedi_external_input_root.txt || grep -q "MONAN_EXTERNAL_DATA_ROOT" /tmp/monan_jedi_external_input_root.txt
+
+echo "[INFO] Auditing real input source registry"
+bash scripts/setup/audit_3dvar_fgat_input_sources.sh > /tmp/monan_jedi_input_sources.txt
+grep -q "Input source registry audit completed" /tmp/monan_jedi_input_sources.txt
 
 echo "[INFO] Auditing scientific input checklist"
 bash scripts/setup/audit_3dvar_fgat_scientific_inputs.sh > /tmp/monan_jedi_scientific_inputs.txt

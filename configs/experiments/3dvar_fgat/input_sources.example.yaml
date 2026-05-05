@@ -1,0 +1,108 @@
+# Real input source registry for the first MONAN/JEDI 3DVar-FGAT case.
+#
+# This file records where each scientific input should come from before it is
+# staged into MONAN_EXTERNAL_DATA_ROOT and then linked/copied into MONAN_DATA_ROOT.
+#
+# Fill source_path values on JACI once real files are identified.
+
+input_sources:
+  experiment: 3dvar_fgat
+  cycle: "2024081500"
+  status: source_discovery
+
+  destinations:
+    external_root: "${MONAN_EXTERNAL_DATA_ROOT}"
+    staged_root: "${MONAN_DATA_ROOT}"
+
+  sources:
+    - name: background_state
+      required: true
+      kind: netcdf
+      source_path: ""
+      external_target: "background/2024081500/mpasout.2024-08-15_00.00.00.nc"
+      staged_target: "background/2024081500/mpasout.2024-08-15_00.00.00.nc"
+      origin_system: MPAS_or_MONAN_forecast
+      owner_or_contact: TODO
+      discovery_status: pending
+      notes: >-
+        Identify the MPAS/MONAN background valid at 2024-08-15 00 UTC and compatible with
+        the selected MPAS-JEDI geometry.
+
+    - name: aircraft_ioda
+      required: true
+      kind: hdf5
+      source_path: ""
+      external_target: "observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+      staged_target: "observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+      origin_system: IODA_conversion_pipeline
+      owner_or_contact: TODO
+      discovery_status: pending
+      notes: >-
+        Identify aircraft observations converted to IODA for the selected FGAT window.
+
+    - name: sondes_ioda
+      required: true
+      kind: hdf5
+      source_path: ""
+      external_target: "observations/ioda/2024081500/sondes_obs_2024081500.h5"
+      staged_target: "observations/ioda/2024081500/sondes_obs_2024081500.h5"
+      origin_system: IODA_conversion_pipeline
+      owner_or_contact: TODO
+      discovery_status: pending
+      notes: >-
+        Identify radiosonde/profile observations converted to IODA for the selected FGAT window.
+
+    - name: sfc_ioda
+      required: true
+      kind: hdf5
+      source_path: ""
+      external_target: "observations/ioda/2024081500/sfc_obs_2024081500.h5"
+      staged_target: "observations/ioda/2024081500/sfc_obs_2024081500.h5"
+      origin_system: IODA_conversion_pipeline
+      owner_or_contact: TODO
+      discovery_status: pending
+      notes: >-
+        Identify surface observations converted to IODA for the selected FGAT window.
+
+    - name: covariance_stddev
+      required: true
+      kind: netcdf
+      source_path: ""
+      external_target: "covariance/mpas.stddev.nc"
+      staged_target: "covariance/mpas.stddev.nc"
+      origin_system: SABER_BUMP_resource_generation
+      owner_or_contact: TODO
+      discovery_status: pending
+      notes: >-
+        Identify or generate the covariance/stddev resource compatible with the selected mesh.
+
+    - name: graph_info_128
+      required: false
+      kind: text
+      source_path: ""
+      external_target: "graph/graph.info.part.0128"
+      staged_target: "graph/graph.info.part.0128"
+      origin_system: MPAS_mesh_partitioning
+      owner_or_contact: TODO
+      discovery_status: pending
+      notes: >-
+        Identify graph partition file if the runtime configuration requires 128 MPI tasks.
+
+    - name: static_file
+      required: false
+      kind: netcdf
+      source_path: ""
+      external_target: "static/x1.static.nc"
+      staged_target: "static/x1.static.nc"
+      origin_system: MPAS_mesh_static_generation
+      owner_or_contact: TODO
+      discovery_status: pending
+      notes: >-
+        Identify static file matching the background mesh and geometry configuration.
+
+  mpas_jedi_build:
+    build_root: "${MPAS_BUNDLE_BUILD}"
+    variational_executable: "${MPASJEDI_VARIATIONAL_EXE}"
+    discovery_status: pending
+    notes: >-
+      Replace placeholder MPAS_BUNDLE_BUILD with the validated MPAS-JEDI installation on JACI.
