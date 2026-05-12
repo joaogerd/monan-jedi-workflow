@@ -1,0 +1,47 @@
+# MPAS-JEDI build discovery manifest for JACI.
+#
+# This file describes how MONAN-JEDI-WORKFLOW expects to discover and validate
+# the MPAS-JEDI build used by the first 3DVar-FGAT experiment.
+#
+# It intentionally keeps placeholder paths. Copy or adapt this file for a real
+# JACI build once mpas-bundle is installed.
+
+mpas_jedi_build:
+  site: jaci
+  status: pending_discovery
+
+  build_root: "${MPAS_BUNDLE_BUILD}"
+  bin_dir: "${MPAS_BUNDLE_BUILD}/bin"
+  lib_dir: "${MPAS_BUNDLE_BUILD}/lib"
+
+  required_executables:
+    - name: mpasjedi_variational
+      variable: MPASJEDI_VARIATIONAL_EXE
+      path: "${MPASJEDI_VARIATIONAL_EXE}"
+      required_for: 3dvar_fgat
+      status: pending
+
+    - name: mpas_atmosphere
+      variable: MPAS_ATMOSPHERE_EXE
+      path: "${MPAS_ATMOSPHERE_EXE}"
+      required_for: forecast
+      status: pending
+
+  optional_executables:
+    - name: mpasjedi_hofx3d
+      variable: MPASJEDI_HOFX_EXE
+      path: "${MPASJEDI_HOFX_EXE}"
+      required_for: hofx_diagnostics
+      status: pending
+
+  expected_commands:
+    - name: mpiexec
+      variable: MPI_LAUNCHER
+      command: "${MPI_LAUNCHER}"
+      required: true
+
+  notes:
+    - "Replace MPAS_BUNDLE_BUILD in configs/sites/jaci/site.env with the real mpas-bundle build root."
+    - "The first 3DVar-FGAT run requires mpasjedi_variational.x."
+    - "Forecast cycling will also require mpas_atmosphere."
+    - "HofX diagnostics may require mpasjedi_hofx3d.x."
