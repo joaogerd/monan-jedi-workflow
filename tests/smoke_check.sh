@@ -46,6 +46,7 @@ required_paths=(
   scripts/setup/check_3dvar_fgat_input_consistency.sh
   scripts/setup/check_external_input_root.sh
   scripts/setup/check_mpas_jedi_build.sh
+  scripts/setup/find_mpas_jedi_build.sh
   scripts/setup/print_3dvar_fgat_next_steps.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
   scripts/setup/validate_3dvar_fgat_staged_inputs.sh
@@ -63,6 +64,7 @@ required_paths=(
   tools/check_ioda_inventory.py
   tools/check_input_consistency.py
   tools/check_mpas_jedi_build.py
+  tools/find_mpas_jedi_build.py
   tools/audit_input_sources.py
   tools/audit_scientific_inputs.py
   tools/bootstrap_data_layout.py
@@ -92,6 +94,10 @@ grep -q "Source: NCAR/MPAS-Workflow" configs/templates/resources/forecast.yaml
 echo "[INFO] Checking MPAS-JEDI build in permissive mode"
 bash scripts/setup/check_mpas_jedi_build.sh > /tmp/monan_jedi_mpas_jedi_build.txt
 grep -q "MPAS-JEDI build check completed" /tmp/monan_jedi_mpas_jedi_build.txt
+
+echo "[INFO] Checking MPAS-JEDI build finder in non-strict mode"
+bash scripts/setup/find_mpas_jedi_build.sh --max-depth 1 . > /tmp/monan_jedi_mpas_jedi_finder.txt
+grep -q "MPAS-JEDI build finder completed" /tmp/monan_jedi_mpas_jedi_finder.txt || grep -q "No MPAS-JEDI build candidates found" /tmp/monan_jedi_mpas_jedi_finder.txt
 
 echo "[INFO] Checking observer manifest"
 python3 tools/check_observer_manifest.py configs/experiments/3dvar_fgat/observers.yaml
