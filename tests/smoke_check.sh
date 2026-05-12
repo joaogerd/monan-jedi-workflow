@@ -14,6 +14,7 @@ required_paths=(
   docs/upstream_configuration_map.md
   docs/first_real_3dvar_fgat_case.md
   configs/sites/jaci/site.env.example
+  configs/sites/jaci/mpas_jedi_build.example.yaml
   configs/sites/jaci/README.md
   configs/experiments/3dvar_fgat/experiment.yaml
   configs/experiments/3dvar_fgat/README.md
@@ -44,6 +45,7 @@ required_paths=(
   scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
   scripts/setup/check_3dvar_fgat_input_consistency.sh
   scripts/setup/check_external_input_root.sh
+  scripts/setup/check_mpas_jedi_build.sh
   scripts/setup/print_3dvar_fgat_next_steps.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
   scripts/setup/validate_3dvar_fgat_staged_inputs.sh
@@ -60,6 +62,7 @@ required_paths=(
   tools/check_observer_metadata.py
   tools/check_ioda_inventory.py
   tools/check_input_consistency.py
+  tools/check_mpas_jedi_build.py
   tools/audit_input_sources.py
   tools/audit_scientific_inputs.py
   tools/bootstrap_data_layout.py
@@ -85,6 +88,10 @@ echo "[INFO] Checking imported template provenance"
 grep -q "Source: NCAR/MPAS-Workflow" configs/jedi/applications/3dvar.yaml
 grep -q "Source: NCAR/MPAS-Workflow" configs/mpas/resources/model.yaml
 grep -q "Source: NCAR/MPAS-Workflow" configs/templates/resources/forecast.yaml
+
+echo "[INFO] Checking MPAS-JEDI build in permissive mode"
+bash scripts/setup/check_mpas_jedi_build.sh > /tmp/monan_jedi_mpas_jedi_build.txt
+grep -q "MPAS-JEDI build check completed" /tmp/monan_jedi_mpas_jedi_build.txt
 
 echo "[INFO] Checking observer manifest"
 python3 tools/check_observer_manifest.py configs/experiments/3dvar_fgat/observers.yaml
