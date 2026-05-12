@@ -42,6 +42,7 @@ required_paths=(
   scripts/setup/audit_3dvar_fgat_input_sources.sh
   scripts/setup/audit_3dvar_fgat_scientific_inputs.sh
   scripts/setup/bootstrap_3dvar_fgat_data_layout.sh
+  scripts/setup/check_3dvar_fgat_input_consistency.sh
   scripts/setup/check_external_input_root.sh
   scripts/setup/print_3dvar_fgat_next_steps.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
@@ -58,6 +59,7 @@ required_paths=(
   tools/check_observer_manifest.py
   tools/check_observer_metadata.py
   tools/check_ioda_inventory.py
+  tools/check_input_consistency.py
   tools/audit_input_sources.py
   tools/audit_scientific_inputs.py
   tools/bootstrap_data_layout.py
@@ -97,6 +99,10 @@ python3 tools/check_ioda_inventory.py \
   --inventory configs/experiments/3dvar_fgat/ioda_inventory.example.yaml \
   --manifest configs/experiments/3dvar_fgat/observers.yaml \
   --metadata configs/jedi/obs_plugs/variational/metadata.yaml
+
+echo "[INFO] Checking source/staging/checklist consistency"
+bash scripts/setup/check_3dvar_fgat_input_consistency.sh > /tmp/monan_jedi_input_consistency.txt
+grep -q "Input source/staging/checklist consistency check passed" /tmp/monan_jedi_input_consistency.txt
 
 echo "[INFO] Checking data layout dry-run"
 bash scripts/setup/bootstrap_3dvar_fgat_data_layout.sh --dry-run > /tmp/monan_jedi_data_layout.txt
