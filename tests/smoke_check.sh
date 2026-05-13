@@ -19,11 +19,13 @@ required_paths=(
   configs/experiments/3dvar_fgat/experiment.yaml
   configs/experiments/3dvar_fgat/README.md
   configs/experiments/3dvar_fgat/input_sources.example.yaml
+  configs/experiments/3dvar_fgat/input_sources.jaci.example.yaml
   configs/experiments/3dvar_fgat/render_context.example.yaml
   configs/experiments/3dvar_fgat/observers.yaml
   configs/experiments/3dvar_fgat/ioda_inventory.example.yaml
   configs/experiments/3dvar_fgat/data_layout.example.yaml
   configs/experiments/3dvar_fgat/staging.example.yaml
+  configs/experiments/3dvar_fgat/staging.jaci.example.yaml
   configs/experiments/3dvar_fgat/scientific_input_checklist.yaml
   configs/experiments/3dvar_fgat/runtime_manifest.example.yaml
   configs/experiments/3dvar_fgat/run_command.example.yaml
@@ -46,6 +48,7 @@ required_paths=(
   scripts/setup/check_3dvar_fgat_input_consistency.sh
   scripts/setup/check_external_input_root.sh
   scripts/setup/check_mpas_jedi_build.sh
+  scripts/setup/create_3dvar_fgat_external_tree.sh
   scripts/setup/find_mpas_jedi_build.sh
   scripts/setup/print_3dvar_fgat_next_steps.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
@@ -117,10 +120,22 @@ echo "[INFO] Checking source/staging/checklist consistency"
 bash scripts/setup/check_3dvar_fgat_input_consistency.sh > /tmp/monan_jedi_input_consistency.txt
 grep -q "Input source/staging/checklist consistency check passed" /tmp/monan_jedi_input_consistency.txt
 
+echo "[INFO] Checking JACI source/staging/checklist consistency"
+bash scripts/setup/check_3dvar_fgat_input_consistency.sh \
+  --sources configs/experiments/3dvar_fgat/input_sources.jaci.example.yaml \
+  --staging configs/experiments/3dvar_fgat/staging.jaci.example.yaml \
+  --checklist configs/experiments/3dvar_fgat/scientific_input_checklist.yaml \
+  > /tmp/monan_jedi_jaci_input_consistency.txt
+grep -q "Input source/staging/checklist consistency check passed" /tmp/monan_jedi_jaci_input_consistency.txt
+
 echo "[INFO] Checking data layout dry-run"
 bash scripts/setup/bootstrap_3dvar_fgat_data_layout.sh --dry-run > /tmp/monan_jedi_data_layout.txt
 grep -q "DRY-RUN" /tmp/monan_jedi_data_layout.txt
 grep -q "observations/ioda/2024081500" /tmp/monan_jedi_data_layout.txt
+
+echo "[INFO] Checking external input root dry-run"
+bash scripts/setup/create_3dvar_fgat_external_tree.sh --dry-run > /tmp/monan_jedi_external_tree.txt
+grep -q "External input tree preparation completed" /tmp/monan_jedi_external_tree.txt
 
 echo "[INFO] Checking external input root in permissive mode"
 bash scripts/setup/check_external_input_root.sh --allow-missing > /tmp/monan_jedi_external_input_root.txt
