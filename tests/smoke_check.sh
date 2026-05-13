@@ -52,6 +52,7 @@ required_paths=(
   scripts/setup/find_mpas_jedi_build.sh
   scripts/setup/print_3dvar_fgat_next_steps.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
+  scripts/setup/sync_3dvar_fgat_input_sources.sh
   scripts/setup/validate_3dvar_fgat_staged_inputs.sh
   scripts/run/render_3dvar_fgat.sh
   scripts/run/prepare_3dvar_fgat_runtime.sh
@@ -73,6 +74,7 @@ required_paths=(
   tools/bootstrap_data_layout.py
   tools/check_external_input_root.py
   tools/stage_inputs.py
+  tools/sync_input_sources.py
   tools/validate_staged_inputs.py
   tools/render_template.py
   tools/render_observers.py
@@ -127,6 +129,10 @@ bash scripts/setup/check_3dvar_fgat_input_consistency.sh \
   --checklist configs/experiments/3dvar_fgat/scientific_input_checklist.yaml \
   > /tmp/monan_jedi_jaci_input_consistency.txt
 grep -q "Input source/staging/checklist consistency check passed" /tmp/monan_jedi_jaci_input_consistency.txt
+
+echo "[INFO] Checking input source sync dry-run"
+bash scripts/setup/sync_3dvar_fgat_input_sources.sh --dry-run > /tmp/monan_jedi_input_source_sync.txt
+grep -q "Input source synchronization completed" /tmp/monan_jedi_input_source_sync.txt
 
 echo "[INFO] Checking data layout dry-run"
 bash scripts/setup/bootstrap_3dvar_fgat_data_layout.sh --dry-run > /tmp/monan_jedi_data_layout.txt
