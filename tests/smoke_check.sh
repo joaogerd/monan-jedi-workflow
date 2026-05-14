@@ -62,6 +62,7 @@ required_paths=(
   scripts/run/render_3dvar_fgat_pbs.sh
   scripts/run/validate_3dvar_fgat_experiment.sh
   scripts/run/validate_3dvar_fgat_jedi_observers.sh
+  scripts/run/validate_3dvar_fgat_window.sh
   workflow/cylc/global.cylc.jaci.example
   jobs/pbs/smoke_test.pbs
   jobs/pbs/3dvar_fgat.pbs.template
@@ -79,6 +80,7 @@ required_paths=(
   tools/stage_inputs.py
   tools/sync_input_sources.py
   tools/validate_file_formats.py
+  tools/validate_fgat_window.py
   tools/validate_ioda_structure.py
   tools/validate_jedi_observer_config.py
   tools/validate_staged_inputs.py
@@ -195,5 +197,9 @@ grep -q "Experiment structural validation passed" /tmp/monan_jedi_experiment_val
 echo "[INFO] Checking rendered JEDI observer configuration"
 bash scripts/run/validate_3dvar_fgat_jedi_observers.sh > /tmp/monan_jedi_jedi_observers.txt
 grep -q "Rendered JEDI observer configuration validation completed" /tmp/monan_jedi_jedi_observers.txt
+
+echo "[INFO] Checking FGAT window structure"
+bash scripts/run/validate_3dvar_fgat_window.sh > /tmp/monan_jedi_fgat_window.txt
+grep -q "FGAT window structural validation completed" /tmp/monan_jedi_fgat_window.txt
 
 echo "[INFO] Structure smoke check passed"
