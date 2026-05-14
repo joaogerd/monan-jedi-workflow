@@ -7,6 +7,7 @@ experiment:
   name: jaci_3dvar_fgat_smoke
 
 cycle:
+  yyyymmddhh: "2024081500"
   analysis_iso8601: "2024-08-15T00:00:00Z"
   mpas_file_date: "2024-08-15_00.00.00"
   window:

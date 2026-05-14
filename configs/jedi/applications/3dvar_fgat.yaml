@@ -10,6 +10,15 @@
 #   - not yet scientifically validated on JACI;
 #   - FGAT background-time handling must be confirmed with the selected MPAS-JEDI bundle.
 
+monan metadata:
+  experiment: 3dvar_fgat
+  analysis date: {{cycle.analysis_iso8601}}
+  cycle: {{cycle.yyyymmddhh}}
+  time window:
+    begin: {{cycle.window.begin}}
+    length: {{cycle.window.length}}
+  mpas file date: {{cycle.mpas_file_date}}
+
 _iteration: &iterationConfig
   geometry:
     nml_file: {{mpas.inner_namelist}}

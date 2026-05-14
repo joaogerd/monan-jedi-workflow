@@ -66,6 +66,19 @@ def find_values_by_key(node: Any, key_names: set[str]) -> list[Any]:
     return found
 
 
+def find_time_windows(node: Any) -> list[Any]:
+    windows: list[Any] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if str(key) in {"time window", "time_window", "window"}:
+                windows.append(value)
+            windows.extend(find_time_windows(value))
+    elif isinstance(node, list):
+        for value in node:
+            windows.extend(find_time_windows(value))
+    return windows
+
+
 def extract_date_tokens(text: str) -> list[str]:
     return DATE_TOKEN_RE.findall(text)
 
@@ -201,10 +214,12 @@ def main() -> int:
         jedi = read_yaml(args.jedi_yaml)
         temporal_values = find_values_by_key(
             jedi,
-            {"window begin", "window length", "window_begin", "window_length", "analysis date", "analysis_date"},
+            {"window begin", "window length", "window_begin", "window_length", "analysis date", "analysis_date", "cycle"},
         )
+        time_windows = find_time_windows(jedi)
         print(f"[INFO] Rendered JEDI temporal values: {temporal_values}")
-        if not temporal_values:
+        print(f"[INFO] Rendered JEDI time windows: {time_windows}")
+        if not temporal_values and not time_windows:
             level = "ERROR" if args.strict else "WARN"
             print(f"[{level}] no obvious temporal/window keys found in rendered JEDI YAML")
             ok = ok and not args.strict
