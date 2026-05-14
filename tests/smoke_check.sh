@@ -55,6 +55,7 @@ required_paths=(
   scripts/setup/sync_3dvar_fgat_input_sources.sh
   scripts/setup/validate_3dvar_fgat_file_formats.sh
   scripts/setup/validate_3dvar_fgat_ioda_structure.sh
+  scripts/setup/validate_3dvar_fgat_mpas_background.sh
   scripts/setup/validate_3dvar_fgat_staged_inputs.sh
   scripts/run/render_3dvar_fgat.sh
   scripts/run/prepare_3dvar_fgat_runtime.sh
@@ -83,6 +84,7 @@ required_paths=(
   tools/validate_fgat_window.py
   tools/validate_ioda_structure.py
   tools/validate_jedi_observer_config.py
+  tools/validate_mpas_background.py
   tools/validate_staged_inputs.py
   tools/render_template.py
   tools/render_observers.py
@@ -178,6 +180,10 @@ grep -q "Staged input validation passed" /tmp/monan_jedi_staged_inputs.txt
 echo "[INFO] Checking basic file formats in permissive mode"
 bash scripts/setup/validate_3dvar_fgat_file_formats.sh > /tmp/monan_jedi_file_formats.txt
 grep -q "Basic file format validation completed" /tmp/monan_jedi_file_formats.txt
+
+echo "[INFO] Checking MPAS background in permissive mode"
+bash scripts/setup/validate_3dvar_fgat_mpas_background.sh > /tmp/monan_jedi_mpas_background.txt
+grep -q "MPAS background validation completed" /tmp/monan_jedi_mpas_background.txt || grep -q "background file not found" /tmp/monan_jedi_mpas_background.txt
 
 echo "[INFO] Checking basic IODA structure in permissive mode"
 bash scripts/setup/validate_3dvar_fgat_ioda_structure.sh > /tmp/monan_jedi_ioda_structure.txt
