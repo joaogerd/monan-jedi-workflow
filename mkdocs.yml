@@ -49,8 +49,14 @@ markdown_extensions:
   - attr_list
 
 theme:
-  name: mkdocs
+  name: material
   language: en
   features:
     - navigation.sections
     - navigation.expand
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light blue
