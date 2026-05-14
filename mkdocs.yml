@@ -21,6 +21,7 @@ nav:
       - Usuários: pt/users.md
       - FAQ e solução de problemas: pt/troubleshooting.md
       - Referência dos arquivos: pt/reference.md
+      - Site de documentação: pt/documentation_site.md
   - English:
       - Home: en/index.md
       - Overview: en/overview.md
@@ -33,6 +34,7 @@ nav:
       - Users: en/users.md
       - FAQ and troubleshooting: en/troubleshooting.md
       - File reference: en/reference.md
+      - Documentation site: en/documentation_site.md
 
 plugins:
   - search
