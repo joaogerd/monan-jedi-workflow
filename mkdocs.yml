@@ -1,0 +1,62 @@
+site_name: MONAN-JEDI-WORKFLOW
+site_description: Workflow documentation for MONAN/JEDI experiments on INPE HPC systems
+site_author: MONAN-JEDI-WORKFLOW contributors
+repo_url: https://github.com/joaogerd/monan-jedi-workflow
+repo_name: joaogerd/monan-jedi-workflow
+edit_uri: edit/main/docs-site/
+docs_dir: docs-site
+site_dir: site
+
+nav:
+  - Home: index.md
+  - Português:
+      - Início: pt/index.md
+      - Visão geral: pt/overview.md
+      - Arquitetura: pt/architecture.md
+      - Instalação e configuração: pt/installation.md
+      - Guia de uso: pt/usage.md
+      - Cookbook / How-to: pt/cookbook.md
+      - Adaptação e extensão: pt/extension.md
+      - Desenvolvedores: pt/developers.md
+      - Usuários: pt/users.md
+      - FAQ e solução de problemas: pt/troubleshooting.md
+      - Referência dos arquivos: pt/reference.md
+      - Site de documentação: pt/documentation_site.md
+  - English:
+      - Home: en/index.md
+      - Overview: en/overview.md
+      - Architecture: en/architecture.md
+      - Installation and configuration: en/installation.md
+      - User guide: en/usage.md
+      - Cookbook / How-to: en/cookbook.md
+      - Adaptation and extension: en/extension.md
+      - Developers: en/developers.md
+      - Users: en/users.md
+      - FAQ and troubleshooting: en/troubleshooting.md
+      - File reference: en/reference.md
+      - Documentation site: en/documentation_site.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - fenced_code
+  - codehilite
+  - attr_list
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light blue

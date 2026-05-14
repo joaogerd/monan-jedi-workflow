@@ -4,18 +4,43 @@ Initial INPE-oriented migration base derived conceptually from NCAR/MPAS-Workflo
 
 This repository is intended to evolve into a clean, portable workflow for MONAN/MPAS-JEDI
 experiments, initially targeting **3DVar-FGAT** cycling on the **JACI** HPE/Cray supercomputer
-using **PBS** and **Cylc 8**.
+using **PBS**.
+
+## Documentation
+
+A structured bilingual documentation site is available under:
+
+```text
+docs-site/
+```
+
+The site is built with MkDocs and includes Portuguese and English documentation for project overview,
+architecture, installation, usage, cookbook recipes, extension guidelines, developer notes and file
+reference.
+
+Preview locally with:
+
+```bash
+python3 -m pip install -r requirements-docs.txt
+mkdocs serve
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000
+```
 
 ## Scope
 
-This first version is intentionally conservative:
+This version is intentionally conservative:
 
 - documents the original MPAS-Workflow architecture;
 - preserves the scientific role of MPAS, JEDI, observation and experiment configurations;
 - introduces an INPE/JACI-oriented directory layout;
 - adds Bash-first runtime helpers;
-- provides PBS and Cylc templates;
-- adds a small template-rendering layer for structural smoke tests;
+- provides PBS templates;
+- adds template-rendering and validation layers;
 - does not claim to replace all original C-shell task scripts in one step.
 
 ## Quick start on JACI
@@ -28,14 +53,8 @@ cp configs/sites/jaci/site.env.example configs/sites/jaci/site.env
 ${EDITOR:-vi} configs/sites/jaci/site.env
 
 source scripts/env/load_jaci_env.sh configs/sites/jaci/site.env
-scripts/setup/check_runtime.sh configs/sites/jaci/site.env
-```
-
-Configure Cylc:
-
-```bash
-mkdir -p "$HOME/.cylc/flow"
-cp workflow/cylc/global.cylc.jaci.example "$HOME/.cylc/flow/global.cylc"
+bash scripts/setup/check_runtime.sh configs/sites/jaci/site.env
+bash tests/smoke_check.sh
 ```
 
 A real 3DVar-FGAT run requires validated MPAS/JEDI executables, MPAS mesh/static files,
@@ -44,10 +63,10 @@ covariance files.
 
 ## Render a 3DVar-FGAT template smoke file
 
-The repository includes a small template-rendering layer that can be tested without MPAS/JEDI:
+The repository includes a template-rendering layer that can be tested without MPAS/JEDI:
 
 ```bash
-scripts/run/render_3dvar_fgat.sh
+bash scripts/run/render_3dvar_fgat.sh
 ```
 
 Default output:
@@ -58,9 +77,3 @@ build/rendered/3dvar_fgat.yaml
 
 This rendered file is a structural smoke output. It is not yet a validated scientific JEDI
 configuration for production use.
-
-For details, see:
-
-```text
-docs/template_rendering.md
-```
