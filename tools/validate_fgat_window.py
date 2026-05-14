@@ -19,6 +19,7 @@ import yaml
 
 CYCLE_RE = re.compile(r"^\d{10}$")
 DATE_TOKEN_RE = re.compile(r"(\d{10})")
+ISO_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
 def read_yaml(path: Path) -> Any:
@@ -27,10 +28,14 @@ def read_yaml(path: Path) -> Any:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def parse_cycle(cycle: str) -> datetime:
-    if not CYCLE_RE.match(cycle):
-        raise ValueError(f"cycle must be YYYYMMDDHH, got {cycle!r}")
-    return datetime.strptime(cycle, "%Y%m%d%H")
+def parse_cycle(value: str) -> tuple[str, datetime]:
+    text = str(value).strip()
+    if CYCLE_RE.match(text):
+        return text, datetime.strptime(text, "%Y%m%d%H")
+    if ISO_UTC_RE.match(text):
+        dt = datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
+        return dt.strftime("%Y%m%d%H"), dt
+    raise ValueError(f"cycle must be YYYYMMDDHH or ISO UTC, got {value!r}")
 
 
 def parse_duration_hours(value: Any) -> float | None:
@@ -42,7 +47,7 @@ def parse_duration_hours(value: Any) -> float | None:
     match = re.match(r"^(\d+(?:\.\d+)?)(h|hr|hour|hours)?$", text, re.IGNORECASE)
     if match:
         return float(match.group(1))
-    match = re.match(r"^PT(\d+(?:\.\d+)?)H$", text, re.IGNORECASE)
+    match = re.match(r"^PT(-?\d+(?:\.\d+)?)H$", text, re.IGNORECASE)
     if match:
         return float(match.group(1))
     return None
@@ -65,12 +70,11 @@ def extract_date_tokens(text: str) -> list[str]:
     return DATE_TOKEN_RE.findall(text)
 
 
-def experiment_root(path: Path) -> dict[str, Any]:
+def load_document(path: Path) -> dict[str, Any]:
     data = read_yaml(path)
-    root = data.get("experiment") if isinstance(data, dict) else None
-    if not isinstance(root, dict):
-        raise ValueError("experiment file must contain experiment mapping")
-    return root
+    if not isinstance(data, dict):
+        raise ValueError("experiment file must be a YAML mapping")
+    return data
 
 
 def ioda_paths(path: Path) -> list[str]:
@@ -117,14 +121,21 @@ def main() -> int:
     args = parser.parse_args()
 
     ok = True
-    exp = experiment_root(args.experiment)
-    cycle = str(exp.get("cycle", ""))
-    if not cycle:
-        print("[ERROR] experiment.cycle is missing")
+    doc = load_document(args.experiment)
+    exp = doc.get("experiment", {})
+    assim = doc.get("assimilation", {})
+    if not isinstance(exp, dict):
+        exp = {}
+    if not isinstance(assim, dict):
+        assim = {}
+
+    cycle_source = exp.get("cycle", exp.get("start_cycle", exp.get("analysis_time", "")))
+    if not cycle_source:
+        print("[ERROR] experiment cycle is missing; expected experiment.cycle, start_cycle or analysis_time")
         return 2
 
     try:
-        cycle_dt = parse_cycle(cycle)
+        cycle, cycle_dt = parse_cycle(str(cycle_source))
     except ValueError as exc:
         print(f"[ERROR] {exc}")
         return 2
@@ -135,29 +146,44 @@ def main() -> int:
     if not isinstance(window, dict):
         window = {}
 
-    window_begin = str(window.get("begin", window.get("start", "")))
-    window_length = window.get("length", window.get("duration_hours"))
+    window_begin = str(
+        window.get(
+            "begin",
+            window.get("start", assim.get("window_begin", assim.get("window_start", ""))),
+        )
+    )
+    window_length = window.get(
+        "length",
+        window.get("duration_hours", assim.get("window_length", assim.get("window_duration_hours"))),
+    )
+    begin_offset_hours = parse_duration_hours(window_begin)
     length_hours = parse_duration_hours(window_length)
 
     if window_begin:
-        print(f"[INFO] Experiment window begin: {window_begin}")
+        print(f"[INFO] Assimilation window begin declaration: {window_begin}")
+        if begin_offset_hours is not None:
+            print(f"[INFO] Inferred window begin: {(cycle_dt + timedelta(hours=begin_offset_hours)).isoformat()}Z")
     else:
         level = "ERROR" if args.strict else "WARN"
-        print(f"[{level}] experiment.window.begin/start is not declared")
+        print(f"[{level}] assimilation window begin/start is not declared")
         ok = ok and not args.strict
 
     if length_hours is None:
         level = "ERROR" if args.strict else "WARN"
-        print(f"[{level}] experiment window length/duration_hours is not declared or not parseable")
+        print(f"[{level}] assimilation window length/duration_hours is not declared or not parseable")
         ok = ok and not args.strict
     else:
-        print(f"[INFO] Experiment window length: {length_hours} hours")
-        print(f"[INFO] Inferred window end: {(cycle_dt + timedelta(hours=length_hours)).isoformat()}Z")
+        print(f"[INFO] Assimilation window length: {length_hours} hours")
+        if begin_offset_hours is not None:
+            end_dt = cycle_dt + timedelta(hours=begin_offset_hours + length_hours)
+        else:
+            end_dt = cycle_dt + timedelta(hours=length_hours)
+        print(f"[INFO] Inferred window end: {end_dt.isoformat()}Z")
 
     render_context = read_yaml(args.render_context)
-    context_cycles = find_values_by_key(render_context, {"cycle", "cycle_date", "analysis_time"})
+    context_cycles = find_values_by_key(render_context, {"cycle", "cycle_date", "analysis_time", "start_cycle"})
     print(f"[INFO] Render context temporal values: {context_cycles}")
-    if context_cycles and not any(cycle in str(value) for value in context_cycles):
+    if context_cycles and not any(cycle in str(value) or str(cycle_source) in str(value) for value in context_cycles):
         level = "ERROR" if args.strict else "WARN"
         print(f"[{level}] render context does not visibly contain experiment cycle {cycle}")
         ok = ok and not args.strict
