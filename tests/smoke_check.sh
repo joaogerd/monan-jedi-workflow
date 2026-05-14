@@ -53,6 +53,7 @@ required_paths=(
   scripts/setup/print_3dvar_fgat_next_steps.sh
   scripts/setup/stage_3dvar_fgat_inputs.sh
   scripts/setup/sync_3dvar_fgat_input_sources.sh
+  scripts/setup/validate_3dvar_fgat_file_formats.sh
   scripts/setup/validate_3dvar_fgat_staged_inputs.sh
   scripts/run/render_3dvar_fgat.sh
   scripts/run/prepare_3dvar_fgat_runtime.sh
@@ -75,6 +76,7 @@ required_paths=(
   tools/check_external_input_root.py
   tools/stage_inputs.py
   tools/sync_input_sources.py
+  tools/validate_file_formats.py
   tools/validate_staged_inputs.py
   tools/render_template.py
   tools/render_observers.py
@@ -166,6 +168,10 @@ grep -q "Input staging completed" /tmp/monan_jedi_input_staging.txt
 echo "[INFO] Checking staged inputs in permissive mode"
 bash scripts/setup/validate_3dvar_fgat_staged_inputs.sh --allow-missing > /tmp/monan_jedi_staged_inputs.txt
 grep -q "Staged input validation passed" /tmp/monan_jedi_staged_inputs.txt
+
+echo "[INFO] Checking basic file formats in permissive mode"
+bash scripts/setup/validate_3dvar_fgat_file_formats.sh > /tmp/monan_jedi_file_formats.txt
+grep -q "Basic file format validation completed" /tmp/monan_jedi_file_formats.txt
 
 echo "[INFO] Inspecting placeholders"
 python3 tools/check_placeholders.py configs/jedi/applications/3dvar.yaml configs/templates/resources/variational_minimal.yaml >/tmp/monan_jedi_placeholders.txt
