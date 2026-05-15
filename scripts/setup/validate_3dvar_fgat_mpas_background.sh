@@ -41,11 +41,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "${data_root}" ]]; then
+  data_root='${MONAN_DATA_ROOT}'
+fi
+
 args=(
   "${REPO_ROOT}/tools/validate_mpas_background.py"
   --layout "${layout}"
   --render-context "${render_context}"
-  --data-root "${data_root:-\${MONAN_DATA_ROOT}}"
+  --data-root "${data_root}"
 )
 
 if [[ -n "${background}" ]]; then
