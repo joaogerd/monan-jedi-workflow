@@ -26,13 +26,27 @@ def has_module(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
+def looks_like_background(item: dict[str, Any]) -> bool:
+    name = str(item.get("name", ""))
+    required_for = str(item.get("required_for", ""))
+    path = str(item.get("path", item.get("target", "")))
+    return (
+        name == "background_state"
+        or required_for == "3dvar_fgat"
+        or path.startswith("background/")
+        or "mpasout." in path
+    )
+
+
 def background_from_layout(layout: Path, data_root: Path) -> Path | None:
     data = read_yaml(layout)
     root = data.get("data_layout") if isinstance(data, dict) else None
     if not isinstance(root, dict):
         return None
     for item in root.get("expected_files", []):
-        if isinstance(item, dict) and item.get("name") == "background_state":
+        if not isinstance(item, dict):
+            continue
+        if looks_like_background(item):
             value = item.get("path", item.get("target", ""))
             if value:
                 path = Path(expand(str(value)))
