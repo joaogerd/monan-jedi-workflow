@@ -40,6 +40,41 @@ if [[ -z "${MONAN_EXTERNAL_DATA_ROOT:-}" ]]; then
   warn "MONAN_EXTERNAL_DATA_ROOT was not set; using default: ${MONAN_EXTERNAL_DATA_ROOT}"
 fi
 
+# Compatibility for older local JACI site.env files created before the workflow
+# started loading the MONAN-JEDI/spack-stack-inpe runtime. Prefer explicit values
+# from site.env, then common aliases, and finally the current validated JACI
+# default under MONAN_JACI_WORKSPACE.
+if [[ "${MONAN_LOAD_STACK:-true}" == "true" ]]; then
+  export MONAN_LOAD_STACK="true"
+
+  if [[ -z "${STACK_ROOT:-}" ]]; then
+    if [[ -n "${MONAN_STACK_ROOT:-}" ]]; then
+      export STACK_ROOT="${MONAN_STACK_ROOT}"
+      warn "STACK_ROOT was not set; using MONAN_STACK_ROOT: ${STACK_ROOT}"
+    elif [[ -n "${SPACK_STACK_ROOT:-}" ]]; then
+      export STACK_ROOT="${SPACK_STACK_ROOT}"
+      warn "STACK_ROOT was not set; using SPACK_STACK_ROOT: ${STACK_ROOT}"
+    elif [[ -n "${MONAN_JACI_WORKSPACE:-}" ]]; then
+      export STACK_ROOT="${MONAN_JACI_WORKSPACE}/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack"
+      warn "STACK_ROOT was not set; using current JACI default: ${STACK_ROOT}"
+    fi
+  fi
+
+  if [[ -n "${STACK_ROOT:-}" ]]; then
+    export STACK_ENV_NAME="${STACK_ENV_NAME:-jaci-mpas-jedi-gcc12-craympich}"
+    export STACK_MODULE_ROOT="${STACK_MODULE_ROOT:-${STACK_ROOT}/envs/${STACK_ENV_NAME}/modules}"
+    export STACK_ENV_MODULE="${STACK_ENV_MODULE:-cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0}"
+    export STACK_SITE_SETUP="${STACK_SITE_SETUP:-${STACK_ROOT}/configs/sites/tier2/jaci/setup.sh}"
+  else
+    warn "MONAN_LOAD_STACK=true but STACK_ROOT could not be derived; stack runtime will fail unless site.env defines it"
+  fi
+fi
+
+# JACI Cray/PALS runtime uses mpirun -np in the current tutorial case. Keep both
+# values overridable by site.env so other platforms can use a different launcher.
+export MPI_LAUNCHER="${MPI_LAUNCHER:-mpirun}"
+export MPI_TASKS_FLAG="${MPI_TASKS_FLAG:--np}"
+
 load_jaci_modules() {
   local modules_file="$1"
 
@@ -75,7 +110,10 @@ log "MONAN_WORKFLOW_ROOT=${MONAN_WORKFLOW_ROOT}"
 log "MONAN_DATA_ROOT=${MONAN_DATA_ROOT:-unset}"
 log "MONAN_SCRATCH=${MONAN_SCRATCH:-unset}"
 log "MONAN_EXTERNAL_DATA_ROOT=${MONAN_EXTERNAL_DATA_ROOT}"
+log "STACK_ROOT=${STACK_ROOT:-unset}"
+log "STACK_ENV_MODULE=${STACK_ENV_MODULE:-unset}"
 log "MPAS_BUNDLE_BUILD=${MPAS_BUNDLE_BUILD}"
 log "MPASJEDI_VARIATIONAL_EXE=${MPASJEDI_VARIATIONAL_EXE:-unset}"
 log "MPI_LAUNCHER=${MPI_LAUNCHER:-unset}"
+log "MPI_TASKS_FLAG=${MPI_TASKS_FLAG:-unset}"
 log "CYLC_PLATFORM=${CYLC_PLATFORM}"
