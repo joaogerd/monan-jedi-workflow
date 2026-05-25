@@ -15,6 +15,25 @@ cp configs/sites/jaci/site.env.example configs/sites/jaci/site.env
 ${EDITOR:-vi} configs/sites/jaci/site.env
 ```
 
+## Runtime model
+
+MONAN-JEDI-WORKFLOW does not build MPAS-JEDI. It consumes executables produced by
+the MONAN-JEDI build. Therefore, runtime PBS jobs must load the same
+spack-stack-inpe environment used to compile the selected executable.
+
+The environment loading order is:
+
+1. source `configs/sites/jaci/site.env`;
+2. load the selected spack-stack-inpe JACI runtime when `MONAN_LOAD_STACK=true`;
+3. load Anaconda when `MONAN_LOAD_ANACONDA=true`;
+4. expose MPAS-JEDI executables and the MPI launcher to workflow scripts.
+
+This is centralized in:
+
+```text
+configs/sites/jaci/modules.sh
+```
+
 ## Required variables
 
 | Variable | Purpose |
@@ -25,10 +44,30 @@ ${EDITOR:-vi} configs/sites/jaci/site.env
 | `MONAN_WORK_ROOT` | Persistent work area |
 | `MONAN_SCRATCH` | Scratch/runtime area |
 | `MONAN_DATA_ROOT` | Root for experiment input data |
+| `MONAN_LOAD_STACK` | Whether to load the MONAN-JEDI/spack-stack-inpe runtime |
+| `STACK_ROOT` | Root of the selected spack-stack-inpe installation |
+| `STACK_ENV_NAME` | Name of the selected stack environment |
+| `STACK_MODULE_ROOT` | Module root for the selected stack environment |
+| `STACK_ENV_MODULE` | Stack environment module to load |
+| `STACK_SITE_SETUP` | Site setup script from spack-stack-inpe |
 | `MPAS_BUNDLE_BUILD` | Build or install directory of the selected MPAS-JEDI bundle |
 | `MPASJEDI_VARIATIONAL_EXE` | Path to `mpasjedi_variational.x` |
 | `MPI_LAUNCHER` | MPI launcher command for JACI |
+| `MPI_TASKS_FLAG` | MPI task-count flag used by the selected launcher |
 | `CYLC_PLATFORM` | Cylc platform name, initially `pbs_cluster` |
+
+## JACI MPI launcher
+
+The JACI PBS examples use `mpirun -np` after loading the Cray MPI/PALS modules.
+For this reason, the JACI example uses:
+
+```bash
+export MPI_LAUNCHER="mpirun"
+export MPI_TASKS_FLAG="-np"
+```
+
+The task-count flag remains configurable because other platforms may use a
+different launcher syntax, such as `mpiexec -n` or `srun -n`.
 
 ## Python on JACI
 
@@ -39,20 +78,14 @@ One observed symptom is:
 SyntaxError: future feature annotations is not defined
 ```
 
-Before running Python-based validation tools on JACI, load Anaconda and initialize Conda:
+The repository therefore supports loading Anaconda after the stack runtime:
 
 ```bash
-module load anaconda
-start_conda
+export MONAN_LOAD_ANACONDA="true"
 ```
 
-In this repository, that startup is centralized in:
-
-```text
-configs/sites/jaci/modules.sh
-```
-
-The environment loader calls this file automatically.
+The stack setup is loaded first because it may reset the module state. Anaconda is
+loaded second so the helper scripts run with the expected Python runtime.
 
 ## Load environment
 
@@ -60,7 +93,8 @@ The environment loader calls this file automatically.
 source scripts/env/load_jaci_env.sh configs/sites/jaci/site.env
 ```
 
-This should load the Anaconda module, run `start_conda`, and expose a newer Python runtime.
+This should load the selected stack runtime, initialize Anaconda, expose the
+selected MPAS-JEDI executables and report the active MPI launcher.
 
 ## Check environment
 
@@ -89,12 +123,12 @@ for the repository checkout.
 
 ## Expected data layout
 
-The current smoke workflow expects a structure similar to:
+The current tutorial workflow expects a structure similar to:
 
 ```text
 ${MONAN_DATA_ROOT}/
-├── background/2024081500/
-├── observations/ioda/2024081500/
+├── background/2018041500/
+├── observations/ioda/2018041500/
 ├── covariance/
 ├── graph/
 └── static/
@@ -108,8 +142,9 @@ mesh, MPAS-JEDI version, MPI layout and covariance resources.
 The example values are placeholders. Do not submit PBS jobs until:
 
 1. `MONAN_PROJECT` and `MONAN_QUEUE` are confirmed for JACI;
-2. `MPAS_BUNDLE_BUILD` points to a validated MPAS-JEDI build;
-3. `MPASJEDI_VARIATIONAL_EXE` exists and is executable;
-4. `MPI_LAUNCHER` is confirmed for JACI;
-5. background, observations, covariance, graph and static files exist;
-6. the rendered JEDI YAML has been inspected.
+2. `STACK_ROOT`, `STACK_MODULE_ROOT`, `STACK_ENV_MODULE` and `STACK_SITE_SETUP` match the stack used to compile MONAN-JEDI;
+3. `MPAS_BUNDLE_BUILD` points to a validated MPAS-JEDI build;
+4. `MPASJEDI_VARIATIONAL_EXE` exists and is executable;
+5. `MPI_LAUNCHER` and `MPI_TASKS_FLAG` are confirmed for JACI;
+6. background, observations, covariance, graph and static files exist;
+7. the rendered JEDI YAML has been inspected.
