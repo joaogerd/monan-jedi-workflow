@@ -75,9 +75,34 @@ for var in \
   MPASJEDI_VARIATIONAL_EXE \
   MPASJEDI_HOFX_EXE \
   MPI_LAUNCHER \
+  MPI_TASKS_FLAG \
   CYLC_PLATFORM; do
   check_required_var "$var"
 done
+
+if [[ "${MONAN_LOAD_STACK:-false}" == "true" ]]; then
+  log "Checking MONAN-JEDI stack runtime variables"
+  for var in \
+    STACK_ROOT \
+    STACK_ENV_NAME \
+    STACK_MODULE_ROOT \
+    STACK_ENV_MODULE \
+    STACK_SITE_SETUP; do
+    check_required_var "$var"
+  done
+
+  check_dir "${STACK_ROOT:-}"
+  check_dir "${STACK_MODULE_ROOT:-}"
+  if [[ -n "${STACK_SITE_SETUP:-}" ]]; then
+    if [[ -f "${STACK_SITE_SETUP}" ]]; then
+      log "Stack site setup found: ${STACK_SITE_SETUP}"
+    else
+      warn "Stack site setup not found: ${STACK_SITE_SETUP}"
+    fi
+  fi
+else
+  warn "MONAN_LOAD_STACK is not true; MPAS-JEDI runtime libraries may be unavailable in PBS jobs"
+fi
 
 log "Checking required commands"
 check_command bash
