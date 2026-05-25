@@ -65,6 +65,67 @@ def expected_state_variables(render_context: Path) -> list[str]:
     return []
 
 
+def mpas_native_aliases(jedi_name: str) -> set[str]:
+    """Return MPAS-native fields that can satisfy a JEDI generic variable.
+
+    MPAS-JEDI uses generic JEDI variable names in YAML, while MPAS restart/background
+    files commonly store native MPAS variables. This lightweight alias table follows
+    the same idea used by MPAS-Workflow geovars.yaml and keeps this validator useful
+    for tutorial data as well as newer MPAS-JEDI configurations.
+    """
+
+    aliases = {
+        "air_temperature": {
+            "air_temperature",
+            "temperature",
+            "theta",
+            "theta_base",
+        },
+        "water_vapor_mixing_ratio_wrt_moist_air": {
+            "water_vapor_mixing_ratio_wrt_moist_air",
+            "spechum",
+            "qv",
+        },
+        "water_vapor_mixing_ratio_wrt_dry_air": {
+            "water_vapor_mixing_ratio_wrt_dry_air",
+            "qv",
+        },
+        "air_pressure_at_surface": {
+            "air_pressure_at_surface",
+            "surface_pressure",
+        },
+        "air_pressure": {
+            "air_pressure",
+            "pressure",
+            "pressure_p",
+            "pressure_base",
+        },
+        "eastward_wind": {
+            "eastward_wind",
+            "uReconstructZonal",
+            "u10",
+            "u",
+        },
+        "northward_wind": {
+            "northward_wind",
+            "uReconstructMeridional",
+            "v10",
+            "u",
+        },
+        "air_potential_temperature": {
+            "air_potential_temperature",
+            "theta",
+        },
+        "dry_air_density": {
+            "dry_air_density",
+            "rho",
+            "rho_base",
+        },
+    }
+
+    return aliases.get(jedi_name, {jedi_name})
+
+
 def open_netcdf(path: Path) -> tuple[set[str], dict[str, Any]]:
     if has_module("netCDF4"):
         import netCDF4  # type: ignore
@@ -150,21 +211,38 @@ def main() -> int:
     print(f"[INFO] Background variable count: {attrs.get('_variable_count')}")
 
     expected = expected_state_variables(args.render_context)
-    missing = [value for value in expected if value not in variables]
+    missing: list[str] = []
+    matched: dict[str, list[str]] = {}
+
+    for value in expected:
+        aliases = mpas_native_aliases(value)
+        present = sorted(alias for alias in aliases if alias in variables)
+        if present:
+            matched[value] = present
+        else:
+            missing.append(value)
+
+    for value, present in matched.items():
+        print(f"[INFO] JEDI variable {value} matched MPAS background field(s): {present}")
+
     if missing:
         level = "ERROR" if args.strict else "WARN"
-        print(f"[{level}] expected JEDI state variables not found in background: {missing}")
+        print(f"[{level}] expected JEDI state variables not found directly or via MPAS-native aliases: {missing}")
         if args.strict:
             return 2
     else:
-        print("[INFO] Expected JEDI state variables found in background")
+        print("[INFO] Expected JEDI state variables matched background fields")
 
     time_keys = [key for key in attrs if str(key).lower() in {"start_date", "valid_time", "analysis_time", "time"}]
+    mpas_time_variables = sorted(name for name in {"xtime", "initial_time", "Time"} if name in variables)
+
     if time_keys:
         print(f"[INFO] Background temporal attribute keys: {time_keys}")
+    elif mpas_time_variables:
+        print(f"[INFO] Background MPAS temporal variable(s): {mpas_time_variables}")
     else:
         level = "ERROR" if args.strict else "WARN"
-        print(f"[{level}] no obvious temporal global attributes found in background")
+        print(f"[{level}] no obvious temporal global attributes or MPAS temporal variables found in background")
         if args.strict:
             return 2
 

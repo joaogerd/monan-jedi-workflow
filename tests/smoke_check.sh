@@ -147,7 +147,7 @@ grep -q "Input source synchronization completed" /tmp/monan_jedi_input_source_sy
 echo "[INFO] Checking data layout dry-run"
 bash scripts/setup/bootstrap_3dvar_fgat_data_layout.sh --dry-run > /tmp/monan_jedi_data_layout.txt
 grep -q "DRY-RUN" /tmp/monan_jedi_data_layout.txt
-grep -q "observations/ioda/2024081500" /tmp/monan_jedi_data_layout.txt
+grep -q "observations/ioda/2018041500" /tmp/monan_jedi_data_layout.txt
 
 echo "[INFO] Checking external input root dry-run"
 bash scripts/setup/create_3dvar_fgat_external_tree.sh --dry-run > /tmp/monan_jedi_external_tree.txt

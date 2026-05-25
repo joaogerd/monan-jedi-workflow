@@ -4,35 +4,35 @@
 # be customized for the JACI first-case experiment.
 
 input_staging:
-  cycle: "2024081500"
+  cycle: "2018041500"
   data_root: "${MONAN_DATA_ROOT}"
   default_action: link
 
   files:
     - name: background_state
-      source: "${MONAN_EXTERNAL_DATA_ROOT}/background/2024081500/mpasout.2024-08-15_00.00.00.nc"
-      target: "background/2024081500/mpasout.2024-08-15_00.00.00.nc"
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/background/2018041500/mpasout.2018-04-15_00.00.00.nc"
+      target: "background/2018041500/mpasout.2018-04-15_00.00.00.nc"
       required: true
       kind: netcdf
       description: JACI first-case MPAS background state.
 
     - name: aircraft_ioda
-      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2024081500/aircraft_obs_2024081500.h5"
-      target: "observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2018041500/aircraft_obs_2018041500.h5"
+      target: "observations/ioda/2018041500/aircraft_obs_2018041500.h5"
       required: true
       kind: hdf5
       description: JACI first-case aircraft IODA observations.
 
     - name: sondes_ioda
-      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2024081500/sondes_obs_2024081500.h5"
-      target: "observations/ioda/2024081500/sondes_obs_2024081500.h5"
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2018041500/sondes_obs_2018041500.h5"
+      target: "observations/ioda/2018041500/sondes_obs_2018041500.h5"
       required: true
       kind: hdf5
       description: JACI first-case radiosonde/profile IODA observations.
 
     - name: sfc_ioda
-      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2024081500/sfc_obs_2024081500.h5"
-      target: "observations/ioda/2024081500/sfc_obs_2024081500.h5"
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2018041500/sfc_obs_2018041500.h5"
+      target: "observations/ioda/2018041500/sfc_obs_2018041500.h5"
       required: true
       kind: hdf5
       description: JACI first-case surface IODA observations.
@@ -45,11 +45,11 @@ input_staging:
       description: JACI first-case covariance/stddev resource.
 
     - name: graph_info_128
-      source: "${MONAN_EXTERNAL_DATA_ROOT}/graph/graph.info.part.0128"
-      target: "graph/graph.info.part.0128"
+      source: "${MONAN_EXTERNAL_DATA_ROOT}/graph/graph.info.part.0064"
+      target: "graph/graph.info.part.0064"
       required: false
       kind: text
-      description: Optional graph partition file for 128 MPI tasks.
+      description: Optional graph partition file for 64 MPI tasks.
 
     - name: static_file
       source: "${MONAN_EXTERNAL_DATA_ROOT}/static/x1.static.nc"

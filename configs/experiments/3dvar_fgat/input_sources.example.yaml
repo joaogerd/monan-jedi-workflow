@@ -7,7 +7,7 @@
 
 input_sources:
   experiment: 3dvar_fgat
-  cycle: "2024081500"
+  cycle: "2018041500"
   status: source_discovery
 
   destinations:
@@ -19,21 +19,21 @@ input_sources:
       required: true
       kind: netcdf
       source_path: ""
-      external_target: "background/2024081500/mpasout.2024-08-15_00.00.00.nc"
-      staged_target: "background/2024081500/mpasout.2024-08-15_00.00.00.nc"
+      external_target: "background/2018041500/mpasout.2018-04-15_00.00.00.nc"
+      staged_target: "background/2018041500/mpasout.2018-04-15_00.00.00.nc"
       origin_system: MPAS_or_MONAN_forecast
       owner_or_contact: TODO
       discovery_status: pending
       notes: >-
-        Identify the MPAS/MONAN background valid at 2024-08-15 00 UTC and compatible with
+        Identify the MPAS/MONAN background valid at 2018-04-15 00 UTC and compatible with
         the selected MPAS-JEDI geometry.
 
     - name: aircraft_ioda
       required: true
       kind: hdf5
       source_path: ""
-      external_target: "observations/ioda/2024081500/aircraft_obs_2024081500.h5"
-      staged_target: "observations/ioda/2024081500/aircraft_obs_2024081500.h5"
+      external_target: "observations/ioda/2018041500/aircraft_obs_2018041500.h5"
+      staged_target: "observations/ioda/2018041500/aircraft_obs_2018041500.h5"
       origin_system: IODA_conversion_pipeline
       owner_or_contact: TODO
       discovery_status: pending
@@ -44,8 +44,8 @@ input_sources:
       required: true
       kind: hdf5
       source_path: ""
-      external_target: "observations/ioda/2024081500/sondes_obs_2024081500.h5"
-      staged_target: "observations/ioda/2024081500/sondes_obs_2024081500.h5"
+      external_target: "observations/ioda/2018041500/sondes_obs_2018041500.h5"
+      staged_target: "observations/ioda/2018041500/sondes_obs_2018041500.h5"
       origin_system: IODA_conversion_pipeline
       owner_or_contact: TODO
       discovery_status: pending
@@ -56,8 +56,8 @@ input_sources:
       required: true
       kind: hdf5
       source_path: ""
-      external_target: "observations/ioda/2024081500/sfc_obs_2024081500.h5"
-      staged_target: "observations/ioda/2024081500/sfc_obs_2024081500.h5"
+      external_target: "observations/ioda/2018041500/sfc_obs_2018041500.h5"
+      staged_target: "observations/ioda/2018041500/sfc_obs_2018041500.h5"
       origin_system: IODA_conversion_pipeline
       owner_or_contact: TODO
       discovery_status: pending
@@ -80,13 +80,13 @@ input_sources:
       required: false
       kind: text
       source_path: ""
-      external_target: "graph/graph.info.part.0128"
-      staged_target: "graph/graph.info.part.0128"
+      external_target: "graph/graph.info.part.0064"
+      staged_target: "graph/graph.info.part.0064"
       origin_system: MPAS_mesh_partitioning
       owner_or_contact: TODO
       discovery_status: pending
       notes: >-
-        Identify graph partition file if the runtime configuration requires 128 MPI tasks.
+        Identify graph partition file if the runtime configuration requires 64 MPI tasks.
 
     - name: static_file
       required: false

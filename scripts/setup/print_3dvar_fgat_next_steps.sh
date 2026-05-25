@@ -10,20 +10,20 @@ cat <<'EOF'
 
 2. Create external input directories
 
-   mkdir -p ${MONAN_EXTERNAL_DATA_ROOT}/background/2024081500
-   mkdir -p ${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2024081500
+   mkdir -p ${MONAN_EXTERNAL_DATA_ROOT}/background/2018041500
+   mkdir -p ${MONAN_EXTERNAL_DATA_ROOT}/observations/ioda/2018041500
    mkdir -p ${MONAN_EXTERNAL_DATA_ROOT}/covariance
    mkdir -p ${MONAN_EXTERNAL_DATA_ROOT}/graph
    mkdir -p ${MONAN_EXTERNAL_DATA_ROOT}/static
 
 3. Place real files under ${MONAN_EXTERNAL_DATA_ROOT}
 
-   background/2024081500/mpasout.2024-08-15_00.00.00.nc
-   observations/ioda/2024081500/aircraft_obs_2024081500.h5
-   observations/ioda/2024081500/sondes_obs_2024081500.h5
-   observations/ioda/2024081500/sfc_obs_2024081500.h5
+   background/2018041500/mpasout.2018-04-15_00.00.00.nc
+   observations/ioda/2018041500/aircraft_obs_2018041500.h5
+   observations/ioda/2018041500/sondes_obs_2018041500.h5
+   observations/ioda/2018041500/sfc_obs_2018041500.h5
    covariance/mpas.stddev.nc
-   graph/graph.info.part.0128
+   graph/graph.info.part.0064
    static/x1.static.nc
 
 4. Dry-run staging

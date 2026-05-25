@@ -7,28 +7,28 @@
 # the files are scientifically valid. Real IODA files must be validated on JACI.
 
 ioda_inventory:
-  cycle: "2024081500"
-  root: "${MONAN_DATA_ROOT}/observations/ioda/2024081500"
-  feedback_root: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback"
+  cycle: "2018041500"
+  root: "${MONAN_DATA_ROOT}/observations/ioda/2018041500"
+  feedback_root: "${MONAN_SCRATCH}/jaci_3dvar_fgat_tutorial_2018041500/feedback"
 
   files:
     - observer: aircraft
       required: true
-      path: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/aircraft_obs_2024081500.h5"
-      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/aircraft_oman_2024081500.h5"
+      path: "${MONAN_DATA_ROOT}/observations/ioda/2018041500/aircraft_obs_2018041500.h5"
+      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_tutorial_2018041500/feedback/aircraft_oman_2018041500.h5"
       expected_group: aircraft
       status: structural_placeholder
 
     - observer: sondes
       required: true
-      path: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/sondes_obs_2024081500.h5"
-      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/sondes_oman_2024081500.h5"
+      path: "${MONAN_DATA_ROOT}/observations/ioda/2018041500/sondes_obs_2018041500.h5"
+      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_tutorial_2018041500/feedback/sondes_oman_2018041500.h5"
       expected_group: sondes
       status: structural_placeholder
 
     - observer: sfc
       required: true
-      path: "${MONAN_DATA_ROOT}/observations/ioda/2024081500/sfc_obs_2024081500.h5"
-      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_smoke/feedback/sfc_oman_2024081500.h5"
+      path: "${MONAN_DATA_ROOT}/observations/ioda/2018041500/sfc_obs_2018041500.h5"
+      feedback_path: "${MONAN_SCRATCH}/jaci_3dvar_fgat_tutorial_2018041500/feedback/sfc_oman_2018041500.h5"
       expected_group: sfc
       status: structural_placeholder

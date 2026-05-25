@@ -6,9 +6,9 @@
 variational_run:
   executable: "${MPASJEDI_VARIATIONAL_EXE}"
   mpi_launcher: "${MPI_LAUNCHER}"
-  mpi_tasks: 128
+  mpi_tasks: 64
   threads: 1
-  work_dir: "build/runtime/jaci_3dvar_fgat_smoke/2024081500"
+  work_dir: "build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500"
   yaml: "build/rendered/3dvar_fgat.yaml"
   log_file: "logs/mpasjedi_variational.log"
 

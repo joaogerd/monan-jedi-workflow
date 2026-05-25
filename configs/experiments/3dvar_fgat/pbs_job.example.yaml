@@ -18,7 +18,7 @@ pbs:
 runtime:
   repo_root: "${MONAN_WORKFLOW_ROOT}"
   site_env: "${MONAN_WORKFLOW_ROOT}/configs/sites/jaci/site.env"
-  work_dir: "${MONAN_WORKFLOW_ROOT}/build/runtime/jaci_3dvar_fgat_smoke/2024081500"
+  work_dir: "${MONAN_WORKFLOW_ROOT}/build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500"
   command_file: "${MONAN_WORKFLOW_ROOT}/build/rendered/mpasjedi_variational.command"
 
 steps:
