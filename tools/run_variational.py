@@ -38,11 +38,16 @@ def build_command(cfg: dict[str, Any]) -> list[str]:
     executable = expand(str(cfg["executable"]))
     mpi_launcher = expand(str(cfg.get("mpi_launcher", ""))).strip()
     mpi_tasks = int(cfg.get("mpi_tasks", 1))
+    mpi_tasks_flag = expand(str(cfg.get("mpi_tasks_flag", os.environ.get("MPI_TASKS_FLAG", "-n")))).strip()
     yaml_file = expand(str(cfg["yaml"]))
     extra_args = [str(item) for item in cfg.get("extra_args", [])]
 
     if mpi_launcher:
-        cmd = shlex.split(mpi_launcher) + ["-n", str(mpi_tasks), executable, yaml_file]
+        launcher_parts = shlex.split(mpi_launcher)
+        if mpi_tasks_flag:
+            cmd = launcher_parts + [mpi_tasks_flag, str(mpi_tasks), executable, yaml_file]
+        else:
+            cmd = launcher_parts + [str(mpi_tasks), executable, yaml_file]
     else:
         cmd = [executable, yaml_file]
     cmd.extend(extra_args)
