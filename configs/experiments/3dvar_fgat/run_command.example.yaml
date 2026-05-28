@@ -7,10 +7,12 @@ variational_run:
   mpi_tasks: 64
   threads: 1
   work_dir: "build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500"
-  yaml: "build/rendered/3dvar_fgat.yaml"
+  yaml: "${MONAN_WORKFLOW_ROOT}/build/rendered/3dvar_fgat.yaml"
   log_file: "logs/mpasjedi_variational.log"
 
   environment:
     OMP_NUM_THREADS: "1"
+    GFORTRAN_CONVERT_UNIT: "big_endian:101-200"
+    F_UFMTENDIAN: "big:101-200"
 
   extra_args: []

@@ -61,6 +61,120 @@ runtime:
       source: "${MONAN_DATA_ROOT}/static/x1.static.nc"
       target: "static/x1.static.nc"
       required: false
+    - name: mpas_invariant_file
+      source: "${MONAN_DATA_ROOT}/static/x1.10242.invariant.nc"
+      target: "x1.10242.invariant.nc"
+      required: true
+    - name: mpas_graph_partition_file
+      source: "${MONAN_DATA_ROOT}/static/x1.10242.graph.info.part.64"
+      target: "x1.10242.graph.info.part.64"
+      required: true
+    - name: mpas_template_fields
+      source: "${MONAN_DATA_ROOT}/static/templateFields.10242.nc"
+      target: "templateFields.10242.nc"
+      required: true
+    - name: mpas_keptvars
+      source: "${MONAN_DATA_ROOT}/static/keptvars.yaml"
+      target: "keptvars.yaml"
+      required: true
+    - name: mpas_geovars
+      source: "${MONAN_DATA_ROOT}/static/geovars.yaml"
+      target: "geovars.yaml"
+      required: true
+    - name: mpas_obsop_name_map
+      source: "${MONAN_DATA_ROOT}/static/obsop_name_map.yaml"
+      target: "obsop_name_map.yaml"
+      required: true
+
+    # MPAS geometry files required by the JEDI geometry blocks.
+    - name: namelist_outer
+      source: "${MONAN_DATA_ROOT}/static/namelist.atmosphere.outer"
+      target: "namelist.atmosphere.outer"
+      required: true
+    - name: namelist_inner
+      source: "${MONAN_DATA_ROOT}/static/namelist.atmosphere.inner"
+      target: "namelist.atmosphere.inner"
+      required: true
+    - name: streams_outer
+      source: "${MONAN_DATA_ROOT}/static/streams.atmosphere.outer"
+      target: "streams.atmosphere.outer"
+      required: true
+    - name: streams_inner
+      source: "${MONAN_DATA_ROOT}/static/streams.atmosphere.inner"
+      target: "streams.atmosphere.inner"
+      required: true
+
+    # MPAS stream lists required by the runtime namelist/streams files.
+    - name: stream_list_control
+      source: "${MONAN_DATA_ROOT}/static/stream_list.atmosphere.control"
+      target: "stream_list.atmosphere.control"
+      required: true
+    - name: stream_list_background
+      source: "${MONAN_DATA_ROOT}/static/stream_list.atmosphere.background"
+      target: "stream_list.atmosphere.background"
+      required: true
+    - name: stream_list_analysis
+      source: "${MONAN_DATA_ROOT}/static/stream_list.atmosphere.analysis"
+      target: "stream_list.atmosphere.analysis"
+      required: true
+    - name: stream_list_ensemble
+      source: "${MONAN_DATA_ROOT}/static/stream_list.atmosphere.ensemble"
+      target: "stream_list.atmosphere.ensemble"
+      required: false
+
+    # MPAS physics lookup tables read from the execution directory.
+    - name: cam_abs_data
+      source: "${MONAN_DATA_ROOT}/static/CAM_ABS_DATA.DBL"
+      target: "CAM_ABS_DATA.DBL"
+      required: true
+    - name: cam_aeropt_data
+      source: "${MONAN_DATA_ROOT}/static/CAM_AEROPT_DATA.DBL"
+      target: "CAM_AEROPT_DATA.DBL"
+      required: true
+    - name: genparm_tbl
+      source: "${MONAN_DATA_ROOT}/static/GENPARM.TBL"
+      target: "GENPARM.TBL"
+      required: true
+    - name: landuse_tbl
+      source: "${MONAN_DATA_ROOT}/static/LANDUSE.TBL"
+      target: "LANDUSE.TBL"
+      required: true
+    - name: ozone_dat_tbl
+      source: "${MONAN_DATA_ROOT}/static/OZONE_DAT.TBL"
+      target: "OZONE_DAT.TBL"
+      required: true
+    - name: ozone_lat_tbl
+      source: "${MONAN_DATA_ROOT}/static/OZONE_LAT.TBL"
+      target: "OZONE_LAT.TBL"
+      required: true
+    - name: ozone_plev_tbl
+      source: "${MONAN_DATA_ROOT}/static/OZONE_PLEV.TBL"
+      target: "OZONE_PLEV.TBL"
+      required: true
+    - name: rrtmg_lw_data
+      source: "${MONAN_DATA_ROOT}/static/RRTMG_LW_DATA.DBL"
+      target: "RRTMG_LW_DATA"
+      required: true
+    - name: rrtmg_lw_data_dbl
+      source: "${MONAN_DATA_ROOT}/static/RRTMG_LW_DATA.DBL"
+      target: "RRTMG_LW_DATA.DBL"
+      required: true
+    - name: rrtmg_sw_data
+      source: "${MONAN_DATA_ROOT}/static/RRTMG_SW_DATA.DBL"
+      target: "RRTMG_SW_DATA"
+      required: true
+    - name: rrtmg_sw_data_dbl
+      source: "${MONAN_DATA_ROOT}/static/RRTMG_SW_DATA.DBL"
+      target: "RRTMG_SW_DATA.DBL"
+      required: true
+    - name: soilparm_tbl
+      source: "${MONAN_DATA_ROOT}/static/SOILPARM.TBL"
+      target: "SOILPARM.TBL"
+      required: true
+    - name: vegparm_tbl
+      source: "${MONAN_DATA_ROOT}/static/VEGPARM.TBL"
+      target: "VEGPARM.TBL"
+      required: true
 
   rendered:
     jedi_yaml: "build/rendered/3dvar_fgat.yaml"
