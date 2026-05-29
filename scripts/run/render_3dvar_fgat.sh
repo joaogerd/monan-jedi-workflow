@@ -41,6 +41,35 @@ if command -v git >/dev/null 2>&1; then
   git_commit=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
 fi
 
+sha256_or_missing() {
+  local path="$1"
+  if [[ -f "${path}" ]] && command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${path}" | awk '{print $1}'
+  elif [[ -f "${path}" ]]; then
+    printf 'sha256sum-not-available'
+  else
+    printf 'missing'
+  fi
+}
+
+file_size_bytes() {
+  local path="$1"
+  if [[ -f "${path}" ]]; then
+    wc -c < "${path}" | tr -d ' '
+  else
+    printf '0'
+  fi
+}
+
+exists_flag() {
+  local path="$1"
+  if [[ -e "${path}" ]]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
 finalize_trace() {
   local exit_code=$?
   local finished_at_utc
@@ -60,6 +89,37 @@ finalize_trace() {
 
   mkdir -p "${provenance_dir}"
   cat >> "${trace_file}" <<EOF
+artifact_checksums:
+  template:
+    path: ${template_file}
+    exists: $(exists_flag "${template_file}")
+    size_bytes: $(file_size_bytes "${template_file}")
+    sha256: $(sha256_or_missing "${template_file}")
+  context:
+    path: ${context_file}
+    exists: $(exists_flag "${context_file}")
+    size_bytes: $(file_size_bytes "${context_file}")
+    sha256: $(sha256_or_missing "${context_file}")
+  observer_manifest:
+    path: ${observer_manifest}
+    exists: $(exists_flag "${observer_manifest}")
+    size_bytes: $(file_size_bytes "${observer_manifest}")
+    sha256: $(sha256_or_missing "${observer_manifest}")
+  observers_yaml:
+    path: ${observers_file}
+    exists: $(exists_flag "${observers_file}")
+    size_bytes: $(file_size_bytes "${observers_file}")
+    sha256: $(sha256_or_missing "${observers_file}")
+  combined_context:
+    path: ${combined_context}
+    exists: $(exists_flag "${combined_context}")
+    size_bytes: $(file_size_bytes "${combined_context}")
+    sha256: $(sha256_or_missing "${combined_context}")
+  rendered_yaml:
+    path: ${output_file}
+    exists: $(exists_flag "${output_file}")
+    size_bytes: $(file_size_bytes "${output_file}")
+    sha256: $(sha256_or_missing "${output_file}")
 result:
   status: ${status}
   exit_code: ${exit_code}
