@@ -1,0 +1,158 @@
+# Variable mapping profiles for MONAN/JEDI 3DVar-FGAT experiments.
+#
+# Purpose
+# -------
+# This file separates three concepts that are often mixed in MPAS-JEDI setups:
+#
+#   1. canonical/conceptual JEDI variable names;
+#   2. actual MPAS/NetCDF variable names present in the input files;
+#   3. SABER/BUMP variable names expected by the static covariance files.
+#
+# A workflow should select one profile and render the final JEDI context from it.
+# When moving from the MPAS-JEDI tutorial case to a newer MONAN/MPAS dataset,
+# add a new profile instead of editing generated YAML by hand.
+
+schema_version: 1
+
+default_profile: tutorial_2024_mpas_8_2_static_b
+
+profiles:
+  tutorial_2024_mpas_8_2_static_b:
+    description: >
+      Variable mapping for the MPAS-JEDI 2024 tutorial 240 km 3DVar case,
+      using pre-generated static B files. The rendered JEDI YAML must use the
+      variable names present in the tutorial MPAS background and BUMP files.
+
+    analysis_variables:
+      canonical_to_model:
+        water_vapor_mixing_ratio_wrt_moist_air: spechum
+        air_pressure_at_surface: surface_pressure
+        air_temperature: temperature
+        northward_wind: uReconstructMeridional
+        eastward_wind: uReconstructZonal
+
+      order:
+        - water_vapor_mixing_ratio_wrt_moist_air
+        - air_pressure_at_surface
+        - air_temperature
+        - northward_wind
+        - eastward_wind
+
+    state_variables:
+      canonical_to_model:
+        water_vapor_mixing_ratio_wrt_moist_air: spechum
+        air_pressure_at_surface: surface_pressure
+        air_temperature: temperature
+        northward_wind: uReconstructMeridional
+        eastward_wind: uReconstructZonal
+        air_potential_temperature: theta
+        dry_air_density: rho
+        water_vapor_mixing_ratio_wrt_dry_air: qv
+        air_pressure: pressure
+        seaice_fraction: xice
+        skin_temperature_at_surface: skintemp
+        vegetation_area_fraction: vegfra
+        eastward_wind_at_10m: u10
+        northward_wind_at_10m: v10
+
+      direct_model:
+        - u
+        - landmask
+        - snowc
+        - ivgtyp
+        - isltyp
+        - snowh
+        - lai
+        - smois
+        - tslb
+        - pressure_p
+
+      order:
+        - water_vapor_mixing_ratio_wrt_moist_air
+        - air_pressure_at_surface
+        - air_temperature
+        - northward_wind
+        - eastward_wind
+        - air_potential_temperature
+        - dry_air_density
+        - u
+        - water_vapor_mixing_ratio_wrt_dry_air
+        - air_pressure
+        - landmask
+        - seaice_fraction
+        - snowc
+        - skin_temperature_at_surface
+        - ivgtyp
+        - isltyp
+        - snowh
+        - vegetation_area_fraction
+        - eastward_wind_at_10m
+        - northward_wind_at_10m
+        - lai
+        - smois
+        - tslb
+        - pressure_p
+
+    saber_bump:
+      control_variables:
+        canonical_to_bump:
+          air_horizontal_streamfunction: stream_function
+          air_horizontal_velocity_potential: velocity_potential
+          air_temperature: temperature
+          water_vapor_mixing_ratio_wrt_moist_air: spechum
+          air_pressure_at_surface: surface_pressure
+
+        order:
+          - air_horizontal_streamfunction
+          - air_horizontal_velocity_potential
+          - air_temperature
+          - water_vapor_mixing_ratio_wrt_moist_air
+          - air_pressure_at_surface
+
+      variables_3d:
+        - stream_function
+        - velocity_potential
+        - temperature
+        - spechum
+
+      variables_2d:
+        - surface_pressure
+
+      vertical_balance:
+        - balanced_variable: velocity_potential
+          unbalanced_variable: stream_function
+          diagonal_regression: true
+        - balanced_variable: temperature
+          unbalanced_variable: stream_function
+        - balanced_variable: surface_pressure
+          unbalanced_variable: stream_function
+
+      file_prefixes:
+        nicas: mpas
+        vbal: mpas
+
+  monan_mpas_current_placeholder:
+    description: >
+      Placeholder for a future MONAN/MPAS current dataset profile. Add this
+      profile when the current MPAS files, geovars and SABER/BUMP files are
+      available and validated.
+
+    analysis_variables:
+      canonical_to_model: {}
+      order: []
+
+    state_variables:
+      canonical_to_model: {}
+      direct_model: []
+      order: []
+
+    saber_bump:
+      control_variables:
+        canonical_to_bump: {}
+        order: []
+      variables_3d: []
+      variables_2d: []
+      vertical_balance: []
+      file_prefixes:
+        nicas: mpas
+        vbal: mpas
