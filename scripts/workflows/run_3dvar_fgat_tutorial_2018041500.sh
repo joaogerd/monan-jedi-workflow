@@ -52,6 +52,7 @@ RENDER_TRACE="${PROVENANCE_DIR}/3dvar_fgat.trace"
 RUNTIME_TRACE="${PROVENANCE_DIR}/runtime.trace"
 VARIATIONAL_TRACE="${PROVENANCE_DIR}/variational.trace"
 PBS_TRACE="${PROVENANCE_DIR}/3dvar_fgat_pbs.trace"
+PBS_EXEC_TRACE="${PROVENANCE_DIR}/pbs_execution.trace"
 WORKFLOW_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 WORKFLOW_STARTED_EPOCH="$(date -u +%s)"
 WORKFLOW_GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -60,6 +61,29 @@ WORKFLOW_STATUS="running"
 WORKFLOW_STEP=0
 
 mkdir -p "${PROVENANCE_DIR}"
+
+relative_path() {
+  local path="$1"
+  printf '%s' "${path#${REPO_ROOT}/}"
+}
+
+exists_flag() {
+  local path="$1"
+  if [[ -e "${path}" ]]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+file_size_bytes() {
+  local path="$1"
+  if [[ -f "${path}" ]]; then
+    wc -c < "${path}" | tr -d ' '
+  else
+    printf '0'
+  fi
+}
 
 write_workflow_trace_header() {
   cat > "${WORKFLOW_TRACE}" <<EOF
@@ -82,6 +106,7 @@ workflow:
     render_trace: build/rendered/provenance/3dvar_fgat.trace
     runtime_trace: build/rendered/provenance/runtime.trace
     pbs_trace: build/rendered/provenance/3dvar_fgat_pbs.trace
+    pbs_execution_trace: build/rendered/provenance/pbs_execution.trace
     variational_trace: build/rendered/provenance/variational.trace
   expected_artifacts:
     rendered_yaml: build/rendered/3dvar_fgat.yaml
@@ -123,6 +148,36 @@ EOF
   fi
 }
 
+append_trace_index_summary() {
+  cat >> "${WORKFLOW_TRACE}" <<EOF
+  trace_inventory:
+    workflow_trace:
+      path: $(relative_path "${WORKFLOW_TRACE}")
+      exists: $(exists_flag "${WORKFLOW_TRACE}")
+      size_bytes: $(file_size_bytes "${WORKFLOW_TRACE}")
+    render_trace:
+      path: $(relative_path "${RENDER_TRACE}")
+      exists: $(exists_flag "${RENDER_TRACE}")
+      size_bytes: $(file_size_bytes "${RENDER_TRACE}")
+    runtime_trace:
+      path: $(relative_path "${RUNTIME_TRACE}")
+      exists: $(exists_flag "${RUNTIME_TRACE}")
+      size_bytes: $(file_size_bytes "${RUNTIME_TRACE}")
+    variational_trace:
+      path: $(relative_path "${VARIATIONAL_TRACE}")
+      exists: $(exists_flag "${VARIATIONAL_TRACE}")
+      size_bytes: $(file_size_bytes "${VARIATIONAL_TRACE}")
+    pbs_render_trace:
+      path: $(relative_path "${PBS_TRACE}")
+      exists: $(exists_flag "${PBS_TRACE}")
+      size_bytes: $(file_size_bytes "${PBS_TRACE}")
+    pbs_execution_trace:
+      path: $(relative_path "${PBS_EXEC_TRACE}")
+      exists: $(exists_flag "${PBS_EXEC_TRACE}")
+      size_bytes: $(file_size_bytes "${PBS_EXEC_TRACE}")
+EOF
+}
+
 finalize_workflow_trace() {
   local exit_code=$?
   local finished_at
@@ -138,6 +193,7 @@ finalize_workflow_trace() {
     WORKFLOW_STATUS="failed"
   fi
 
+  append_trace_index_summary
   cat >> "${WORKFLOW_TRACE}" <<EOF
   result:
     status: ${WORKFLOW_STATUS}
@@ -228,12 +284,12 @@ if [[ "${SUBMIT_PBS}" == true ]]; then
   bash scripts/run/render_3dvar_fgat_pbs.sh
 
   PBS_FILE="${MONAN_WORKFLOW_ROOT}/build/rendered/3dvar_fgat.pbs"
-  append_workflow_step "submit_pbs_job" "qsub ${PBS_FILE}" "pbs" "" "PBS job id"
+  append_workflow_step "submit_pbs_job" "qsub ${PBS_FILE}" "pbs" "build/rendered/provenance/pbs_execution.trace" "PBS job id"
   log_info "Submitting PBS job: ${PBS_FILE}"
   qsub "${PBS_FILE}"
 else
   append_workflow_step "render_pbs_job" "bash scripts/run/render_3dvar_fgat_pbs.sh" "skipped" "build/rendered/provenance/3dvar_fgat_pbs.trace" "build/rendered/3dvar_fgat.pbs"
-  append_workflow_step "submit_pbs_job" "qsub build/rendered/3dvar_fgat.pbs" "skipped"
+  append_workflow_step "submit_pbs_job" "qsub build/rendered/3dvar_fgat.pbs" "skipped" "build/rendered/provenance/pbs_execution.trace"
 fi
 
 log_info "3DVar-FGAT temporary Bash workflow completed"
