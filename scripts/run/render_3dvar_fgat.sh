@@ -33,16 +33,46 @@ observers_file="${render_dir}/observers.yaml"
 combined_context="${render_dir}/render_context.with_observers.yaml"
 provenance_dir="${render_dir}/provenance"
 trace_file="${provenance_dir}/3dvar_fgat.trace"
+started_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+started_epoch=$(date -u +%s)
 
 git_commit="unknown"
 if command -v git >/dev/null 2>&1; then
   git_commit=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
 fi
 
-timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+finalize_trace() {
+  local exit_code=$?
+  local finished_at_utc
+  local finished_epoch
+  local duration_seconds
+  local status
+
+  finished_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  finished_epoch=$(date -u +%s)
+  duration_seconds=$((finished_epoch - started_epoch))
+
+  if [[ ${exit_code} -eq 0 ]]; then
+    status="completed"
+  else
+    status="failed"
+  fi
+
+  mkdir -p "${provenance_dir}"
+  cat >> "${trace_file}" <<EOF
+result:
+  status: ${status}
+  exit_code: ${exit_code}
+  finished_at_utc: ${finished_at_utc}
+  duration_seconds: ${duration_seconds}
+EOF
+
+  exit "${exit_code}"
+}
+trap finalize_trace EXIT
 
 log_info "3DVar-FGAT render provenance"
-log_info "  timestamp UTC : ${timestamp_utc}"
+log_info "  started UTC   : ${started_at_utc}"
 log_info "  git commit    : ${git_commit}"
 log_info "  script        : scripts/run/render_3dvar_fgat.sh"
 log_info "  template      : ${template_file}"
@@ -51,6 +81,28 @@ log_info "  observers     : ${observer_manifest}"
 log_info "  observers out : ${observers_file}"
 log_info "  combined ctx  : ${combined_context}"
 log_info "  final YAML    : ${output_file}"
+
+mkdir -p "${provenance_dir}"
+cat > "${trace_file}" <<EOF
+started_at_utc: ${started_at_utc}
+git_commit: ${git_commit}
+generated_by: scripts/run/render_3dvar_fgat.sh
+inputs:
+  template: ${template_file}
+  context: ${context_file}
+  observer_manifest: ${observer_manifest}
+commands:
+  render_observers: python3 ${REPO_ROOT}/tools/render_observers.py ${observer_manifest} --context ${context_file} --output ${observers_file} --allow-env --allow-unresolved
+  render_template: python3 ${REPO_ROOT}/tools/render_template.py ${template_file} --context ${combined_context} --output ${output_file} --allow-env --allow-unresolved
+intermediate_outputs:
+  observers_yaml: ${observers_file}
+  combined_context: ${combined_context}
+outputs:
+  jedi_yaml: ${output_file}
+notes:
+  - This trace records artifact provenance only.
+  - The rendered YAML is a structural smoke output unless validated by the runtime workflow.
+EOF
 
 log_info "Rendering 3DVar-FGAT observers"
 python3 "${REPO_ROOT}/tools/render_observers.py" \
@@ -91,25 +143,6 @@ python3 "${REPO_ROOT}/tools/render_template.py" \
   --output "${output_file}" \
   --allow-env \
   --allow-unresolved
-
-mkdir -p "${provenance_dir}"
-cat > "${trace_file}" <<EOF
-timestamp_utc: ${timestamp_utc}
-git_commit: ${git_commit}
-generated_by: scripts/run/render_3dvar_fgat.sh
-inputs:
-  template: ${template_file}
-  context: ${context_file}
-  observer_manifest: ${observer_manifest}
-intermediate_outputs:
-  observers_yaml: ${observers_file}
-  combined_context: ${combined_context}
-outputs:
-  jedi_yaml: ${output_file}
-notes:
-  - This trace records artifact provenance only.
-  - The rendered YAML is a structural smoke output unless validated by the runtime workflow.
-EOF
 
 log_info "Rendered observers written to ${observers_file}"
 log_info "Rendered combined context written to ${combined_context}"
