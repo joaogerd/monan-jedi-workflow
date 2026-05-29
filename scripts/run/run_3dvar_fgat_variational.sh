@@ -58,6 +58,46 @@ trace_file="${provenance_dir}/variational.trace"
 started_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 started_epoch=$(date -u +%s)
 
+experiment_name="jaci_3dvar_fgat_tutorial_2018041500"
+cycle="2018041500"
+runtime_dir="${REPO_ROOT}/build/runtime/${experiment_name}/${cycle}"
+runtime_log_dir="${runtime_dir}/logs"
+runtime_analysis_dir="${runtime_dir}/analysis"
+runtime_feedback_dir="${runtime_dir}/feedback"
+variational_log="${runtime_log_dir}/mpasjedi_variational.log"
+rendered_yaml="${REPO_ROOT}/build/rendered/3dvar_fgat.yaml"
+scratch_root="${MONAN_SCRATCH:-${REPO_ROOT}/build/scratch}"
+scratch_experiment_dir="${scratch_root}/${experiment_name}"
+scratch_analysis_dir="${scratch_experiment_dir}/analysis"
+scratch_feedback_dir="${scratch_experiment_dir}/feedback"
+
+exists_flag() {
+  local path="$1"
+  if [[ -e "${path}" ]]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+dir_count() {
+  local path="$1"
+  if [[ -d "${path}" ]]; then
+    find "${path}" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' '
+  else
+    printf '0'
+  fi
+}
+
+file_size_bytes() {
+  local path="$1"
+  if [[ -f "${path}" ]]; then
+    wc -c < "${path}" | tr -d ' '
+  else
+    printf '0'
+  fi
+}
+
 git_commit="unknown"
 if command -v git >/dev/null 2>&1; then
   git_commit=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
@@ -82,6 +122,31 @@ finalize_trace() {
 
   mkdir -p "${provenance_dir}"
   cat >> "${trace_file}" <<EOF
+observed_outputs:
+  command_file:
+    path: ${command_file}
+    exists: $(exists_flag "${command_file}")
+    size_bytes: $(file_size_bytes "${command_file}")
+  variational_log:
+    path: ${variational_log}
+    exists: $(exists_flag "${variational_log}")
+    size_bytes: $(file_size_bytes "${variational_log}")
+  runtime_analysis_dir:
+    path: ${runtime_analysis_dir}
+    exists: $(exists_flag "${runtime_analysis_dir}")
+    entries: $(dir_count "${runtime_analysis_dir}")
+  runtime_feedback_dir:
+    path: ${runtime_feedback_dir}
+    exists: $(exists_flag "${runtime_feedback_dir}")
+    entries: $(dir_count "${runtime_feedback_dir}")
+  scratch_analysis_dir:
+    path: ${scratch_analysis_dir}
+    exists: $(exists_flag "${scratch_analysis_dir}")
+    entries: $(dir_count "${scratch_analysis_dir}")
+  scratch_feedback_dir:
+    path: ${scratch_feedback_dir}
+    exists: $(exists_flag "${scratch_feedback_dir}")
+    entries: $(dir_count "${scratch_feedback_dir}")
 result:
   status: ${status}
   exit_code: ${exit_code}
@@ -101,6 +166,8 @@ log_info "  config        : ${config}"
 log_info "  execute mode  : ${execute}"
 log_info "  strict mode   : ${strict}"
 log_info "  command file  : ${command_file}"
+log_info "  runtime dir   : ${runtime_dir}"
+log_info "  JEDI log      : ${variational_log}"
 
 if [[ "${execute}" != true ]]; then
   log_warn "Dry-run mode. Use --execute only inside a validated runtime/PBS environment."
@@ -113,17 +180,25 @@ git_commit: ${git_commit}
 generated_by: scripts/run/run_3dvar_fgat_variational.sh
 inputs:
   run_config: ${config}
+  rendered_yaml: ${rendered_yaml}
+  runtime_dir: ${runtime_dir}
 execution:
   execute_mode: ${execute}
   strict_mode: ${strict}
 command:
   executable: python3
   argv: ${args[*]}
-outputs:
+expected_outputs:
   command_file: ${command_file}
+  variational_log: ${variational_log}
+  runtime_analysis_dir: ${runtime_analysis_dir}
+  runtime_feedback_dir: ${runtime_feedback_dir}
+  scratch_analysis_dir: ${scratch_analysis_dir}
+  scratch_feedback_dir: ${scratch_feedback_dir}
 notes:
-  - This stage creates the command file.
-  - Actual execution only happens when execute_mode=true.
+  - This stage always creates or refreshes the command file.
+  - Actual JEDI execution only happens when execute_mode=true.
+  - observed_outputs is written at script exit and records which expected outputs actually exist.
 EOF
 
 python3 "${args[@]}"
