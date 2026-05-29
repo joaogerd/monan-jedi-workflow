@@ -98,6 +98,16 @@ file_size_bytes() {
   fi
 }
 
+command_path_or_missing() {
+  local cmd="$1"
+  command -v "${cmd}" 2>/dev/null || printf 'missing'
+}
+
+safe_env_value() {
+  local name="$1"
+  printf '%s' "${!name-}"
+}
+
 git_commit="unknown"
 if command -v git >/dev/null 2>&1; then
   git_commit=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
@@ -168,6 +178,9 @@ log_info "  strict mode   : ${strict}"
 log_info "  command file  : ${command_file}"
 log_info "  runtime dir   : ${runtime_dir}"
 log_info "  JEDI log      : ${variational_log}"
+log_info "  executable    : ${MPASJEDI_VARIATIONAL_EXE:-unset}"
+log_info "  MPI launcher  : ${MPI_LAUNCHER:-unset} ${MPI_TASKS_FLAG:-}"
+log_info "  PBS job id    : ${PBS_JOBID:-none}"
 
 if [[ "${execute}" != true ]]; then
   log_warn "Dry-run mode. Use --execute only inside a validated runtime/PBS environment."
@@ -185,9 +198,35 @@ inputs:
 execution:
   execute_mode: ${execute}
   strict_mode: ${strict}
+  pbs_job_id: ${PBS_JOBID:-none}
+  pbs_job_name: ${PBS_JOBNAME:-none}
+  pbs_queue: ${PBS_QUEUE:-none}
+  pbs_workdir: ${PBS_O_WORKDIR:-none}
 command:
   executable: python3
   argv: ${args[*]}
+runtime_environment:
+  hostname: $(hostname 2>/dev/null || printf 'unknown')
+  user: ${USER:-unknown}
+  pwd: $(pwd)
+  python: $(command_path_or_missing python3)
+  mpirun: $(command_path_or_missing mpirun)
+  mpi_launcher: ${MPI_LAUNCHER:-unset}
+  mpi_tasks_flag: ${MPI_TASKS_FLAG:-unset}
+  mpasjedi_variational_exe: ${MPASJEDI_VARIATIONAL_EXE:-unset}
+  monan_workflow_root: ${MONAN_WORKFLOW_ROOT:-unset}
+  monan_data_root: ${MONAN_DATA_ROOT:-unset}
+  monan_scratch: ${MONAN_SCRATCH:-unset}
+  stack_root: ${STACK_ROOT:-unset}
+  stack_env_module: ${STACK_ENV_MODULE:-unset}
+  omp_num_threads: ${OMP_NUM_THREADS:-unset}
+  gfortran_convert_unit: ${GFORTRAN_CONVERT_UNIT:-unset}
+  f_ufmtendian: ${F_UFMTENDIAN:-unset}
+  fi_cxi_rx_match_mode: ${FI_CXI_RX_MATCH_MODE:-unset}
+  mpich_smp_single_copy_mode: ${MPICH_SMP_SINGLE_COPY_MODE:-unset}
+  mpich_shared_mem_coll_opt: ${MPICH_SHARED_MEM_COLL_OPT:-unset}
+  oops_trace: ${OOPS_TRACE:-unset}
+  oops_debug: ${OOPS_DEBUG:-unset}
 expected_outputs:
   command_file: ${command_file}
   variational_log: ${variational_log}
@@ -200,6 +239,17 @@ notes:
   - Actual JEDI execution only happens when execute_mode=true.
   - observed_outputs is written at script exit and records which expected outputs actually exist.
 EOF
+
+if command -v module >/dev/null 2>&1; then
+  {
+    echo "loaded_modules: |"
+    module list 2>&1 | sed 's/^/  /'
+  } >> "${trace_file}"
+else
+  cat >> "${trace_file}" <<EOF
+loaded_modules: module-command-not-available
+EOF
+fi
 
 python3 "${args[@]}"
 
