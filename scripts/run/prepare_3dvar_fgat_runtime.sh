@@ -62,17 +62,47 @@ fi
 render_dir="${REPO_ROOT}/build/rendered"
 provenance_dir="${render_dir}/provenance"
 trace_file="${provenance_dir}/runtime.trace"
+started_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+started_epoch=$(date -u +%s)
 
 git_commit="unknown"
 if command -v git >/dev/null 2>&1; then
   git_commit=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
 fi
 
-timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+finalize_trace() {
+  local exit_code=$?
+  local finished_at_utc
+  local finished_epoch
+  local duration_seconds
+  local status
+
+  finished_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  finished_epoch=$(date -u +%s)
+  duration_seconds=$((finished_epoch - started_epoch))
+
+  if [[ ${exit_code} -eq 0 ]]; then
+    status="completed"
+  else
+    status="failed"
+  fi
+
+  mkdir -p "${provenance_dir}"
+  cat >> "${trace_file}" <<EOF
+result:
+  status: ${status}
+  exit_code: ${exit_code}
+  finished_at_utc: ${finished_at_utc}
+  duration_seconds: ${duration_seconds}
+EOF
+
+  exit "${exit_code}"
+}
+trap finalize_trace EXIT
 
 log_info "Preparing 3DVar-FGAT runtime"
 log_info "Runtime preparation provenance"
-log_info "  timestamp UTC : ${timestamp_utc}"
+log_info "  started UTC   : ${started_at_utc}"
 log_info "  git commit    : ${git_commit}"
 log_info "  script        : scripts/run/prepare_3dvar_fgat_runtime.sh"
 log_info "  manifest      : ${manifest}"
@@ -84,11 +114,9 @@ if [[ "${dry_run}" == true ]]; then
   log_warn "Running in dry-run mode. Use --strict to create links/copies."
 fi
 
-python3 "${args[@]}"
-
 mkdir -p "${provenance_dir}"
 cat > "${trace_file}" <<EOF
-timestamp_utc: ${timestamp_utc}
+started_at_utc: ${started_at_utc}
 git_commit: ${git_commit}
 generated_by: scripts/run/prepare_3dvar_fgat_runtime.sh
 inputs:
@@ -97,6 +125,9 @@ execution_modes:
   dry_run: ${dry_run}
   copy_mode: ${copy_mode}
   force: ${force}
+command:
+  executable: python3
+  argv: ${args[*]}
 expected_outputs:
   runtime_tree: build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500
 notes:
@@ -104,5 +135,7 @@ notes:
   - This script does not render the PBS job.
   - This script does not submit qsub.
 EOF
+
+python3 "${args[@]}"
 
 log_info "Runtime provenance trace written to ${trace_file}"
