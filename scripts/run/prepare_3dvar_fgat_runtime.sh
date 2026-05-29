@@ -65,10 +65,98 @@ trace_file="${provenance_dir}/runtime.trace"
 started_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 started_epoch=$(date -u +%s)
 
+runtime_tree="${REPO_ROOT}/build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500"
+rendered_yaml="${REPO_ROOT}/build/rendered/3dvar_fgat.yaml"
+
+runtime_artifacts=(
+  "background/mpasout.2018-04-15_00.00.00.nc"
+  "obs/aircraft_obs_2018041500.h5"
+  "obs/sondes_obs_2018041500.h5"
+  "obs/sfc_obs_2018041500.h5"
+  "covariance/mpas.stddev.nc"
+  "x1.10242.invariant.nc"
+  "x1.10242.graph.info.part.64"
+  "templateFields.10242.nc"
+  "geovars.yaml"
+  "keptvars.yaml"
+  "obsop_name_map.yaml"
+  "namelist.atmosphere.outer"
+  "namelist.atmosphere.inner"
+  "streams.atmosphere.outer"
+  "streams.atmosphere.inner"
+  "stream_list.atmosphere.control"
+  "stream_list.atmosphere.background"
+  "stream_list.atmosphere.analysis"
+  "stream_list.atmosphere.ensemble"
+)
+
 git_commit="unknown"
 if command -v git >/dev/null 2>&1; then
   git_commit=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
 fi
+
+exists_flag() {
+  local path="$1"
+  if [[ -e "${path}" ]]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+file_size_bytes() {
+  local path="$1"
+  local resolved
+  resolved=$(readlink -f "${path}" 2>/dev/null || printf '%s' "${path}")
+  if [[ -f "${resolved}" ]]; then
+    wc -c < "${resolved}" | tr -d ' '
+  else
+    printf '0'
+  fi
+}
+
+sha256_or_missing() {
+  local path="$1"
+  local resolved
+  resolved=$(readlink -f "${path}" 2>/dev/null || printf '%s' "${path}")
+  if [[ -f "${resolved}" ]] && command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${resolved}" | awk '{print $1}'
+  elif [[ -f "${resolved}" ]]; then
+    printf 'sha256sum-not-available'
+  else
+    printf 'missing'
+  fi
+}
+
+resolved_path() {
+  local path="$1"
+  readlink -f "${path}" 2>/dev/null || printf '%s' "${path}"
+}
+
+append_artifact_checksum() {
+  local label="$1"
+  local path="$2"
+  cat >> "${trace_file}" <<EOF
+  ${label}:
+    path: ${path}
+    resolved_path: $(resolved_path "${path}")
+    exists: $(exists_flag "${path}")
+    size_bytes: $(file_size_bytes "${path}")
+    sha256: $(sha256_or_missing "${path}")
+EOF
+}
+
+append_runtime_artifact_checksums() {
+  cat >> "${trace_file}" <<EOF
+artifact_checksums:
+EOF
+  append_artifact_checksum "manifest" "${manifest}"
+  append_artifact_checksum "rendered_yaml" "${rendered_yaml}"
+  for artifact in "${runtime_artifacts[@]}"; do
+    local_label=$(printf '%s' "${artifact}" | tr '/.-' '___')
+    append_artifact_checksum "${local_label}" "${runtime_tree}/${artifact}"
+  done
+}
 
 finalize_trace() {
   local exit_code=$?
@@ -88,6 +176,7 @@ finalize_trace() {
   fi
 
   mkdir -p "${provenance_dir}"
+  append_runtime_artifact_checksums
   cat >> "${trace_file}" <<EOF
 result:
   status: ${status}
@@ -106,6 +195,7 @@ log_info "  started UTC   : ${started_at_utc}"
 log_info "  git commit    : ${git_commit}"
 log_info "  script        : scripts/run/prepare_3dvar_fgat_runtime.sh"
 log_info "  manifest      : ${manifest}"
+log_info "  runtime tree  : ${runtime_tree}"
 log_info "  mode dry-run  : ${dry_run}"
 log_info "  mode copy     : ${copy_mode}"
 log_info "  mode force    : ${force}"
@@ -121,6 +211,7 @@ git_commit: ${git_commit}
 generated_by: scripts/run/prepare_3dvar_fgat_runtime.sh
 inputs:
   manifest: ${manifest}
+  rendered_yaml: ${rendered_yaml}
 execution_modes:
   dry_run: ${dry_run}
   copy_mode: ${copy_mode}
@@ -129,11 +220,13 @@ command:
   executable: python3
   argv: ${args[*]}
 expected_outputs:
-  runtime_tree: build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500
-notes:
+  runtime_tree: ${runtime_tree}
+  runtime_artifacts:
+$(printf '    - %s\n' "${runtime_artifacts[@]}")notes:
   - This script prepares the runtime directory from the runtime manifest.
   - This script does not render the PBS job.
   - This script does not submit qsub.
+  - artifact_checksums is written at script exit and resolves symbolic links when possible.
 EOF
 
 python3 "${args[@]}"
