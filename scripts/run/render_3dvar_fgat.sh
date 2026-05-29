@@ -31,6 +31,26 @@ observer_manifest="${REPO_ROOT}/configs/experiments/3dvar_fgat/observers.yaml"
 render_dir="${REPO_ROOT}/build/rendered"
 observers_file="${render_dir}/observers.yaml"
 combined_context="${render_dir}/render_context.with_observers.yaml"
+provenance_dir="${render_dir}/provenance"
+trace_file="${provenance_dir}/3dvar_fgat.trace"
+
+git_commit="unknown"
+if command -v git >/dev/null 2>&1; then
+  git_commit=$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || printf 'unknown')
+fi
+
+timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+log_info "3DVar-FGAT render provenance"
+log_info "  timestamp UTC : ${timestamp_utc}"
+log_info "  git commit    : ${git_commit}"
+log_info "  script        : scripts/run/render_3dvar_fgat.sh"
+log_info "  template      : ${template_file}"
+log_info "  context       : ${context_file}"
+log_info "  observers     : ${observer_manifest}"
+log_info "  observers out : ${observers_file}"
+log_info "  combined ctx  : ${combined_context}"
+log_info "  final YAML    : ${output_file}"
 
 log_info "Rendering 3DVar-FGAT observers"
 python3 "${REPO_ROOT}/tools/render_observers.py" \
@@ -72,6 +92,27 @@ python3 "${REPO_ROOT}/tools/render_template.py" \
   --allow-env \
   --allow-unresolved
 
+mkdir -p "${provenance_dir}"
+cat > "${trace_file}" <<EOF
+timestamp_utc: ${timestamp_utc}
+git_commit: ${git_commit}
+generated_by: scripts/run/render_3dvar_fgat.sh
+inputs:
+  template: ${template_file}
+  context: ${context_file}
+  observer_manifest: ${observer_manifest}
+intermediate_outputs:
+  observers_yaml: ${observers_file}
+  combined_context: ${combined_context}
+outputs:
+  jedi_yaml: ${output_file}
+notes:
+  - This trace records artifact provenance only.
+  - The rendered YAML is a structural smoke output unless validated by the runtime workflow.
+EOF
+
 log_info "Rendered observers written to ${observers_file}"
+log_info "Rendered combined context written to ${combined_context}"
 log_info "Rendered file written to ${output_file}"
+log_info "Provenance trace written to ${trace_file}"
 log_warn "This rendered YAML is a structural smoke output, not a validated scientific run configuration."
