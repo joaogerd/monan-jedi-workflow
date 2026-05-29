@@ -14,10 +14,89 @@ cd {{runtime.repo_root}}
 
 source scripts/utils/logging.sh
 
+PROVENANCE_DIR="{{runtime.repo_root}}/build/rendered/provenance"
+PBS_EXEC_TRACE="${PROVENANCE_DIR}/pbs_execution.trace"
+PBS_STARTED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+PBS_STARTED_EPOCH="$(date -u +%s)"
+PBS_GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
+PBS_LOG_FILE="{{pbs.log_dir}}/{{pbs.job_name}}.${PBS_JOBID:-unknown}.out"
+
+mkdir -p "${PROVENANCE_DIR}" "{{pbs.log_dir}}"
+
+finalize_pbs_trace() {
+  local exit_code=$?
+  local finished_at_utc
+  local finished_epoch
+  local duration_seconds
+  local status
+
+  finished_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  finished_epoch="$(date -u +%s)"
+  duration_seconds=$((finished_epoch - PBS_STARTED_EPOCH))
+
+  if [[ ${exit_code} -eq 0 ]]; then
+    status="completed"
+  else
+    status="failed"
+  fi
+
+  cat >> "${PBS_EXEC_TRACE}" <<EOF
+result:
+  status: ${status}
+  exit_code: ${exit_code}
+  finished_at_utc: ${finished_at_utc}
+  duration_seconds: ${duration_seconds}
+observed_outputs:
+  pbs_log:
+    path: ${PBS_LOG_FILE}
+    exists: $([[ -f "${PBS_LOG_FILE}" ]] && echo true || echo false)
+    size_bytes: $([[ -f "${PBS_LOG_FILE}" ]] && wc -c < "${PBS_LOG_FILE}" | tr -d ' ' || echo 0)
+  jedi_log:
+    path: {{runtime.repo_root}}/build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500/logs/mpasjedi_variational.log
+    exists: $([[ -f "{{runtime.repo_root}}/build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500/logs/mpasjedi_variational.log" ]] && echo true || echo false)
+    size_bytes: $([[ -f "{{runtime.repo_root}}/build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500/logs/mpasjedi_variational.log" ]] && wc -c < "{{runtime.repo_root}}/build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500/logs/mpasjedi_variational.log" | tr -d ' ' || echo 0)
+EOF
+
+  exit "${exit_code}"
+}
+trap finalize_pbs_trace EXIT
+
+cat > "${PBS_EXEC_TRACE}" <<EOF
+started_at_utc: ${PBS_STARTED_AT_UTC}
+git_commit: ${PBS_GIT_COMMIT:-unknown}
+generated_by: jobs/pbs/3dvar_fgat.pbs.template
+pbs:
+  job_id: ${PBS_JOBID:-unknown}
+  job_name: {{pbs.job_name}}
+  project: {{pbs.project}}
+  queue: {{pbs.queue}}
+  select: {{pbs.nodes}}:ncpus={{pbs.ncpus}}:mpiprocs={{pbs.mpiprocs}}
+  walltime: {{pbs.walltime}}
+  place: {{pbs.place}}
+  join_output: {{pbs.join_output}}
+  log_file: ${PBS_LOG_FILE}
+runtime:
+  repo_root: {{runtime.repo_root}}
+  site_env: {{runtime.site_env}}
+steps:
+  render_yaml: {{steps.render_yaml}}
+  prepare_runtime: {{steps.prepare_runtime}}
+  run_variational: {{steps.run_variational}}
+related_traces:
+  render_trace: build/rendered/provenance/3dvar_fgat.trace
+  runtime_trace: build/rendered/provenance/runtime.trace
+  variational_trace: build/rendered/provenance/variational.trace
+  pbs_render_trace: build/rendered/provenance/3dvar_fgat_pbs.trace
+notes:
+  - This trace is generated inside the PBS job, not at PBS render time.
+  - The PBS job may overwrite render/runtime/variational traces if those steps are enabled.
+EOF
+
 log_info "Starting MONAN/JEDI 3DVar-FGAT PBS job"
 log_info "PBS job id: ${PBS_JOBID:-unknown}"
 log_info "PBS workdir: ${PBS_O_WORKDIR:-unknown}"
 log_info "Repository: {{runtime.repo_root}}"
+log_info "PBS execution provenance trace: ${PBS_EXEC_TRACE}"
 
 if [[ -f "{{runtime.site_env}}" ]]; then
   log_info "Loading site environment: {{runtime.site_env}}"
@@ -25,8 +104,6 @@ if [[ -f "{{runtime.site_env}}" ]]; then
 else
   log_warn "Site environment file not found: {{runtime.site_env}}"
 fi
-
-mkdir -p "{{pbs.log_dir}}"
 
 if [[ "{{steps.render_yaml}}" == "true" ]]; then
   log_info "Rendering 3DVar-FGAT YAML"
