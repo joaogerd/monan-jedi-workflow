@@ -1,0 +1,59 @@
+# PREPBUFR to IODA conversion manifest for the 3DVar-FGAT tutorial workflow.
+#
+# This file describes the observation conversion stage that must run before
+# MPAS-JEDI consumes IODA/HDF5 observation files. The exact converter executable
+# and options may vary with the installed iodaconv/JEDI stack. Keep this file as
+# the experiment-level contract and adjust the converter command only in the
+# site environment or conversion script.
+
+schema_version: 1
+
+experiment:
+  name: jaci_3dvar_fgat_tutorial_2018041500
+  cycle: "2018041500"
+
+paths:
+  prepbufr_dir: "${MONAN_DATA_ROOT}/observations/prepbufr/2018041500"
+  ioda_dir: "${MONAN_DATA_ROOT}/observations/ioda/2018041500"
+  log_dir: "${MONAN_WORKFLOW_ROOT}/build/logs/obs_conversion"
+
+# The converter command is intentionally configurable from the environment.
+# Typical JEDI installations expose either a Python iodaconv script or an
+# executable wrapper. Set PREPBUFR_IODA_CONVERTER in configs/sites/jaci/site.env
+# when the exact converter is known.
+converter:
+  executable_env: PREPBUFR_IODA_CONVERTER
+  default_executable: "prepbufr_to_ioda.py"
+  python_env: PYTHON3
+
+# Output files are the IODA files consumed by configs/jedi/obs_plugs/variational/*.yaml.
+observations:
+  - name: aircraft
+    enabled: true
+    prepbufr_file: "${MONAN_DATA_ROOT}/observations/prepbufr/2018041500/prepbufr.2018041500"
+    output_file: "${MONAN_DATA_ROOT}/observations/ioda/2018041500/aircraft_obs_2018041500.h5"
+    group: aircraft
+    description: "Aircraft conventional observations converted from PREPBUFR."
+    converter_args:
+      - "--subset"
+      - "aircraft"
+
+  - name: sondes
+    enabled: true
+    prepbufr_file: "${MONAN_DATA_ROOT}/observations/prepbufr/2018041500/prepbufr.2018041500"
+    output_file: "${MONAN_DATA_ROOT}/observations/ioda/2018041500/sondes_obs_2018041500.h5"
+    group: sondes
+    description: "Radiosonde/profile conventional observations converted from PREPBUFR."
+    converter_args:
+      - "--subset"
+      - "sondes"
+
+  - name: sfc
+    enabled: true
+    prepbufr_file: "${MONAN_DATA_ROOT}/observations/prepbufr/2018041500/prepbufr.2018041500"
+    output_file: "${MONAN_DATA_ROOT}/observations/ioda/2018041500/sfc_obs_2018041500.h5"
+    group: sfc
+    description: "Surface conventional observations converted from PREPBUFR."
+    converter_args:
+      - "--subset"
+      - "sfc"
