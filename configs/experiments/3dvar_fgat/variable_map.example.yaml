@@ -151,6 +151,16 @@ profiles:
         pressure_p:
           - pressure_p
 
+      # Static/invariant fields may be required by MPAS-JEDI but are not always
+      # present in the time-dependent background file.
+      auxiliary_candidates:
+        landmask:
+          - landmask
+        ivgtyp:
+          - ivgtyp
+        isltyp:
+          - isltyp
+
     saber_bump:
       control_variables:
         canonical_to_bump:
@@ -206,6 +216,7 @@ profiles:
 
     validation:
       background_candidates: {}
+      auxiliary_candidates: {}
 
     saber_bump:
       control_variables:
