@@ -14,6 +14,7 @@ SUBMIT_PBS=false
 DRY_RUN=true
 SKIP_SMOKE=false
 CLEAN_RUNTIME=false
+CONVERT_OBS=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +40,10 @@ while [[ $# -gt 0 ]]; do
       CLEAN_RUNTIME=true
       shift
       ;;
+    --convert-obs)
+      CONVERT_OBS=true
+      shift
+      ;;
     *)
       echo "[ERROR] Unknown argument: $1" >&2
       exit 2
@@ -49,6 +54,7 @@ done
 PROVENANCE_DIR="${REPO_ROOT}/build/rendered/provenance"
 WORKFLOW_TRACE="${PROVENANCE_DIR}/workflow.trace"
 RENDER_TRACE="${PROVENANCE_DIR}/3dvar_fgat.trace"
+OBS_CONVERSION_TRACE="${PROVENANCE_DIR}/obs_conversion.trace"
 RUNTIME_TRACE="${PROVENANCE_DIR}/runtime.trace"
 VARIATIONAL_TRACE="${PROVENANCE_DIR}/variational.trace"
 PBS_TRACE="${PROVENANCE_DIR}/3dvar_fgat_pbs.trace"
@@ -102,15 +108,18 @@ workflow:
     dry_run: ${DRY_RUN}
     skip_smoke: ${SKIP_SMOKE}
     clean_runtime: ${CLEAN_RUNTIME}
+    convert_obs: ${CONVERT_OBS}
   provenance_index:
     workflow_trace: build/rendered/provenance/workflow.trace
     render_trace: build/rendered/provenance/3dvar_fgat.trace
+    obs_conversion_trace: build/rendered/provenance/obs_conversion.trace
     variable_map_trace: build/rendered/provenance/variable_map.trace
     runtime_trace: build/rendered/provenance/runtime.trace
     pbs_trace: build/rendered/provenance/3dvar_fgat_pbs.trace
     pbs_execution_trace: build/rendered/provenance/pbs_execution.trace
     variational_trace: build/rendered/provenance/variational.trace
   expected_artifacts:
+    observation_conversion_trace: build/rendered/provenance/obs_conversion.trace
     rendered_yaml: build/rendered/3dvar_fgat.yaml
     rendered_observers: build/rendered/observers.yaml
     rendered_variable_context: build/rendered/variable_context.yaml
@@ -162,6 +171,10 @@ append_trace_index_summary() {
       path: $(relative_path "${RENDER_TRACE}")
       exists: $(exists_flag "${RENDER_TRACE}")
       size_bytes: $(file_size_bytes "${RENDER_TRACE}")
+    obs_conversion_trace:
+      path: $(relative_path "${OBS_CONVERSION_TRACE}")
+      exists: $(exists_flag "${OBS_CONVERSION_TRACE}")
+      size_bytes: $(file_size_bytes "${OBS_CONVERSION_TRACE}")
     variable_map_trace:
       path: $(relative_path "${VARIABLE_MAP_TRACE}")
       exists: $(exists_flag "${VARIABLE_MAP_TRACE}")
@@ -238,6 +251,20 @@ if [[ "${SKIP_SMOKE}" != true ]]; then
 else
   append_workflow_step "smoke_checks" "bash tests/smoke_check.sh" "skipped"
 fi
+
+if [[ "${CONVERT_OBS}" == true ]]; then
+  append_workflow_step "convert_observations" "bash scripts/run/convert_observations.sh --execute --strict" "required" "build/rendered/provenance/obs_conversion.trace" "IODA observation files"
+  log_info "Converting observations"
+  bash scripts/run/convert_observations.sh --execute --strict
+else
+  append_workflow_step "plan_observation_conversion" "bash scripts/run/convert_observations.sh" "dry-run" "build/rendered/provenance/obs_conversion.trace" "observation conversion plan"
+  log_info "Planning observation conversion"
+  bash scripts/run/convert_observations.sh
+fi
+
+append_workflow_step "validate_observation_conversion" "bash scripts/setup/validate_obs_conversion.sh" "permissive" "build/rendered/provenance/obs_conversion.trace" "raw and converted observation status"
+log_info "Validating observation conversion outputs"
+bash scripts/setup/validate_obs_conversion.sh
 
 append_workflow_step "render_jedi_yaml" "bash scripts/run/render_3dvar_fgat.sh" "required" "build/rendered/provenance/3dvar_fgat.trace, build/rendered/provenance/variable_map.trace" "build/rendered/3dvar_fgat.yaml and build/rendered/variable_context.yaml"
 log_info "Rendering JEDI YAML"
