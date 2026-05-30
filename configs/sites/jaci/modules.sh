@@ -2,14 +2,15 @@
 # Environment modules for JACI.
 #
 # This file prepares the runtime environment used by MONAN-JEDI-WORKFLOW
-# validation scripts and PBS jobs. It first loads the MONAN-JEDI stack runtime
-# when requested by site.env, then loads the Python runtime used by repository
-# helper scripts.
+# validation scripts and PBS jobs. It loads the MONAN-JEDI stack runtime and then
+# validates that the active Python interpreter is the Python provided by that
+# stack. Do not load Anaconda here: the JACI stack Python packages are built for
+# CPython 3.11, while the site Anaconda module may provide a different Python ABI.
 
 # JACI site-provided shell functions may reference variables that are unset when
 # repository scripts run with `set -u`. Temporarily disable nounset while loading
-# modules and starting Conda, then restore the previous shell option state before
-# returning to the caller.
+# modules, then restore the previous shell option state before returning to the
+# caller.
 case "$-" in
   *u*) monan_had_nounset=1 ;;
   *) monan_had_nounset=0 ;;
@@ -57,27 +58,45 @@ monan_load_stack_runtime() {
   printf '[INFO] MONAN-JEDI stack runtime loaded.\n'
 }
 
-monan_load_python_runtime() {
-  if [[ "${MONAN_LOAD_ANACONDA:-true}" != "true" ]]; then
-    printf '[INFO] MONAN_LOAD_ANACONDA is not true; skipping Anaconda setup.\n'
-    return 0
+monan_unload_conflicting_python_runtime() {
+  # The site Anaconda module overrides python3 with Python 3.12 on JACI. That is
+  # incompatible with the current stack modules, whose compiled Python packages
+  # live under lib/python3.11/site-packages and expose CPython 3.11 extensions.
+  if command -v module >/dev/null 2>&1; then
+    module unload anaconda/24.1.2 >/dev/null 2>&1 || true
+    module unload anaconda >/dev/null 2>&1 || true
   fi
 
-  module load anaconda
+  hash -r 2>/dev/null || true
+}
 
-  if command -v start_conda >/dev/null 2>&1; then
-    # Clear positional parameters before calling start_conda. On JACI, start_conda
-    # may treat inherited positional arguments as a Conda environment path.
-    set --
-    start_conda
-  else
-    printf '[WARN] start_conda command not available after loading anaconda.\n' >&2
+monan_validate_python_runtime() {
+  local python_exe
+  local python_version
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    monan_modules_die "python3 is not available after JACI module setup"
+  fi
+
+  python_exe="$(command -v python3)"
+  python_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" || return 1
+
+  printf '[INFO] Python3 runtime: %s\n' "${python_exe}"
+  printf '[INFO] Python3 ABI: %s\n' "${python_version}"
+
+  if [[ "${python_exe}" == /p/app/anaconda/* ]]; then
+    monan_modules_die "Anaconda Python is active (${python_exe}); unload Anaconda and use the Spack stack Python"
+  fi
+
+  if [[ "${MONAN_LOAD_STACK:-false}" == "true" && "${python_version}" != "3.11" ]]; then
+    monan_modules_die "wrong Python ABI (${python_version}); this JACI stack was built for Python 3.11"
   fi
 }
 
 if command -v module >/dev/null 2>&1; then
   monan_load_stack_runtime || monan_modules_die "failed to load MONAN-JEDI stack runtime"
-  monan_load_python_runtime || monan_modules_die "failed to load JACI Python runtime"
+  monan_unload_conflicting_python_runtime || monan_modules_die "failed to unload conflicting Python runtime"
+  monan_validate_python_runtime || monan_modules_die "failed to validate JACI Python runtime"
 else
   printf '[WARN] module command not available; skipping module setup.\n' >&2
 fi
@@ -89,15 +108,6 @@ else
 fi
 unset monan_had_nounset
 
-if command -v python3 >/dev/null 2>&1; then
-  printf '[INFO] Python3 runtime: %s\n' "$(command -v python3)"
-elif command -v python >/dev/null 2>&1; then
-  printf '[INFO] Python runtime: %s\n' "$(command -v python)"
-else
-  printf '[ERROR] Python is not available after JACI module setup.\n' >&2
-  return 1 2>/dev/null || exit 1
-fi
-
 if [[ -n "${MPI_LAUNCHER:-}" ]]; then
   if command -v "${MPI_LAUNCHER}" >/dev/null 2>&1; then
     printf '[INFO] MPI launcher: %s\n' "$(command -v "${MPI_LAUNCHER}")"
@@ -106,4 +116,4 @@ if [[ -n "${MPI_LAUNCHER:-}" ]]; then
   fi
 fi
 
-unset -f monan_modules_die monan_load_stack_runtime monan_load_python_runtime
+unset -f monan_modules_die monan_load_stack_runtime monan_unload_conflicting_python_runtime monan_validate_python_runtime
