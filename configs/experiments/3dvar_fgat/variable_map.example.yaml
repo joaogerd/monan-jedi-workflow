@@ -93,6 +93,64 @@ profiles:
         - tslb
         - pressure_p
 
+    validation:
+      # Some rendered MPAS-JEDI variables are diagnostic or alias variables.
+      # They may not exist literally in the MPAS background file but are
+      # resolvable from equivalent fields already present in the tutorial file.
+      background_candidates:
+        spechum:
+          - spechum
+          - qv
+        temperature:
+          - temperature
+          - theta
+          - theta_base
+        pressure:
+          - pressure
+          - pressure_p
+          - pressure_base
+        landmask:
+          - landmask
+          - xland
+        ivgtyp:
+          - ivgtyp
+        isltyp:
+          - isltyp
+        surface_pressure:
+          - surface_pressure
+        uReconstructMeridional:
+          - uReconstructMeridional
+        uReconstructZonal:
+          - uReconstructZonal
+        theta:
+          - theta
+        rho:
+          - rho
+        u:
+          - u
+        qv:
+          - qv
+        xice:
+          - xice
+        snowc:
+          - snowc
+        skintemp:
+          - skintemp
+        vegfra:
+          - vegfra
+        u10:
+          - u10
+        v10:
+          - v10
+        lai:
+          - lai
+        smois:
+          - smois
+        tslb:
+          - tslb
+        pressure_p:
+          - pressure_p
+
     saber_bump:
       control_variables:
         canonical_to_bump:
@@ -145,6 +203,9 @@ profiles:
       canonical_to_model: {}
       direct_model: []
       order: []
+
+    validation:
+      background_candidates: {}
 
     saber_bump:
       control_variables:
