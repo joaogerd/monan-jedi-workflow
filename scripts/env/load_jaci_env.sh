@@ -6,7 +6,7 @@
 #   source scripts/env/load_jaci_env.sh configs/sites/jaci/site.env
 #
 # It must therefore avoid leaking its positional argument into site-provided shell
-# functions such as start_conda.
+# functions sourced by modules.sh.
 
 log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*" >&2; }
@@ -81,10 +81,10 @@ load_jaci_modules() {
   if [[ -f "$modules_file" ]]; then
     log "Loading JACI modules from ${modules_file}"
 
-    # Important: this function intentionally receives only the modules file path
-    # and then clears positional parameters before sourcing modules.sh. JACI's
-    # start_conda may inspect positional parameters. Without this isolation, the
-    # outer site.env argument can be misinterpreted as a Conda environment path.
+    # This function intentionally receives only the modules file path and then
+    # clears positional parameters before sourcing modules.sh. This prevents the
+    # outer site.env argument from being interpreted by any site-provided shell
+    # function sourced during module setup.
     set --
     # shellcheck disable=SC1090
     source "$modules_file"
