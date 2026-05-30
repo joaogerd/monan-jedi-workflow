@@ -53,6 +53,7 @@ RUNTIME_TRACE="${PROVENANCE_DIR}/runtime.trace"
 VARIATIONAL_TRACE="${PROVENANCE_DIR}/variational.trace"
 PBS_TRACE="${PROVENANCE_DIR}/3dvar_fgat_pbs.trace"
 PBS_EXEC_TRACE="${PROVENANCE_DIR}/pbs_execution.trace"
+VARIABLE_MAP_TRACE="${PROVENANCE_DIR}/variable_map.trace"
 WORKFLOW_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 WORKFLOW_STARTED_EPOCH="$(date -u +%s)"
 WORKFLOW_GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -104,6 +105,7 @@ workflow:
   provenance_index:
     workflow_trace: build/rendered/provenance/workflow.trace
     render_trace: build/rendered/provenance/3dvar_fgat.trace
+    variable_map_trace: build/rendered/provenance/variable_map.trace
     runtime_trace: build/rendered/provenance/runtime.trace
     pbs_trace: build/rendered/provenance/3dvar_fgat_pbs.trace
     pbs_execution_trace: build/rendered/provenance/pbs_execution.trace
@@ -111,6 +113,7 @@ workflow:
   expected_artifacts:
     rendered_yaml: build/rendered/3dvar_fgat.yaml
     rendered_observers: build/rendered/observers.yaml
+    rendered_variable_context: build/rendered/variable_context.yaml
     rendered_context: build/rendered/render_context.with_observers.yaml
     runtime_tree: build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500
     variational_command: build/rendered/mpasjedi_variational.command
@@ -159,6 +162,10 @@ append_trace_index_summary() {
       path: $(relative_path "${RENDER_TRACE}")
       exists: $(exists_flag "${RENDER_TRACE}")
       size_bytes: $(file_size_bytes "${RENDER_TRACE}")
+    variable_map_trace:
+      path: $(relative_path "${VARIABLE_MAP_TRACE}")
+      exists: $(exists_flag "${VARIABLE_MAP_TRACE}")
+      size_bytes: $(file_size_bytes "${VARIABLE_MAP_TRACE}")
     runtime_trace:
       path: $(relative_path "${RUNTIME_TRACE}")
       exists: $(exists_flag "${RUNTIME_TRACE}")
@@ -232,7 +239,7 @@ else
   append_workflow_step "smoke_checks" "bash tests/smoke_check.sh" "skipped"
 fi
 
-append_workflow_step "render_jedi_yaml" "bash scripts/run/render_3dvar_fgat.sh" "required" "build/rendered/provenance/3dvar_fgat.trace" "build/rendered/3dvar_fgat.yaml"
+append_workflow_step "render_jedi_yaml" "bash scripts/run/render_3dvar_fgat.sh" "required" "build/rendered/provenance/3dvar_fgat.trace, build/rendered/provenance/variable_map.trace" "build/rendered/3dvar_fgat.yaml and build/rendered/variable_context.yaml"
 log_info "Rendering JEDI YAML"
 bash scripts/run/render_3dvar_fgat.sh
 
@@ -255,6 +262,10 @@ bash scripts/setup/validate_3dvar_fgat_file_formats.sh --strict
 append_workflow_step "validate_mpas_background" "bash scripts/setup/validate_3dvar_fgat_mpas_background.sh --strict"
 log_info "Validating MPAS background"
 bash scripts/setup/validate_3dvar_fgat_mpas_background.sh --strict
+
+append_workflow_step "validate_variable_map" "bash scripts/setup/validate_3dvar_fgat_variable_map.sh --strict" "required" "build/rendered/provenance/variable_map.trace" "validated MPAS/JEDI/SABER variable equivalence"
+log_info "Validating variable map"
+bash scripts/setup/validate_3dvar_fgat_variable_map.sh --strict
 
 append_workflow_step "validate_ioda_structure" "bash scripts/setup/validate_3dvar_fgat_ioda_structure.sh --strict"
 log_info "Validating IODA structure"
