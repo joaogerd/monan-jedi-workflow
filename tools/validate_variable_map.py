@@ -104,7 +104,52 @@ def report_check(label: str, required: list[str], available: set[str], strict: b
 
     print(f"[WARN] {message}")
     return STATUS_WARN
+    
+def report_candidate_check(
+    label: str,
+    required: list[str],
+    available: set[str],
+    candidates: dict[str, list[str]],
+    strict: bool,
+) -> int:
+    missing: list[str] = []
+    resolved_by_candidate: dict[str, str] = {}
 
+    for name in required:
+        candidate_list = candidates.get(name, [name])
+        found = next((candidate for candidate in candidate_list if candidate in available), None)
+
+        if found:
+            resolved_by_candidate[name] = found
+        else:
+            missing.append(f"{name} candidates={candidate_list}")
+
+    if not missing:
+        print(f"[INFO] {label}: all {len(required)} variable(s) resolved")
+
+        aliased = {
+            name: found
+            for name, found in resolved_by_candidate.items()
+            if name != found
+        }
+
+        if aliased:
+            aliases = ", ".join(
+                f"{name}->{found}"
+                for name, found in sorted(aliased.items())
+            )
+            print(f"[INFO] {label}: aliases used: {aliases}")
+
+        return STATUS_OK
+
+    message = f"{label}: unresolved variable(s): {'; '.join(missing)}"
+
+    if strict:
+        print(f"[ERROR] {message}")
+        return STATUS_ERROR
+
+    print(f"[WARN] {message}")
+    return STATUS_WARN
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -122,6 +167,8 @@ def main() -> int:
 
     analysis = profile.get("analysis_variables", {})
     state = profile.get("state_variables", {})
+    validation = profile.get("validation", {})
+    background_candidates = validation.get("background_candidates", {}) or {}
     saber = profile.get("saber_bump", {})
     control = saber.get("control_variables", {})
 
@@ -199,11 +246,57 @@ def main() -> int:
         vbal_vars = set()
         status = max(status, STATUS_WARN)
 
-    status = max(status, report_check("analysis variables in background", analysis_variables, background_vars, args.strict))
-    status = max(status, report_check("state variables in background", state_variables, background_vars, args.strict))
-    status = max(status, report_check("BUMP control variables in stddev", control_variables, stddev_vars, args.strict))
-    status = max(status, report_check("BUMP 3D variables in stddev", bump_3d, stddev_vars, args.strict))
-    status = max(status, report_check("BUMP 2D variables in stddev", bump_2d, stddev_vars, args.strict))
+    status = max(
+        status,
+        report_candidate_check(
+            "analysis variables in background",
+            analysis_variables,
+            background_vars,
+            background_candidates,
+            args.strict,
+        ),
+    )
+
+    status = max(
+        status,
+        report_candidate_check(
+            "state variables in background",
+            state_variables,
+            background_vars,
+            background_candidates,
+            args.strict,
+        ),
+    )
+
+    status = max(
+        status,
+        report_check(
+            "BUMP control variables in stddev",
+            control_variables,
+            stddev_vars,
+            args.strict,
+        ),
+    )
+
+    status = max(
+        status,
+        report_check(
+            "BUMP 3D variables in stddev",
+            bump_3d,
+            stddev_vars,
+            args.strict,
+        ),
+    )
+
+    status = max(
+        status,
+        report_check(
+            "BUMP 2D variables in stddev",
+            bump_2d,
+            stddev_vars,
+            args.strict,
+        ),
+    )
 
     # NICAS and VBAL local files are implementation-specific. When these files do not expose
     # the same variable names directly, the stddev checks above remain the authoritative
