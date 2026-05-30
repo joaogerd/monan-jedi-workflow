@@ -30,6 +30,12 @@ STDDEV="${MONAN_DATA_ROOT}/covariance/mpas.stddev.nc"
 NICAS_DIR="${MONAN_DATA_ROOT}/covariance/NICAS"
 VBAL_DIR="${MONAN_DATA_ROOT}/covariance/VBAL"
 
+AUXILIARY_FILES=(
+  "${MONAN_DATA_ROOT}/static/x1.10242.invariant.nc"
+  "${MONAN_DATA_ROOT}/static/x1.static.nc"
+  "${MONAN_DATA_ROOT}/static/templateFields.10242.nc"
+)
+
 log_info "Validating variable map"
 log_info "Variable profile: ${PROFILE}"
 
@@ -42,6 +48,10 @@ python3 tools/validate_variable_map.py
 --nicas-dir "${NICAS_DIR}"
 --vbal-dir "${VBAL_DIR}"
 )
+
+for aux_file in "${AUXILIARY_FILES[@]}"; do
+  cmd+=(--auxiliary "${aux_file}")
+done
 
 if [[ "${STRICT}" == true ]]; then
   cmd+=(--strict)
