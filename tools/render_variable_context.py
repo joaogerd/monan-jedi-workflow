@@ -55,7 +55,7 @@ def _inline_list(values: list[str]) -> str:
     return ", ".join(values)
 
 
-def _render_vertical_balance_yaml(entries: list[dict[str, Any]], indent: int = 10) -> str:
+def _render_vertical_balance_yaml(entries: list[dict[str, Any]], indent: int = 12) -> str:
     prefix = " " * indent
     lines: list[str] = []
 
