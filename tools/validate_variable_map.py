@@ -159,6 +159,12 @@ def main() -> int:
     parser.add_argument("--stddev", required=True, help="SABER/BUMP stddev NetCDF file")
     parser.add_argument("--nicas-dir", required=True, help="NICAS directory")
     parser.add_argument("--vbal-dir", required=True, help="VBAL directory")
+    parser.add_argument(
+        "--auxiliary",
+        action="append",
+        default=[],
+        help="Auxiliary NetCDF file used by MPAS/JEDI, e.g. static or invariant files",
+    )
     parser.add_argument("--strict", action="store_true", help="Treat missing variables as errors")
     args = parser.parse_args()
 
@@ -169,6 +175,7 @@ def main() -> int:
     state = profile.get("state_variables", {})
     validation = profile.get("validation", {})
     background_candidates = validation.get("background_candidates", {}) or {}
+    auxiliary_candidates = validation.get("auxiliary_candidates", {}) or {}
     saber = profile.get("saber_bump", {})
     control = saber.get("control_variables", {})
 
@@ -185,6 +192,7 @@ def main() -> int:
         list(control.get("order", [])),
         dict(control.get("canonical_to_bump", {})),
     )
+
     bump_3d = list(saber.get("variables_3d", []))
     bump_2d = list(saber.get("variables_2d", []))
     vbal_entries = list(saber.get("vertical_balance", []))
@@ -216,6 +224,24 @@ def main() -> int:
     except Exception as exc:
         print(f"[ERROR] Failed to inspect required NetCDF input: {exc}")
         return STATUS_ERROR
+
+    auxiliary_vars: set[str] = set()
+
+    for aux_value in args.auxiliary:
+        aux_path = expand_path(aux_value)
+
+        if not aux_path.exists():
+            print(f"[WARN] Auxiliary NetCDF file not found: {aux_path}")
+            status = max(status, STATUS_WARN)
+            continue
+
+        print(f"[INFO] Auxiliary file: {aux_path}")
+
+        try:
+            auxiliary_vars.update(ncdump_variables(aux_path))
+        except Exception as exc:
+            print(f"[WARN] Failed to inspect auxiliary file {aux_path}: {exc}")
+            status = max(status, STATUS_WARN)
 
     nicas_file = first_existing_file(nicas_dir, "*.nc")
     vbal_file = first_existing_file(vbal_dir, "*.nc")
@@ -257,13 +283,20 @@ def main() -> int:
         ),
     )
 
+    combined_background_vars = background_vars | auxiliary_vars
+
+    combined_candidates = dict(background_candidates)
+    for name, candidates in auxiliary_candidates.items():
+        existing = combined_candidates.get(name, [])
+        combined_candidates[name] = list(dict.fromkeys(existing + candidates))
+
     status = max(
         status,
         report_candidate_check(
-            "state variables in background",
+            "state variables in background/auxiliary files",
             state_variables,
-            background_vars,
-            background_candidates,
+            combined_background_vars,
+            combined_candidates,
             args.strict,
         ),
     )
@@ -304,6 +337,7 @@ def main() -> int:
     if nicas_vars:
         overlap = sorted(set(control_variables) & nicas_vars)
         print(f"[INFO] NICAS sample/control-name overlap: {overlap if overlap else 'none'}")
+
     if vbal_vars:
         overlap = sorted(set(vbal_variables) & vbal_vars)
         print(f"[INFO] VBAL sample/vertical-balance-name overlap: {overlap if overlap else 'none'}")
@@ -311,6 +345,7 @@ def main() -> int:
     if status == STATUS_OK:
         print("[INFO] Variable map validation completed")
         return 0
+
     if args.strict:
         print("[ERROR] Variable map validation failed")
         return STATUS_ERROR
