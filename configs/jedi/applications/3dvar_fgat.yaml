@@ -23,7 +23,7 @@ _iteration: &iterationConfig
   geometry:
     nml_file: {{mpas.inner_namelist}}
     streams_file: {{mpas.inner_streams}}{{jedi.streams_file_member}}
-    deallocate non-da fields: true
+    deallocate non-da fields: {{jedi.deallocate_non_da_fields}}
   gradient norm reduction: 1e-3
 
 output:
@@ -48,7 +48,7 @@ cost function:
   geometry:
     nml_file: {{mpas.outer_namelist}}
     streams_file: {{mpas.outer_streams}}{{jedi.streams_file_member}}
-    deallocate non-da fields: true
+    deallocate non-da fields: {{jedi.deallocate_non_da_fields}}
   analysis variables: &incvars [{{jedi.analysis_variables}}]
   background:
     state variables: [{{jedi.state_variables}}]
@@ -89,15 +89,9 @@ cost function:
           read vertical balance: true
         vertical balance:
           vbal:
-          - balanced variable: air_horizontal_velocity_potential
-            unbalanced variable: air_horizontal_streamfunction
-            diagonal regression: true
-          - balanced variable: air_temperature
-            unbalanced variable: air_horizontal_streamfunction
-          - balanced variable: air_pressure_at_surface
-            unbalanced variable: air_horizontal_streamfunction
+{{jedi.bump_vertical_balance_yaml}}
     linear variable change:
-      linear variable change name: Control2Analysis
+      linear variable change name: {{jedi.linear_variable_change_name}}
       input variables: *ctlvars
       output variables: *incvars
   observations:
