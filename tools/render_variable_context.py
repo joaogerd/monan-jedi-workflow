@@ -51,6 +51,24 @@ def _resolve_ordered(order: list[str], mapping: dict[str, str], direct: list[str
         raise KeyError("unresolved variable(s): " + ", ".join(missing))
     return resolved
 
+def _inline_list(values: list[str]) -> str:
+    return ", ".join(values)
+
+
+def _render_vertical_balance_yaml(entries: list[dict[str, Any]], indent: int = 10) -> str:
+    prefix = " " * indent
+    lines: list[str] = []
+
+    for entry in entries:
+        lines.append(f"{prefix}- balanced variable: {entry['balanced_variable']}")
+        lines.append(f"{prefix}  unbalanced variable: {entry['unbalanced_variable']}")
+
+        if "diagonal_regression" in entry:
+            value = str(entry["diagonal_regression"]).lower()
+            lines.append(f"{prefix}  diagonal regression: {value}")
+
+    return "\n".join(lines)
+
 
 def render_context(variable_map: dict[str, Any], profile_name: str | None) -> dict[str, Any]:
     if not profile_name:
@@ -73,30 +91,59 @@ def render_context(variable_map: dict[str, Any], profile_name: str | None) -> di
         list(analysis.get("order", [])),
         dict(analysis.get("canonical_to_model", {})),
     )
+
     state_variables = _resolve_ordered(
         list(state.get("order", [])),
         dict(state.get("canonical_to_model", {})),
         list(state.get("direct_model", [])),
     )
+
     bump_control_variables = _resolve_ordered(
         list(control.get("order", [])),
         dict(control.get("canonical_to_bump", {})),
     )
 
+    bump_3d_variables = list(saber.get("variables_3d", []))
+    bump_2d_variables = list(saber.get("variables_2d", []))
+    vertical_balance = list(saber.get("vertical_balance", []))
     prefixes = saber.get("file_prefixes", {}) or {}
+
+    resolved = {
+        "analysis_variables": analysis_variables,
+        "state_variables": state_variables,
+        "bump_cov_control_variables": bump_control_variables,
+        "bump_3d_control_variables": bump_3d_variables,
+        "bump_2d_control_variables": bump_2d_variables,
+        "bump_vertical_balance": vertical_balance,
+        "bump_cov_prefix": prefixes.get("nicas", "mpas"),
+        "bump_cov_vbal_prefix": prefixes.get("vbal", "mpas"),
+        "linear_variable_change_name": profile.get(
+            "linear_variable_change_name",
+            "Control2Analysis",
+        ),
+        "deallocate_non_da_fields": str(
+            profile.get("deallocate_non_da_fields", False)
+        ).lower(),
+    }
+
+    template_context = dict(resolved)
+    template_context.update(
+        {
+            "analysis_variables": _inline_list(analysis_variables),
+            "state_variables": _inline_list(state_variables),
+            "bump_cov_control_variables": _inline_list(bump_control_variables),
+            "bump_3d_control_variables": _inline_list(bump_3d_variables),
+            "bump_2d_control_variables": _inline_list(bump_2d_variables),
+            "bump_vertical_balance_yaml": _render_vertical_balance_yaml(
+                vertical_balance
+            ),
+        }
+    )
 
     return {
         "variable_profile": profile_name,
-        "jedi": {
-            "analysis_variables": analysis_variables,
-            "state_variables": state_variables,
-            "bump_cov_control_variables": bump_control_variables,
-            "bump_3d_control_variables": list(saber.get("variables_3d", [])),
-            "bump_2d_control_variables": list(saber.get("variables_2d", [])),
-            "bump_vertical_balance": list(saber.get("vertical_balance", [])),
-            "bump_cov_prefix": prefixes.get("nicas", "mpas"),
-            "bump_cov_vbal_prefix": prefixes.get("vbal", "mpas"),
-        },
+        "jedi": template_context,
+        "resolved": resolved,
         "provenance": {
             "variable_profile": profile_name,
             "profile_description": profile.get("description", ""),
@@ -140,7 +187,7 @@ def main() -> int:
                 "variable_map": str(args.map),
                 "output": str(args.output),
                 **context["provenance"],
-                "resolved": context["jedi"],
+                "resolved": context["resolved"],
             },
         )
 
