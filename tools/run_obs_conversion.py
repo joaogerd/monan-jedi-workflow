@@ -6,12 +6,13 @@ The driver is intentionally converter-agnostic. It supports two manifest styles:
 1. stage-based conversion, used to mirror MPAS-Workflow PrepareObservations;
 2. legacy one-command-per-observation conversion.
 
-For MPAS-Workflow-like PREPBUFR conversion, the stage model is preferred:
+For native obs2ioda v3 conversion, prefer absolute input/output directories:
 
-    obs2ioda-v2.x prepbufr
-    obs2ioda-v2.x -noqc prepbufr    # surface replacement
-    ioda-upgrade-v1-to-v2.x ...
-    ioda-upgrade-v2-to-v3.x ...
+    obs2ioda-v3 -i /abs/input_dir -o /abs/output_dir prepbufr-file
+
+The driver normalizes stage input_dir/output_dir/work_dir with real paths before
+rendering the command. This avoids silent no-output runs caused by fragile
+relative paths.
 """
 
 from __future__ import annotations
@@ -54,6 +55,17 @@ def expand_text(value: Any) -> str:
 
 def expand_path(value: Any) -> Path:
     return Path(expand_text(value)).expanduser()
+
+
+def real_existing_dir(value: Any) -> str:
+    path = expand_path(value)
+    return str(path.resolve(strict=True))
+
+
+def real_output_dir(value: Any) -> str:
+    path = expand_path(value)
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path.resolve(strict=False))
 
 
 def normalize_command(value: Any) -> list[str]:
@@ -116,12 +128,32 @@ def source_context(stage: dict[str, Any], manifest: dict[str, Any]) -> dict[str,
     sources = manifest.get("sources", {}) or {}
     source_name = stage.get("source")
     source_file = ""
+    source_file_name = ""
+    input_dir = ""
+
     if source_name and isinstance(sources, dict):
         source = sources.get(str(source_name), {}) or {}
         if isinstance(source, dict):
             source_file = expand_text(source.get("file", ""))
+            source_file_name = str(source.get("file_name", ""))
+            input_dir = expand_text(source.get("input_dir", ""))
+
     source_file = expand_text(stage.get("source_file", source_file))
-    return {"source_file": source_file, "prepbufr_file": source_file}
+    source_file_name = str(stage.get("source_file_name", source_file_name))
+    input_dir = expand_text(stage.get("input_dir", input_dir))
+
+    if source_file and not source_file_name:
+        source_file_name = Path(source_file).name
+    if source_file and not input_dir:
+        input_dir = str(Path(source_file).parent)
+
+    return {
+        "source_file": source_file,
+        "prepbufr_file": source_file,
+        "source_file_name": source_file_name,
+        "bufr_file": source_file_name,
+        "input_dir": input_dir,
+    }
 
 
 def base_context(manifest: dict[str, Any]) -> dict[str, str]:
@@ -158,6 +190,10 @@ def append_trace_stage(trace: Path, data: dict[str, Any]) -> None:
         stream.write(f"      status: {data.get('status')}\n")
         if data.get("work_dir"):
             stream.write(f"      work_dir: {data.get('work_dir')}\n")
+        if data.get("input_dir"):
+            stream.write(f"      input_dir: {data.get('input_dir')}\n")
+        if data.get("output_dir"):
+            stream.write(f"      output_dir: {data.get('output_dir')}\n")
         if data.get("source"):
             stream.write(f"      source: {data.get('source')}\n")
             stream.write(f"      source_exists: {str(data.get('source_exists')).lower()}\n")
@@ -318,29 +354,46 @@ def run_command_stage(stage: dict[str, Any], manifest: dict[str, Any], context: 
     kind = str(stage.get("kind", "command"))
     stage_context = dict(context)
     stage_context.update(source_context(stage, manifest))
-    work_dir = expand_path(stage.get("work_dir", context.get("ioda_dir", ".")))
+
+    try:
+        input_dir = real_existing_dir(stage_context.get("input_dir") or stage.get("input_dir") or Path(stage_context.get("source_file", ".")).parent)
+    except FileNotFoundError:
+        input_dir = expand_text(stage_context.get("input_dir") or stage.get("input_dir") or Path(stage_context.get("source_file", ".")).parent)
+
+    output_dir = real_output_dir(stage.get("output_dir", context.get("ioda_dir", ".")))
+    work_dir = Path(real_output_dir(stage.get("work_dir", output_dir)))
+
+    stage_context["input_dir"] = input_dir
+    stage_context["output_dir"] = output_dir
     stage_context["work_dir"] = str(work_dir)
+
+    source = Path(input_dir) / stage_context.get("source_file_name", "")
+    if not source.name:
+        source = expand_path(stage_context.get("source_file", ""))
+    stage_context["source_file"] = str(source)
+    stage_context["prepbufr_file"] = str(source)
 
     command = render_command(normalize_command(stage.get("command")), stage_context)
     outputs = expected_outputs(stage)
     log_dir = expand_path((manifest.get("paths", {}) or {}).get("log_dir", "build/logs/obs_conversion"))
     log_file = log_dir / f"{name}.log"
-    source = expand_path(stage_context.get("source_file", ""))
 
     print(f"[INFO] stage={name}")
-    print(f"[INFO]   work_dir: {work_dir}")
-    print(f"[INFO]   source  : {source}")
-    print(f"[INFO]   command : {shlex.join(command)}")
+    print(f"[INFO]   work_dir : {work_dir}")
+    print(f"[INFO]   input_dir: {input_dir}")
+    print(f"[INFO]   output_dir: {output_dir}")
+    print(f"[INFO]   source   : {source}")
+    print(f"[INFO]   command  : {shlex.join(command)}")
 
     if not source.exists():
         level = "ERROR" if strict else "WARN"
         print(f"[{level}] Missing source file for stage {name}: {source}")
-        append_trace_stage(trace, {"name": name, "kind": kind, "status": "missing_source", "work_dir": str(work_dir), "source": str(source), "source_exists": False, "command": command, "outputs": output_status(outputs)})
+        append_trace_stage(trace, {"name": name, "kind": kind, "status": "missing_source", "work_dir": str(work_dir), "input_dir": input_dir, "output_dir": output_dir, "source": str(source), "source_exists": False, "command": command, "outputs": output_status(outputs)})
         return STATUS_ERROR if strict else STATUS_WARN
 
     if not execute:
         publishes = publish_outputs(stage, execute=False)
-        append_trace_stage(trace, {"name": name, "kind": kind, "status": "planned", "work_dir": str(work_dir), "source": str(source), "source_exists": True, "command": command, "outputs": output_status(outputs), "publishes": publishes})
+        append_trace_stage(trace, {"name": name, "kind": kind, "status": "planned", "work_dir": str(work_dir), "input_dir": input_dir, "output_dir": output_dir, "source": str(source), "source_exists": True, "command": command, "outputs": output_status(outputs), "publishes": publishes})
         return STATUS_OK
 
     rc = run_command(command, work_dir, log_file)
@@ -351,10 +404,10 @@ def run_command_stage(stage: dict[str, Any], manifest: dict[str, Any], context: 
             print(f"[ERROR] Stage failed: {name}; returncode={rc}; log={log_file}")
         if missing:
             print(f"[ERROR] Stage outputs missing: {', '.join(str(path) for path in missing)}")
-        append_trace_stage(trace, {"name": name, "kind": kind, "status": "failed", "work_dir": str(work_dir), "source": str(source), "source_exists": True, "command": command, "returncode": rc, "log_file": str(log_file), "outputs": output_status(outputs), "publishes": publishes})
+        append_trace_stage(trace, {"name": name, "kind": kind, "status": "failed", "work_dir": str(work_dir), "input_dir": input_dir, "output_dir": output_dir, "source": str(source), "source_exists": True, "command": command, "returncode": rc, "log_file": str(log_file), "outputs": output_status(outputs), "publishes": publishes})
         return STATUS_ERROR
 
-    append_trace_stage(trace, {"name": name, "kind": kind, "status": "completed", "work_dir": str(work_dir), "source": str(source), "source_exists": True, "command": command, "returncode": rc, "log_file": str(log_file), "outputs": output_status(outputs), "publishes": publishes})
+    append_trace_stage(trace, {"name": name, "kind": kind, "status": "completed", "work_dir": str(work_dir), "input_dir": input_dir, "output_dir": output_dir, "source": str(source), "source_exists": True, "command": command, "returncode": rc, "log_file": str(log_file), "outputs": output_status(outputs), "publishes": publishes})
     return STATUS_OK
 
 
