@@ -14,7 +14,7 @@ SUBMIT_PBS=false
 DRY_RUN=true
 SKIP_SMOKE=false
 CLEAN_RUNTIME=false
-CONVERT_OBS=false
+CONVERT_OBS=true
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -30,6 +30,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=true
+      CONVERT_OBS=false
       shift
       ;;
     --skip-smoke)
@@ -42,6 +43,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --convert-obs)
       CONVERT_OBS=true
+      shift
+      ;;
+    --skip-obs-conversion)
+      CONVERT_OBS=false
       shift
       ;;
     *)
@@ -252,20 +257,6 @@ else
   append_workflow_step "smoke_checks" "bash tests/smoke_check.sh" "skipped"
 fi
 
-if [[ "${CONVERT_OBS}" == true ]]; then
-  append_workflow_step "convert_observations" "bash scripts/run/convert_observations.sh --execute --strict" "required" "build/rendered/provenance/obs_conversion.trace" "IODA observation files"
-  log_info "Converting observations"
-  bash scripts/run/convert_observations.sh --execute --strict
-else
-  append_workflow_step "plan_observation_conversion" "bash scripts/run/convert_observations.sh" "dry-run" "build/rendered/provenance/obs_conversion.trace" "observation conversion plan"
-  log_info "Planning observation conversion"
-  bash scripts/run/convert_observations.sh
-fi
-
-append_workflow_step "validate_observation_conversion" "bash scripts/setup/validate_obs_conversion.sh" "permissive" "build/rendered/provenance/obs_conversion.trace" "raw and converted observation status"
-log_info "Validating observation conversion outputs"
-bash scripts/setup/validate_obs_conversion.sh
-
 append_workflow_step "render_jedi_yaml" "bash scripts/run/render_3dvar_fgat.sh" "required" "build/rendered/provenance/3dvar_fgat.trace, build/rendered/provenance/variable_map.trace" "build/rendered/3dvar_fgat.yaml and build/rendered/variable_context.yaml"
 log_info "Rendering JEDI YAML"
 bash scripts/run/render_3dvar_fgat.sh
@@ -293,6 +284,20 @@ bash scripts/setup/validate_3dvar_fgat_mpas_background.sh --strict
 append_workflow_step "validate_variable_map" "bash scripts/setup/validate_3dvar_fgat_variable_map.sh --strict" "required" "build/rendered/provenance/variable_map.trace" "validated MPAS/JEDI/SABER variable equivalence"
 log_info "Validating variable map"
 bash scripts/setup/validate_3dvar_fgat_variable_map.sh --strict
+
+if [[ "${CONVERT_OBS}" == true ]]; then
+  append_workflow_step "convert_observations" "bash scripts/run/convert_observations.sh --execute --strict" "required" "build/rendered/provenance/obs_conversion.trace" "data/observations/ioda/2018041500/*.h5"
+  log_info "Converting PREPBUFR observations to IODA v3"
+  bash scripts/run/convert_observations.sh --execute --strict
+else
+  append_workflow_step "plan_observation_conversion" "bash scripts/run/convert_observations.sh" "dry-run" "build/rendered/provenance/obs_conversion.trace" "observation conversion plan"
+  log_info "Planning observation conversion"
+  bash scripts/run/convert_observations.sh
+fi
+
+append_workflow_step "validate_observation_conversion" "bash scripts/setup/validate_obs_conversion.sh --strict" "required" "build/rendered/provenance/obs_conversion.trace" "raw and converted observation status"
+log_info "Validating observation conversion outputs"
+bash scripts/setup/validate_obs_conversion.sh --strict
 
 append_workflow_step "validate_ioda_structure" "bash scripts/setup/validate_3dvar_fgat_ioda_structure.sh --strict"
 log_info "Validating IODA structure"
