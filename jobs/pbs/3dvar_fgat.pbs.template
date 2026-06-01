@@ -6,7 +6,7 @@
 #PBS -l walltime={{pbs.walltime}}
 #PBS -l place={{pbs.place}}
 #PBS -j {{pbs.join_output}}
-#PBS -o {{pbs.log_dir}}/{{pbs.job_name}}.$PBS_JOBID.out
+#PBS -o {{pbs.log_dir}}/{{pbs.job_name}}.out
 
 set -euo pipefail
 
