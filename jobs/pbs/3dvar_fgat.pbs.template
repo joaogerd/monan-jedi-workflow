@@ -21,16 +21,36 @@ cd "$REPO_ROOT"
 source scripts/env/load_jaci_env.sh "$SITE_ENV"
 
 export OMP_NUM_THREADS="{{runtime.omp_num_threads}}"
+export OOPS_TRACE="{{runtime.oops_trace}}"
+export OOPS_DEBUG="{{runtime.oops_debug}}"
 export GFORTRAN_CONVERT_UNIT="{{runtime.gfortran_convert_unit}}"
 export F_UFMTENDIAN="{{runtime.f_ufmtendian}}"
+export FI_CXI_RX_MATCH_MODE="{{runtime.fi_cxi_rx_match_mode}}"
 
-MPASJEDI_VARIATIONAL_EXE="${MPASJEDI_VARIATIONAL_EXE:-$MPAS_BUNDLE_BUILD/bin/mpasjedi_variational.x}"
+if [[ -z "${MPASJEDI_VARIATIONAL_EXE:-}" ]]; then
+  if [[ -z "${MPAS_BUNDLE_BUILD:-}" ]]; then
+    echo "[ERROR] MPASJEDI_VARIATIONAL_EXE is not set and MPAS_BUNDLE_BUILD is empty." >&2
+    exit 1
+  fi
 
-cd "$RUNTIME_DIR"
+  MPASJEDI_VARIATIONAL_EXE="${MPAS_BUNDLE_BUILD}/bin/mpasjedi_variational.x"
+fi
+
+if [[ ! -d "$RUNTIME_DIR" ]]; then
+  echo "[ERROR] Runtime directory not found: $RUNTIME_DIR" >&2
+  exit 1
+fi
+
+if [[ ! -f "$YAML_FILE" ]]; then
+  echo "[ERROR] Rendered YAML file not found: $YAML_FILE" >&2
+  exit 1
+fi
 
 if [[ ! -x "$MPASJEDI_VARIATIONAL_EXE" ]]; then
   echo "[ERROR] MPAS-JEDI variational executable not found or not executable: $MPASJEDI_VARIATIONAL_EXE" >&2
   exit 1
 fi
+
+cd "$RUNTIME_DIR"
 
 exec mpirun -np "$MPI_TASKS" "$MPASJEDI_VARIATIONAL_EXE" "$YAML_FILE"
