@@ -114,6 +114,10 @@ workflow:
     skip_smoke: ${SKIP_SMOKE}
     clean_runtime: ${CLEAN_RUNTIME}
     convert_obs: ${CONVERT_OBS}
+  stages:
+    background_stage: tutorial background is pre-staged and validated; model forecast is not executed in this workflow yet
+    observation_stage: tutorial PREPBUFR is pre-staged, then converted to IODA v3
+    assimilation_stage: render, validate, prepare runtime, and run or submit MPAS-JEDI 3DVar-FGAT
   provenance_index:
     workflow_trace: build/rendered/provenance/workflow.trace
     render_trace: build/rendered/provenance/3dvar_fgat.trace
@@ -250,85 +254,100 @@ if [[ "${CLEAN_RUNTIME}" == true ]]; then
 fi
 
 if [[ "${SKIP_SMOKE}" != true ]]; then
-  append_workflow_step "smoke_checks" "bash tests/smoke_check.sh"
+  append_workflow_step "smoke_checks" "bash tests/smoke_check.sh" "preflight"
   log_info "Running smoke checks"
   bash tests/smoke_check.sh
 else
   append_workflow_step "smoke_checks" "bash tests/smoke_check.sh" "skipped"
 fi
 
-append_workflow_step "render_jedi_yaml" "bash scripts/run/render_3dvar_fgat.sh" "required" "build/rendered/provenance/3dvar_fgat.trace, build/rendered/provenance/variable_map.trace" "build/rendered/3dvar_fgat.yaml and build/rendered/variable_context.yaml"
-log_info "Rendering JEDI YAML"
-bash scripts/run/render_3dvar_fgat.sh
-
-append_workflow_step "validate_window" "bash scripts/run/validate_3dvar_fgat_window.sh --strict"
-log_info "Validating 3DVar-FGAT window"
-bash scripts/run/validate_3dvar_fgat_window.sh --strict
-
-append_workflow_step "validate_rendered_observers" "bash scripts/run/validate_3dvar_fgat_jedi_observers.sh --strict"
-log_info "Validating rendered observers"
-bash scripts/run/validate_3dvar_fgat_jedi_observers.sh --strict
-
-append_workflow_step "validate_staged_inputs" "bash scripts/setup/validate_3dvar_fgat_staged_inputs.sh"
-log_info "Validating staged inputs"
-bash scripts/setup/validate_3dvar_fgat_staged_inputs.sh
-
-append_workflow_step "validate_file_formats" "bash scripts/setup/validate_3dvar_fgat_file_formats.sh --strict"
-log_info "Validating file formats"
-bash scripts/setup/validate_3dvar_fgat_file_formats.sh --strict
-
-append_workflow_step "validate_mpas_background" "bash scripts/setup/validate_3dvar_fgat_mpas_background.sh --strict"
-log_info "Validating MPAS background"
+# -----------------------------------------------------------------------------
+# Background stage
+# -----------------------------------------------------------------------------
+# Operationally this stage will run MONAN/MPAS and generate backgrounds. In this
+# tutorial workflow the background is already staged, so we only validate it.
+append_workflow_step "background_stage_validate_mpas_background" "bash scripts/setup/validate_3dvar_fgat_mpas_background.sh --strict" "background_stage"
+log_info "Background stage: validating pre-staged MPAS background"
 bash scripts/setup/validate_3dvar_fgat_mpas_background.sh --strict
 
-append_workflow_step "validate_variable_map" "bash scripts/setup/validate_3dvar_fgat_variable_map.sh --strict" "required" "build/rendered/provenance/variable_map.trace" "validated MPAS/JEDI/SABER variable equivalence"
-log_info "Validating variable map"
-bash scripts/setup/validate_3dvar_fgat_variable_map.sh --strict
-
+# -----------------------------------------------------------------------------
+# Observation stage
+# -----------------------------------------------------------------------------
+# Operationally this stage will retrieve raw observations and convert them. In
+# this tutorial workflow the PREPBUFR is already staged, so we convert it to
+# IODA v3 and validate the generated observation files before any DA validation
+# that expects IODA products.
 if [[ "${CONVERT_OBS}" == true ]]; then
-  append_workflow_step "convert_observations" "bash scripts/run/convert_observations.sh --execute --strict" "required" "build/rendered/provenance/obs_conversion.trace" "data/observations/ioda/2018041500/*.h5"
-  log_info "Converting PREPBUFR observations to IODA v3"
+  append_workflow_step "observation_stage_convert_prepbufr_to_ioda" "bash scripts/run/convert_observations.sh --execute --strict" "observation_stage" "build/rendered/provenance/obs_conversion.trace" "data/observations/ioda/2018041500/*.h5"
+  log_info "Observation stage: converting PREPBUFR observations to IODA v3"
   bash scripts/run/convert_observations.sh --execute --strict
 else
-  append_workflow_step "plan_observation_conversion" "bash scripts/run/convert_observations.sh" "dry-run" "build/rendered/provenance/obs_conversion.trace" "observation conversion plan"
-  log_info "Planning observation conversion"
+  append_workflow_step "observation_stage_plan_prepbufr_to_ioda" "bash scripts/run/convert_observations.sh" "observation_stage_dry-run" "build/rendered/provenance/obs_conversion.trace" "observation conversion plan"
+  log_info "Observation stage: planning PREPBUFR to IODA conversion"
   bash scripts/run/convert_observations.sh
 fi
 
-append_workflow_step "validate_observation_conversion" "bash scripts/setup/validate_obs_conversion.sh --strict" "required" "build/rendered/provenance/obs_conversion.trace" "raw and converted observation status"
-log_info "Validating observation conversion outputs"
+append_workflow_step "observation_stage_validate_conversion" "bash scripts/setup/validate_obs_conversion.sh --strict" "observation_stage" "build/rendered/provenance/obs_conversion.trace" "raw PREPBUFR and generated IODA status"
+log_info "Observation stage: validating converted observation outputs"
 bash scripts/setup/validate_obs_conversion.sh --strict
 
-append_workflow_step "validate_ioda_structure" "bash scripts/setup/validate_3dvar_fgat_ioda_structure.sh --strict"
-log_info "Validating IODA structure"
+append_workflow_step "observation_stage_validate_ioda_structure" "bash scripts/setup/validate_3dvar_fgat_ioda_structure.sh --strict" "observation_stage"
+log_info "Observation stage: validating IODA structure"
 bash scripts/setup/validate_3dvar_fgat_ioda_structure.sh --strict
 
-append_workflow_step "validate_saber_bump_inputs" "bash scripts/setup/validate_3dvar_fgat_saber_inputs.sh --strict"
-log_info "Validating SABER/BUMP inputs"
+# -----------------------------------------------------------------------------
+# Data assimilation stage
+# -----------------------------------------------------------------------------
+append_workflow_step "render_jedi_yaml" "bash scripts/run/render_3dvar_fgat.sh" "assimilation_stage" "build/rendered/provenance/3dvar_fgat.trace, build/rendered/provenance/variable_map.trace" "build/rendered/3dvar_fgat.yaml and build/rendered/variable_context.yaml"
+log_info "Assimilation stage: rendering JEDI YAML"
+bash scripts/run/render_3dvar_fgat.sh
+
+append_workflow_step "validate_window" "bash scripts/run/validate_3dvar_fgat_window.sh --strict" "assimilation_stage"
+log_info "Assimilation stage: validating 3DVar-FGAT window"
+bash scripts/run/validate_3dvar_fgat_window.sh --strict
+
+append_workflow_step "validate_rendered_observers" "bash scripts/run/validate_3dvar_fgat_jedi_observers.sh --strict" "assimilation_stage"
+log_info "Assimilation stage: validating rendered observers"
+bash scripts/run/validate_3dvar_fgat_jedi_observers.sh --strict
+
+append_workflow_step "validate_staged_inputs" "bash scripts/setup/validate_3dvar_fgat_staged_inputs.sh" "assimilation_stage"
+log_info "Assimilation stage: validating staged/generated inputs"
+bash scripts/setup/validate_3dvar_fgat_staged_inputs.sh
+
+append_workflow_step "validate_file_formats" "bash scripts/setup/validate_3dvar_fgat_file_formats.sh --strict" "assimilation_stage"
+log_info "Assimilation stage: validating file formats"
+bash scripts/setup/validate_3dvar_fgat_file_formats.sh --strict
+
+append_workflow_step "validate_variable_map" "bash scripts/setup/validate_3dvar_fgat_variable_map.sh --strict" "assimilation_stage" "build/rendered/provenance/variable_map.trace" "validated MPAS/JEDI/SABER variable equivalence"
+log_info "Assimilation stage: validating variable map"
+bash scripts/setup/validate_3dvar_fgat_variable_map.sh --strict
+
+append_workflow_step "validate_saber_bump_inputs" "bash scripts/setup/validate_3dvar_fgat_saber_inputs.sh --strict" "assimilation_stage"
+log_info "Assimilation stage: validating SABER/BUMP inputs"
 bash scripts/setup/validate_3dvar_fgat_saber_inputs.sh --strict
 
-append_workflow_step "prepare_runtime" "bash scripts/run/prepare_3dvar_fgat_runtime.sh --strict" "required" "build/rendered/provenance/runtime.trace" "build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500"
-log_info "Preparing runtime"
+append_workflow_step "prepare_runtime" "bash scripts/run/prepare_3dvar_fgat_runtime.sh --strict" "assimilation_stage" "build/rendered/provenance/runtime.trace" "build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500"
+log_info "Assimilation stage: preparing runtime"
 bash scripts/run/prepare_3dvar_fgat_runtime.sh --strict
 
 if [[ "${EXECUTE}" == true ]]; then
-  append_workflow_step "run_variational" "bash scripts/run/run_3dvar_fgat_variational.sh --execute" "execute" "build/rendered/provenance/variational.trace" "build/rendered/mpasjedi_variational.command and runtime logs"
-  log_info "Preparing variational command and executing"
+  append_workflow_step "run_variational" "bash scripts/run/run_3dvar_fgat_variational.sh --execute" "assimilation_stage_execute" "build/rendered/provenance/variational.trace" "build/rendered/mpasjedi_variational.command and runtime logs"
+  log_info "Assimilation stage: preparing variational command and executing"
   bash scripts/run/run_3dvar_fgat_variational.sh --execute
 else
-  append_workflow_step "prepare_variational_command" "bash scripts/run/run_3dvar_fgat_variational.sh" "dry-run" "build/rendered/provenance/variational.trace" "build/rendered/mpasjedi_variational.command"
-  log_info "Preparing variational command"
+  append_workflow_step "prepare_variational_command" "bash scripts/run/run_3dvar_fgat_variational.sh" "assimilation_stage_dry-run" "build/rendered/provenance/variational.trace" "build/rendered/mpasjedi_variational.command"
+  log_info "Assimilation stage: preparing variational command"
   bash scripts/run/run_3dvar_fgat_variational.sh
 fi
 
 if [[ "${SUBMIT_PBS}" == true ]]; then
-  append_workflow_step "render_pbs_job" "bash scripts/run/render_3dvar_fgat_pbs.sh" "pbs" "build/rendered/provenance/3dvar_fgat_pbs.trace" "build/rendered/3dvar_fgat.pbs"
-  log_info "Rendering PBS job"
+  append_workflow_step "render_pbs_job" "bash scripts/run/render_3dvar_fgat_pbs.sh" "assimilation_stage_pbs" "build/rendered/provenance/3dvar_fgat_pbs.trace" "build/rendered/3dvar_fgat.pbs"
+  log_info "Assimilation stage: rendering PBS job"
   bash scripts/run/render_3dvar_fgat_pbs.sh
 
   PBS_FILE="${MONAN_WORKFLOW_ROOT}/build/rendered/3dvar_fgat.pbs"
-  append_workflow_step "submit_pbs_job" "qsub ${PBS_FILE}" "pbs" "build/rendered/provenance/pbs_execution.trace" "PBS job id"
-  log_info "Submitting PBS job: ${PBS_FILE}"
+  append_workflow_step "submit_pbs_job" "qsub ${PBS_FILE}" "assimilation_stage_pbs" "build/rendered/provenance/pbs_execution.trace" "PBS job id"
+  log_info "Assimilation stage: submitting PBS job: ${PBS_FILE}"
   qsub "${PBS_FILE}"
 else
   append_workflow_step "render_pbs_job" "bash scripts/run/render_3dvar_fgat_pbs.sh" "skipped" "build/rendered/provenance/3dvar_fgat_pbs.trace" "build/rendered/3dvar_fgat.pbs"
