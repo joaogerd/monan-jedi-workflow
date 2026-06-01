@@ -10,206 +10,27 @@
 
 set -euo pipefail
 
-cd {{runtime.repo_root}}
+REPO_ROOT="{{runtime.repo_root}}"
+SITE_ENV="{{runtime.site_env}}"
+RUNTIME_DIR="{{runtime.work_dir}}"
+YAML_FILE="{{runtime.yaml_file}}"
+MPASJEDI_VARIATIONAL_EXE="${MPASJEDI_VARIATIONAL_EXE:-}"
+MPI_TASKS="{{runtime.mpi_tasks}}"
 
-source scripts/utils/logging.sh
+cd "$REPO_ROOT"
+source scripts/env/load_jaci_env.sh "$SITE_ENV"
 
-PROVENANCE_DIR="{{runtime.repo_root}}/build/rendered/provenance"
-PBS_EXEC_TRACE="${PROVENANCE_DIR}/pbs_execution.trace"
-PBS_STARTED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-PBS_STARTED_EPOCH="$(date -u +%s)"
-PBS_GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)"
-PBS_LOG_FILE="{{pbs.log_dir}}/{{pbs.job_name}}.${PBS_JOBID:-unknown}.out"
-JEDI_LOG_FILE="{{runtime.repo_root}}/build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500/logs/mpasjedi_variational.log"
-QSTAT_START_FILE="${PROVENANCE_DIR}/pbs_qstat_start.txt"
-QSTAT_END_FILE="${PROVENANCE_DIR}/pbs_qstat_end.txt"
-NODEFILE_COPY="${PROVENANCE_DIR}/pbs_nodefile.txt"
-STDOUT_TAIL_FILE="${PROVENANCE_DIR}/pbs_stdout_tail.txt"
-JEDI_TAIL_FILE="${PROVENANCE_DIR}/mpasjedi_variational_tail.txt"
+export OMP_NUM_THREADS="{{runtime.omp_num_threads}}"
+export GFORTRAN_CONVERT_UNIT="{{runtime.gfortran_convert_unit}}"
+export F_UFMTENDIAN="{{runtime.f_ufmtendian}}"
 
-mkdir -p "${PROVENANCE_DIR}" "{{pbs.log_dir}}"
+MPASJEDI_VARIATIONAL_EXE="${MPASJEDI_VARIATIONAL_EXE:-$MPAS_BUNDLE_BUILD/bin/mpasjedi_variational.x}"
 
-file_exists_bool() {
-  local path="$1"
-  [[ -f "${path}" ]] && echo true || echo false
-}
+cd "$RUNTIME_DIR"
 
-file_size_or_zero() {
-  local path="$1"
-  [[ -f "${path}" ]] && wc -c < "${path}" | tr -d ' ' || echo 0
-}
-
-line_count_or_zero() {
-  local path="$1"
-  [[ -f "${path}" ]] && wc -l < "${path}" | tr -d ' ' || echo 0
-}
-
-capture_qstat() {
-  local output_file="$1"
-  if [[ -n "${PBS_JOBID:-}" ]] && command -v qstat >/dev/null 2>&1; then
-    qstat -f "${PBS_JOBID}" > "${output_file}" 2>&1 || true
-  else
-    printf 'qstat not available or PBS_JOBID unset\n' > "${output_file}"
-  fi
-}
-
-capture_nodefile() {
-  if [[ -n "${PBS_NODEFILE:-}" && -f "${PBS_NODEFILE}" ]]; then
-    cp "${PBS_NODEFILE}" "${NODEFILE_COPY}"
-  else
-    printf 'PBS_NODEFILE not available\n' > "${NODEFILE_COPY}"
-  fi
-}
-
-finalize_pbs_trace() {
-  local exit_code=$?
-  local finished_at_utc
-  local finished_epoch
-  local duration_seconds
-  local status
-
-  finished_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  finished_epoch="$(date -u +%s)"
-  duration_seconds=$((finished_epoch - PBS_STARTED_EPOCH))
-
-  if [[ ${exit_code} -eq 0 ]]; then
-    status="completed"
-  else
-    status="failed"
-  fi
-
-  capture_qstat "${QSTAT_END_FILE}"
-  capture_nodefile
-
-  if [[ -f "${PBS_LOG_FILE}" ]]; then
-    tail -n 120 "${PBS_LOG_FILE}" > "${STDOUT_TAIL_FILE}" 2>/dev/null || true
-  else
-    printf 'PBS stdout/stderr log not available at finalize time\n' > "${STDOUT_TAIL_FILE}"
-  fi
-
-  if [[ -f "${JEDI_LOG_FILE}" ]]; then
-    tail -n 120 "${JEDI_LOG_FILE}" > "${JEDI_TAIL_FILE}" 2>/dev/null || true
-  else
-    printf 'JEDI log not available at finalize time\n' > "${JEDI_TAIL_FILE}"
-  fi
-
-  cat >> "${PBS_EXEC_TRACE}" <<EOF
-scheduler_metadata_end:
-  qstat_file: ${QSTAT_END_FILE}
-  qstat_exists: $(file_exists_bool "${QSTAT_END_FILE}")
-node_allocation:
-  pbs_nodefile: ${PBS_NODEFILE:-none}
-  copied_nodefile: ${NODEFILE_COPY}
-  copied_nodefile_exists: $(file_exists_bool "${NODEFILE_COPY}")
-  allocated_slot_lines: $(line_count_or_zero "${NODEFILE_COPY}")
-final_log_tails:
-  pbs_stdout_tail: ${STDOUT_TAIL_FILE}
-  pbs_stdout_tail_exists: $(file_exists_bool "${STDOUT_TAIL_FILE}")
-  pbs_stdout_tail_size_bytes: $(file_size_or_zero "${STDOUT_TAIL_FILE}")
-  jedi_log_tail: ${JEDI_TAIL_FILE}
-  jedi_log_tail_exists: $(file_exists_bool "${JEDI_TAIL_FILE}")
-  jedi_log_tail_size_bytes: $(file_size_or_zero "${JEDI_TAIL_FILE}")
-result:
-  status: ${status}
-  exit_code: ${exit_code}
-  finished_at_utc: ${finished_at_utc}
-  duration_seconds: ${duration_seconds}
-observed_outputs:
-  pbs_log:
-    path: ${PBS_LOG_FILE}
-    exists: $(file_exists_bool "${PBS_LOG_FILE}")
-    size_bytes: $(file_size_or_zero "${PBS_LOG_FILE}")
-  jedi_log:
-    path: ${JEDI_LOG_FILE}
-    exists: $(file_exists_bool "${JEDI_LOG_FILE}")
-    size_bytes: $(file_size_or_zero "${JEDI_LOG_FILE}")
-EOF
-
-  exit "${exit_code}"
-}
-trap finalize_pbs_trace EXIT
-
-capture_qstat "${QSTAT_START_FILE}"
-capture_nodefile
-
-cat > "${PBS_EXEC_TRACE}" <<EOF
-started_at_utc: ${PBS_STARTED_AT_UTC}
-git_commit: ${PBS_GIT_COMMIT:-unknown}
-generated_by: jobs/pbs/3dvar_fgat.pbs.template
-pbs:
-  job_id: ${PBS_JOBID:-unknown}
-  job_name: {{pbs.job_name}}
-  project: {{pbs.project}}
-  queue: {{pbs.queue}}
-  select: {{pbs.nodes}}:ncpus={{pbs.ncpus}}:mpiprocs={{pbs.mpiprocs}}
-  walltime: {{pbs.walltime}}
-  place: {{pbs.place}}
-  join_output: {{pbs.join_output}}
-  log_file: ${PBS_LOG_FILE}
-scheduler_metadata_start:
-  qstat_file: ${QSTAT_START_FILE}
-  qstat_exists: $(file_exists_bool "${QSTAT_START_FILE}")
-node_allocation_start:
-  pbs_nodefile: ${PBS_NODEFILE:-none}
-  copied_nodefile: ${NODEFILE_COPY}
-  copied_nodefile_exists: $(file_exists_bool "${NODEFILE_COPY}")
-  allocated_slot_lines: $(line_count_or_zero "${NODEFILE_COPY}")
-runtime:
-  repo_root: {{runtime.repo_root}}
-  site_env: {{runtime.site_env}}
-steps:
-  render_yaml: {{steps.render_yaml}}
-  prepare_runtime: {{steps.prepare_runtime}}
-  run_variational: {{steps.run_variational}}
-related_traces:
-  render_trace: build/rendered/provenance/3dvar_fgat.trace
-  runtime_trace: build/rendered/provenance/runtime.trace
-  variational_trace: build/rendered/provenance/variational.trace
-  pbs_render_trace: build/rendered/provenance/3dvar_fgat_pbs.trace
-pbs_environment:
-  PBS_JOBID: ${PBS_JOBID:-unset}
-  PBS_JOBNAME: ${PBS_JOBNAME:-unset}
-  PBS_QUEUE: ${PBS_QUEUE:-unset}
-  PBS_O_WORKDIR: ${PBS_O_WORKDIR:-unset}
-  PBS_NODEFILE: ${PBS_NODEFILE:-unset}
-  PBS_NP: ${PBS_NP:-unset}
-  PBS_NUM_NODES: ${PBS_NUM_NODES:-unset}
-  PBS_NUM_PPN: ${PBS_NUM_PPN:-unset}
-notes:
-  - This trace is generated inside the PBS job, not at PBS render time.
-  - The PBS job may overwrite render/runtime/variational traces if those steps are enabled.
-  - qstat snapshots and final log tails are copied to the provenance directory when available.
-EOF
-
-log_info "Starting MONAN/JEDI 3DVar-FGAT PBS job"
-log_info "PBS job id: ${PBS_JOBID:-unknown}"
-log_info "PBS workdir: ${PBS_O_WORKDIR:-unknown}"
-log_info "PBS nodefile: ${PBS_NODEFILE:-unknown}"
-log_info "Repository: {{runtime.repo_root}}"
-log_info "PBS execution provenance trace: ${PBS_EXEC_TRACE}"
-log_info "PBS qstat start snapshot: ${QSTAT_START_FILE}"
-log_info "PBS node allocation copy: ${NODEFILE_COPY}"
-
-if [[ -f "{{runtime.site_env}}" ]]; then
-  log_info "Loading site environment: {{runtime.site_env}}"
-  source scripts/env/load_jaci_env.sh "{{runtime.site_env}}"
-else
-  log_warn "Site environment file not found: {{runtime.site_env}}"
+if [[ ! -x "$MPASJEDI_VARIATIONAL_EXE" ]]; then
+  echo "[ERROR] MPAS-JEDI variational executable not found or not executable: $MPASJEDI_VARIATIONAL_EXE" >&2
+  exit 1
 fi
 
-if [[ "{{steps.render_yaml}}" == "true" ]]; then
-  log_info "Rendering 3DVar-FGAT YAML"
-  bash scripts/run/render_3dvar_fgat.sh
-fi
-
-if [[ "{{steps.prepare_runtime}}" == "true" ]]; then
-  log_info "Preparing runtime in strict mode"
-  bash scripts/run/prepare_3dvar_fgat_runtime.sh --strict
-fi
-
-if [[ "{{steps.run_variational}}" == "true" ]]; then
-  log_info "Running variational command"
-  bash scripts/run/run_3dvar_fgat_variational.sh --execute
-fi
-
-log_info "MONAN/JEDI 3DVar-FGAT PBS job finished"
+exec mpirun -np "$MPI_TASKS" "$MPASJEDI_VARIATIONAL_EXE" "$YAML_FILE"

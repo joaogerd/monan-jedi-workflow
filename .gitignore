@@ -1,7 +1,6 @@
 .env
 configs/sites/*/site.env
 cylc-run/
-run/
 logs/
 *.log
 *.out

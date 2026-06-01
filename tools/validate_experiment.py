@@ -400,7 +400,7 @@ def main() -> int:
         )
         check_file_contains(
             rendered / "3dvar_fgat.pbs",
-            ["#PBS -N", "#PBS -l select=", "run_3dvar_fgat_variational.sh"],
+            ["#PBS -N", "#PBS -l select=", "exec mpirun -np", "MPASJEDI_VARIATIONAL_EXE"],
         )
     except ValidationError as exc:
         print(f"[ERROR] {exc}")

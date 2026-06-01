@@ -19,9 +19,8 @@ runtime:
   repo_root: "${MONAN_WORKFLOW_ROOT}"
   site_env: "${MONAN_WORKFLOW_ROOT}/configs/sites/jaci/site.env"
   work_dir: "${MONAN_WORKFLOW_ROOT}/build/runtime/jaci_3dvar_fgat_tutorial_2018041500/2018041500"
-  command_file: "${MONAN_WORKFLOW_ROOT}/build/rendered/mpasjedi_variational.command"
-
-steps:
-  render_yaml: true
-  prepare_runtime: true
-  run_variational: true
+  yaml_file: "${MONAN_WORKFLOW_ROOT}/build/rendered/3dvar_fgat.yaml"
+  mpi_tasks: 64
+  omp_num_threads: 1
+  gfortran_convert_unit: "big_endian:101-200"
+  f_ufmtendian: "big:101-200"
