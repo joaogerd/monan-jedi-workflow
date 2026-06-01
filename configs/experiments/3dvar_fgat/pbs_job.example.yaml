@@ -9,8 +9,8 @@ pbs:
   queue: "${MONAN_QUEUE}"
   walltime: "00:30:00"
   nodes: 1
-  ncpus: 128
-  mpiprocs: 128
+  ncpus: 64
+  mpiprocs: 64
   place: "scatter"
   join_output: "oe"
   log_dir: "build/logs/pbs"
@@ -22,5 +22,8 @@ runtime:
   yaml_file: "${MONAN_WORKFLOW_ROOT}/build/rendered/3dvar_fgat.yaml"
   mpi_tasks: 64
   omp_num_threads: 1
+  oops_trace: 0
+  oops_debug: 0
   gfortran_convert_unit: "big_endian:101-200"
   f_ufmtendian: "big:101-200"
+  fi_cxi_rx_match_mode: "hybrid"
