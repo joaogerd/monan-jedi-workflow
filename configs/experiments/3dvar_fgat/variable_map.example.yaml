@@ -57,6 +57,11 @@ profiles:
         vegetation_area_fraction: vegfra
         eastward_wind_at_10m: u10
         northward_wind_at_10m: v10
+        cloud_liquid_water: qc
+        cloud_liquid_ice: qi
+        rain_water: qr
+        snow_water: qs
+        graupel: qg
 
       direct_model:
         - u
@@ -69,6 +74,7 @@ profiles:
         - smois
         - tslb
         - pressure_p
+        - w
 
       order:
         - air_temperature
@@ -87,6 +93,12 @@ profiles:
         - skin_temperature_at_surface
         - ivgtyp
         - isltyp
+        - cloud_liquid_water
+        - cloud_liquid_ice
+        - rain_water
+        - snow_water
+        - graupel
+        - pressure_p
         - snowh
         - vegetation_area_fraction
         - eastward_wind_at_10m
@@ -94,7 +106,7 @@ profiles:
         - lai
         - smois
         - tslb
-        - pressure_p
+        - w
 
     validation:
       background_candidates:
@@ -136,6 +148,23 @@ profiles:
           - ivgtyp
         isltyp:
           - isltyp
+        cloud_liquid_water:
+          - cloud_liquid_water
+          - qc
+        cloud_liquid_ice:
+          - cloud_liquid_ice
+          - qi
+        rain_water:
+          - rain_water
+          - qr
+        snow_water:
+          - snow_water
+          - qs
+        graupel:
+          - graupel
+          - qg
+        pressure_p:
+          - pressure_p
         snowh:
           - snowh
         vegetation_area_fraction:
@@ -150,8 +179,8 @@ profiles:
           - smois
         tslb:
           - tslb
-        pressure_p:
-          - pressure_p
+        w:
+          - w
 
       auxiliary_candidates:
         landmask:
