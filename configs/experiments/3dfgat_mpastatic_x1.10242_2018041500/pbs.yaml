@@ -6,4 +6,21 @@ pbs:
   mpiprocs: 64
   walltime: "00:30:00"
   project: null
-  launcher: mpiexec
+
+  launcher: /opt/cray/pals/1.6/bin/mpiexec
+
+  environment:
+    setup_script: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow/scripts/env/load_jaci_env.sh
+    site_env: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow/configs/sites/jaci/site.env
+
+  runtime:
+    omp_num_threads: 1
+    oops_trace: 0
+    oops_debug: 0
+    gfortran_convert_unit: "big_endian:101-200"
+    f_ufmtendian: "big"
+    fi_cxi_rx_match_mode: "software"
+
+  log:
+    directory: logs
+    filename: "run_3dfgat_workflow_geometry_background_np64.${PBS_JOBID}.log"
