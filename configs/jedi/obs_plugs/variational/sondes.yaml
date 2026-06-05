@@ -4,7 +4,7 @@
 # This file is not yet a validated JEDI-MPAS observer configuration.
 
 - obs space:
-    name: sondes
+    name: Radiosonde
     obsdatain:
       engine:
         type: H5File
@@ -19,3 +19,9 @@
     observation alias file: obsop_name_map.yaml
   obs error:
     covariance model: diagonal
+  obs filters:
+  - filter: PreQC
+    maxvalue: 3
+  - filter: Background Check
+    apply at iterations: 0,1
+    threshold: 3

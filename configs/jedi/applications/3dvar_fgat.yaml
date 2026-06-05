@@ -24,7 +24,7 @@ _iteration: &iterationConfig
     nml_file: {{mpas.inner_namelist}}
     streams_file: {{mpas.inner_streams}}{{jedi.streams_file_member}}
     deallocate non-da fields: {{jedi.deallocate_non_da_fields}}
-  gradient norm reduction: 1e-3
+  gradient norm reduction: 1e-10
 
 output:
   filename: {{paths.analysis_dir}}{{jedi.member_dir}}/{{jedi.analysis_prefix}}.$Y-$M-$D_$h.$m.$s.nc
@@ -41,7 +41,7 @@ final:
     departures: oman
 
 cost function:
-  cost type: 3D-Var
+  cost type: 3D-FGAT
   time window:
     begin: {{cycle.window.begin}}
     length: {{cycle.window.length}}
@@ -49,11 +49,15 @@ cost function:
     nml_file: {{mpas.outer_namelist}}
     streams_file: {{mpas.outer_streams}}{{jedi.streams_file_member}}
     deallocate non-da fields: {{jedi.deallocate_non_da_fields}}
+  model:
+    name: MPAS
+    tstep: {{jedi.model_tstep}}
+    model variables: &modvars [{{jedi.model_variables}}]
   analysis variables: &incvars [{{jedi.analysis_variables}}]
   background:
-    state variables: [{{jedi.state_variables}}]
+    state variables: *modvars
     filename: {{paths.background_dir}}{{jedi.member_dir}}/{{jedi.background_prefix}}.{{cycle.mpas_file_date}}.nc
-    date: &analysisDate {{cycle.analysis_iso8601}}
+    date: &backgroundDate {{cycle.background_iso8601}}
   background error:
     covariance model: SABER
     no outer loop update: true
@@ -77,7 +81,7 @@ cost function:
       read:
         model file:
           filename: {{jedi.bump_cov_stddev_file}}
-          date: *analysisDate
+          date: *backgroundDate
           stream name: control
     - saber block name: BUMP_VerticalBalance
       read:

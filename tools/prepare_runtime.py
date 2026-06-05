@@ -335,6 +335,14 @@ def apply_action(action: LinkAction, *, dry_run: bool, copy: bool, force: bool) 
 
     action.target.parent.mkdir(parents=True, exist_ok=True)
     if action.target.exists() or action.target.is_symlink():
+        if action.target.is_symlink() and not copy:
+            current = action.target.resolve()
+            desired = action.source.resolve()
+            if current != desired:
+                action.target.unlink()
+                action.target.symlink_to(action.source)
+                print(f"[INFO] Updated stale symlink for {action.name}: {action.source} -> {action.target}")
+                return True
         if not force:
             print(f"[INFO] Target already exists, keeping: {action.target}")
             return True

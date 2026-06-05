@@ -4,7 +4,7 @@
 # This file is not yet a validated JEDI-MPAS observer configuration.
 
 - obs space:
-    name: sfc
+    name: SfcCorrected
     obsdatain:
       engine:
         type: H5File
@@ -22,3 +22,14 @@
     observation alias file: obsop_name_map.yaml
   obs error:
     covariance model: diagonal
+  obs filters:
+  - filter: PreQC
+    maxvalue: 3
+  - filter: Difference Check
+    apply at iterations: 0,1
+    reference: MetaData/stationElevation
+    value: GeoVaLs/height_above_mean_sea_level_at_surface
+    threshold: 500
+  - filter: Background Check
+    apply at iterations: 0,1
+    threshold: 3
