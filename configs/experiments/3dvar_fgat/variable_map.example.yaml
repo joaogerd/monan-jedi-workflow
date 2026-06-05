@@ -17,6 +17,191 @@ schema_version: 1
 default_profile: tutorial_2024_mpas_8_2_static_b
 
 profiles:
+  tutorial_2024_mpas_8_2_fgat_canonical:
+    description: >
+      Official-style MPAS-JEDI 3D-FGAT rendering profile for the tutorial case.
+      The final JEDI YAML uses canonical JEDI/VADER variable names, while
+      canonical_to_model mappings remain available for NetCDF validation and
+      provenance checks against MPAS/internal file variables.
+
+    render_name_mode: canonical
+
+    analysis_variables:
+      canonical_to_model:
+        air_temperature: temperature
+        water_vapor_mixing_ratio_wrt_moist_air: spechum
+        eastward_wind: uReconstructZonal
+        northward_wind: uReconstructMeridional
+        air_pressure_at_surface: surface_pressure
+
+      order:
+        - air_temperature
+        - water_vapor_mixing_ratio_wrt_moist_air
+        - eastward_wind
+        - northward_wind
+        - air_pressure_at_surface
+
+    state_variables:
+      canonical_to_model:
+        air_temperature: temperature
+        water_vapor_mixing_ratio_wrt_moist_air: spechum
+        eastward_wind: uReconstructZonal
+        northward_wind: uReconstructMeridional
+        air_pressure_at_surface: surface_pressure
+        air_potential_temperature: theta
+        dry_air_density: rho
+        water_vapor_mixing_ratio_wrt_dry_air: qv
+        air_pressure: pressure
+        seaice_fraction: xice
+        skin_temperature_at_surface: skintemp
+        vegetation_area_fraction: vegfra
+        eastward_wind_at_10m: u10
+        northward_wind_at_10m: v10
+
+      direct_model:
+        - u
+        - landmask
+        - snowc
+        - ivgtyp
+        - isltyp
+        - snowh
+        - lai
+        - smois
+        - tslb
+        - pressure_p
+
+      order:
+        - air_temperature
+        - water_vapor_mixing_ratio_wrt_moist_air
+        - eastward_wind
+        - northward_wind
+        - air_pressure_at_surface
+        - air_potential_temperature
+        - dry_air_density
+        - u
+        - water_vapor_mixing_ratio_wrt_dry_air
+        - air_pressure
+        - landmask
+        - seaice_fraction
+        - snowc
+        - skin_temperature_at_surface
+        - ivgtyp
+        - isltyp
+        - snowh
+        - vegetation_area_fraction
+        - eastward_wind_at_10m
+        - northward_wind_at_10m
+        - lai
+        - smois
+        - tslb
+        - pressure_p
+
+    validation:
+      background_candidates:
+        air_temperature:
+          - temperature
+          - theta
+          - theta_base
+        water_vapor_mixing_ratio_wrt_moist_air:
+          - spechum
+          - qv
+        eastward_wind:
+          - uReconstructZonal
+        northward_wind:
+          - uReconstructMeridional
+        air_pressure_at_surface:
+          - surface_pressure
+        air_potential_temperature:
+          - theta
+        dry_air_density:
+          - rho
+        u:
+          - u
+        water_vapor_mixing_ratio_wrt_dry_air:
+          - qv
+        air_pressure:
+          - pressure
+          - pressure_p
+          - pressure_base
+        landmask:
+          - landmask
+          - xland
+        seaice_fraction:
+          - xice
+        snowc:
+          - snowc
+        skin_temperature_at_surface:
+          - skintemp
+        ivgtyp:
+          - ivgtyp
+        isltyp:
+          - isltyp
+        snowh:
+          - snowh
+        vegetation_area_fraction:
+          - vegfra
+        eastward_wind_at_10m:
+          - u10
+        northward_wind_at_10m:
+          - v10
+        lai:
+          - lai
+        smois:
+          - smois
+        tslb:
+          - tslb
+        pressure_p:
+          - pressure_p
+
+      auxiliary_candidates:
+        landmask:
+          - landmask
+        ivgtyp:
+          - ivgtyp
+        isltyp:
+          - isltyp
+
+    saber_bump:
+      control_variables:
+        canonical_to_bump:
+          air_horizontal_streamfunction: stream_function
+          air_horizontal_velocity_potential: velocity_potential
+          air_temperature: temperature
+          water_vapor_mixing_ratio_wrt_moist_air: spechum
+          air_pressure_at_surface: surface_pressure
+
+        order:
+          - air_horizontal_streamfunction
+          - air_horizontal_velocity_potential
+          - air_temperature
+          - water_vapor_mixing_ratio_wrt_moist_air
+          - air_pressure_at_surface
+
+      # The local pre-generated VBAL files use stream_function and
+      # velocity_potential control variables. Keep this SABER/VBAL contract
+      # until those files are regenerated or their metadata proves otherwise.
+      variables_3d:
+        - stream_function
+        - velocity_potential
+        - temperature
+        - spechum
+
+      variables_2d:
+        - surface_pressure
+
+      vertical_balance:
+        - balanced_variable: velocity_potential
+          unbalanced_variable: stream_function
+          diagonal_regression: true
+        - balanced_variable: temperature
+          unbalanced_variable: stream_function
+        - balanced_variable: surface_pressure
+          unbalanced_variable: stream_function
+
+      file_prefixes:
+        nicas: mpas
+        vbal: mpas
+
   tutorial_2024_mpas_8_2_static_b:
     description: >
       Variable mapping for the MPAS-JEDI 2024 tutorial 240 km 3DVar case,

@@ -4,7 +4,8 @@
 This tool converts a named variable mapping profile into the compact `jedi`
 fragment consumed by the 3DVar-FGAT template renderer.  It keeps conceptual
 JEDI names, MPAS/NetCDF names and SABER/BUMP names separated in the source
-mapping file, while exposing only the resolved names to the final JEDI YAML.
+mapping file. Profiles may render canonical JEDI names for the final YAML while
+retaining MPAS/internal aliases for validation and provenance.
 """
 
 from __future__ import annotations
@@ -36,14 +37,22 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
-def _resolve_ordered(order: list[str], mapping: dict[str, str], direct: list[str] | None = None) -> list[str]:
+def _resolve_ordered(
+    order: list[str],
+    mapping: dict[str, str],
+    direct: list[str] | None = None,
+    *,
+    render_name_mode: str = "mapped",
+) -> list[str]:
     direct_set = set(direct or [])
     resolved: list[str] = []
     missing: list[str] = []
     for name in order:
         if name in mapping:
-            resolved.append(mapping[name])
+            resolved.append(name if render_name_mode == "canonical" else mapping[name])
         elif name in direct_set:
+            resolved.append(name)
+        elif render_name_mode == "canonical":
             resolved.append(name)
         else:
             missing.append(name)
@@ -82,6 +91,13 @@ def render_context(variable_map: dict[str, Any], profile_name: str | None) -> di
         raise KeyError(f"Unknown variable profile '{profile_name}'. Available: {available}")
 
     profile = profiles[profile_name]
+    render_name_mode = profile.get("render_name_mode", "mapped")
+    if render_name_mode not in {"mapped", "canonical"}:
+        raise ValueError(
+            "render_name_mode must be either 'mapped' or 'canonical', "
+            f"got {render_name_mode!r}"
+        )
+
     analysis = profile.get("analysis_variables", {})
     state = profile.get("state_variables", {})
     saber = profile.get("saber_bump", {})
@@ -90,12 +106,14 @@ def render_context(variable_map: dict[str, Any], profile_name: str | None) -> di
     analysis_variables = _resolve_ordered(
         list(analysis.get("order", [])),
         dict(analysis.get("canonical_to_model", {})),
+        render_name_mode=render_name_mode,
     )
 
     state_variables = _resolve_ordered(
         list(state.get("order", [])),
         dict(state.get("canonical_to_model", {})),
         list(state.get("direct_model", [])),
+        render_name_mode=render_name_mode,
     )
 
     bump_control_variables = _resolve_ordered(
@@ -111,6 +129,7 @@ def render_context(variable_map: dict[str, Any], profile_name: str | None) -> di
     resolved = {
         "analysis_variables": analysis_variables,
         "state_variables": state_variables,
+        "model_variables": state_variables,
         "bump_cov_control_variables": bump_control_variables,
         "bump_3d_control_variables": bump_3d_variables,
         "bump_2d_control_variables": bump_2d_variables,
@@ -131,6 +150,7 @@ def render_context(variable_map: dict[str, Any], profile_name: str | None) -> di
         {
             "analysis_variables": _inline_list(analysis_variables),
             "state_variables": _inline_list(state_variables),
+            "model_variables": _inline_list(state_variables),
             "bump_cov_control_variables": _inline_list(bump_control_variables),
             "bump_3d_control_variables": _inline_list(bump_3d_variables),
             "bump_2d_control_variables": _inline_list(bump_2d_variables),
@@ -147,6 +167,7 @@ def render_context(variable_map: dict[str, Any], profile_name: str | None) -> di
         "provenance": {
             "variable_profile": profile_name,
             "profile_description": profile.get("description", ""),
+            "render_name_mode": render_name_mode,
             "analysis_canonical_to_model": analysis.get("canonical_to_model", {}),
             "state_canonical_to_model": state.get("canonical_to_model", {}),
             "state_direct_model": state.get("direct_model", []),
