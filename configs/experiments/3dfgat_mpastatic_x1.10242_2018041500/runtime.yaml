@@ -3,7 +3,9 @@ runtime:
     - source: background/2018041418/mpasout.2018-04-14_21.00.00.nc
       target: background/mpasout.2018-04-14_21.00.00.nc
 
-    - source: background/2018041418/mpasout.2018-04-14_21.00.00.nc
+    # streams.atmosphere_240km reads the input stream at the analysis time.
+    # Keep this template file at 00Z, while the FGAT background state remains 21Z.
+    - source: background/2018041418/mpasout.2018-04-15_00.00.00.nc
       target: templateFields.10242.nc
 
     - source: MPAS_namelist_stream_physics_files/x1.10242.invariant.nc
@@ -83,4 +85,4 @@ runtime:
 
   required_xtime:
     background/mpasout.2018-04-14_21.00.00.nc: "2018-04-14_21:00:00"
-    templateFields.10242.nc: "2018-04-14_21:00:00"
+    templateFields.10242.nc: "2018-04-15_00:00:00"
