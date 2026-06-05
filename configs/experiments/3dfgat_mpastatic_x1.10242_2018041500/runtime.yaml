@@ -2,69 +2,58 @@ runtime:
   required_links:
     - source: background/2018041418/mpasout.2018-04-14_21.00.00.nc
       target: background/mpasout.2018-04-14_21.00.00.nc
-      description: 21Z background at the beginning of the FGAT window.
 
     - source: background/2018041418/mpasout.2018-04-14_21.00.00.nc
       target: templateFields.10242.nc
-      description: MPAS template fields file with xtime 21Z.
 
-    - source: static/x1.10242.invariant.nc
+    - source: MPAS_namelist_stream_physics_files/x1.10242.invariant.nc
       target: x1.10242.invariant.nc
 
-    - source: static/x1.10242.graph.info.part.64
+    - source: MPAS_namelist_stream_physics_files/x1.10242.graph.info.part.64
       target: x1.10242.graph.info.part.64
 
-    - source: static/namelist.atmosphere.outer
+    - source: MPAS_namelist_stream_physics_files/namelist.atmosphere_240km
       target: namelist.atmosphere.outer
 
-    - source: static/namelist.atmosphere.inner
+    - source: MPAS_namelist_stream_physics_files/namelist.atmosphere_240km
       target: namelist.atmosphere.inner
 
-    - source: static/streams.atmosphere.outer
+    - source: MPAS_namelist_stream_physics_files/streams.atmosphere_240km
       target: streams.atmosphere.outer
 
-    - source: static/streams.atmosphere.inner
+    - source: MPAS_namelist_stream_physics_files/streams.atmosphere_240km
       target: streams.atmosphere.inner
 
-    - source: static/stream_list.atmosphere.background
+    - source: testinput/namelists/stream_list.atmosphere.background
       target: stream_list.atmosphere.background
 
-    - source: static/stream_list.atmosphere.analysis
+    - source: testinput/namelists/stream_list.atmosphere.analysis
       target: stream_list.atmosphere.analysis
 
-    - source: static/stream_list.atmosphere.control
+    - source: testinput/namelists/stream_list.atmosphere.control
       target: stream_list.atmosphere.control
 
-    - source: static/stream_list.atmosphere.ensemble
+    - source: testinput/namelists/stream_list.atmosphere.ensemble
       target: stream_list.atmosphere.ensemble
 
-    - source: static/geovars.yaml
+    - source: testinput/namelists/geovars.yaml
       target: geovars.yaml
 
-    - source: static/keptvars.yaml
+    - source: testinput/namelists/keptvars.yaml
       target: keptvars.yaml
 
-    - source: static/obsop_name_map.yaml
-      target: obsop_name_map.yaml
+    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/ufo-data/testinput_tier_1
+      target: Data/ufo/testinput_tier_1
 
-    - source: static/x1.static.nc
-      target: static/x1.static.nc
-
-    - source: observations/ioda/2018041500/aircraft_obs_2018041500.h5
-      target: obs/aircraft_obs_2018041500.h5
-
-    - source: observations/ioda/2018041500/sondes_obs_2018041500.h5
-      target: obs/sondes_obs_2018041500.h5
-
-    - source: observations/ioda/2018041500/sfc_obs_2018041500.h5
-      target: obs/sfc_obs_2018041500.h5
+    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/obsop_name_map.yaml
+      target: testinput/obsop_name_map.yaml
 
   required_directories:
-    - analysis
-    - feedback
     - background
-    - obs
-    - static
+    - Data
+    - Data/os
+    - Data/states
+    - testinput
 
   stream_background_required_fields:
     - ivgtyp
