@@ -24,22 +24,22 @@ runtime:
     - source: MPAS_namelist_stream_physics_files/streams.atmosphere_240km
       target: streams.atmosphere.inner
 
-    - source: testinput/namelists/stream_list.atmosphere.background
+    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/stream_list.atmosphere.background
       target: stream_list.atmosphere.background
 
-    - source: testinput/namelists/stream_list.atmosphere.analysis
+    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/stream_list.atmosphere.analysis
       target: stream_list.atmosphere.analysis
 
-    - source: testinput/namelists/stream_list.atmosphere.control
+    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/stream_list.atmosphere.control
       target: stream_list.atmosphere.control
 
-    - source: testinput/namelists/stream_list.atmosphere.ensemble
+    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/stream_list.atmosphere.ensemble
       target: stream_list.atmosphere.ensemble
 
-    - source: testinput/namelists/geovars.yaml
+    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/geovars.yaml
       target: geovars.yaml
 
-    - source: testinput/namelists/keptvars.yaml
+    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/keptvars.yaml
       target: keptvars.yaml
 
     - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/ufo-data/testinput_tier_1
@@ -53,7 +53,26 @@ runtime:
     - Data
     - Data/os
     - Data/states
+    - Data/ufo
     - testinput
+
+  physics_files:
+    root: /p/projetos/monan_das/joao.gerd/manual-tests/official-3dvar-baseline-x1.2562
+    files:
+      - CAM_ABS_DATA.DBL
+      - CAM_AEROPT_DATA.DBL
+      - COMPATIBILITY
+      - GENPARM.TBL
+      - LANDUSE.TBL
+      - OZONE_DAT.TBL
+      - OZONE_LAT.TBL
+      - OZONE_PLEV.TBL
+      - RRTMG_LW_DATA
+      - RRTMG_LW_DATA.DBL
+      - RRTMG_SW_DATA
+      - RRTMG_SW_DATA.DBL
+      - SOILPARM.TBL
+      - VEGPARM.TBL
 
   stream_background_required_fields:
     - ivgtyp
