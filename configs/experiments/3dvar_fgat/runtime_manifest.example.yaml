@@ -25,10 +25,12 @@ runtime:
     - covariance/VBAL
 
   links:
-    # Background state used by the current structural template.
-    - name: background_state
-      source: "${MONAN_DATA_ROOT}/background/2018041500/mpasout.2018-04-15_00.00.00.nc"
-      target: "background/mpasout.2018-04-15_00.00.00.nc"
+    # FGAT real background state at the beginning of the assimilation window.
+    # This source may itself be a staged symlink to:
+    # ${MONAN_EXTERNAL_DATA_ROOT}/background/2018041418/mpasout.2018-04-14_21.00.00.nc
+    - name: fgat_background_state_21z
+      source: "${MONAN_DATA_ROOT}/background/2018041500/mpasout.2018-04-14_21.00.00.nc"
+      target: "background/mpasout.2018-04-14_21.00.00.nc"
       required: true
 
     # Observation files referenced by the generated observers block.
@@ -70,7 +72,9 @@ runtime:
       target: "x1.10242.graph.info.part.64"
       required: true
     - name: mpas_template_fields
-      source: "${MONAN_DATA_ROOT}/static/templateFields.10242.nc"
+      # MPAS reads the input stream at the initial FGAT time. The x1.10242
+      # template symlink must therefore point at 21Z, not the 00Z smoke state.
+      source: "${MONAN_DATA_ROOT}/background/2018041500/mpasout.2018-04-14_21.00.00.nc"
       target: "templateFields.10242.nc"
       required: true
     - name: mpas_keptvars
@@ -87,11 +91,11 @@ runtime:
       required: true
 
     # MPAS geometry files required by the JEDI geometry blocks.
-    - name: namelist_outer
+    - name: namelist_outer_21z
       source: "${MONAN_DATA_ROOT}/static/namelist.atmosphere.outer"
       target: "namelist.atmosphere.outer"
       required: true
-    - name: namelist_inner
+    - name: namelist_inner_21z
       source: "${MONAN_DATA_ROOT}/static/namelist.atmosphere.inner"
       target: "namelist.atmosphere.inner"
       required: true
@@ -120,7 +124,7 @@ runtime:
     - name: stream_list_ensemble
       source: "${MONAN_DATA_ROOT}/static/stream_list.atmosphere.ensemble"
       target: "stream_list.atmosphere.ensemble"
-      required: false
+      required: true
 
     # MPAS physics lookup tables read from the execution directory.
     - name: cam_abs_data
