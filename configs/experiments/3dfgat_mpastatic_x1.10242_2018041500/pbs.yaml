@@ -1,0 +1,9 @@
+pbs:
+  job_name: 3dfgat_mpastatic_x1_10242
+  queue: pesqmini
+  select: 1
+  ncpus: 64
+  mpiprocs: 64
+  walltime: "00:30:00"
+  project: null
+  launcher: mpiexec

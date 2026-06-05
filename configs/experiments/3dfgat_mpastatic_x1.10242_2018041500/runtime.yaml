@@ -1,0 +1,78 @@
+runtime:
+  required_links:
+    - source: background/2018041418/mpasout.2018-04-14_21.00.00.nc
+      target: background/mpasout.2018-04-14_21.00.00.nc
+      description: 21Z background at the beginning of the FGAT window.
+
+    - source: background/2018041418/mpasout.2018-04-14_21.00.00.nc
+      target: templateFields.10242.nc
+      description: MPAS template fields file with xtime 21Z.
+
+    - source: static/x1.10242.invariant.nc
+      target: x1.10242.invariant.nc
+
+    - source: static/x1.10242.graph.info.part.64
+      target: x1.10242.graph.info.part.64
+
+    - source: static/namelist.atmosphere.outer
+      target: namelist.atmosphere.outer
+
+    - source: static/namelist.atmosphere.inner
+      target: namelist.atmosphere.inner
+
+    - source: static/streams.atmosphere.outer
+      target: streams.atmosphere.outer
+
+    - source: static/streams.atmosphere.inner
+      target: streams.atmosphere.inner
+
+    - source: static/stream_list.atmosphere.background
+      target: stream_list.atmosphere.background
+
+    - source: static/stream_list.atmosphere.analysis
+      target: stream_list.atmosphere.analysis
+
+    - source: static/stream_list.atmosphere.control
+      target: stream_list.atmosphere.control
+
+    - source: static/stream_list.atmosphere.ensemble
+      target: stream_list.atmosphere.ensemble
+
+    - source: static/geovars.yaml
+      target: geovars.yaml
+
+    - source: static/keptvars.yaml
+      target: keptvars.yaml
+
+    - source: static/obsop_name_map.yaml
+      target: obsop_name_map.yaml
+
+    - source: static/x1.static.nc
+      target: static/x1.static.nc
+
+    - source: observations/ioda/2018041500/aircraft_obs_2018041500.h5
+      target: obs/aircraft_obs_2018041500.h5
+
+    - source: observations/ioda/2018041500/sondes_obs_2018041500.h5
+      target: obs/sondes_obs_2018041500.h5
+
+    - source: observations/ioda/2018041500/sfc_obs_2018041500.h5
+      target: obs/sfc_obs_2018041500.h5
+
+  required_directories:
+    - analysis
+    - feedback
+    - background
+    - obs
+    - static
+
+  stream_background_required_fields:
+    - ivgtyp
+    - isltyp
+    - landmask
+    - znt
+    - t2m
+
+  required_xtime:
+    background/mpasout.2018-04-14_21.00.00.nc: "2018-04-14_21:00:00"
+    templateFields.10242.nc: "2018-04-14_21:00:00"

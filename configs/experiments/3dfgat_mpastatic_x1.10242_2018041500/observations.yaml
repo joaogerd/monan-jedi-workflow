@@ -1,0 +1,30 @@
+observers:
+  - id: aircraft
+    name: Aircraft
+    file: observations/ioda/2018041500/aircraft_obs_2018041500.h5
+    feedback_file: feedback/aircraft_oman_2018041500.h5
+    operator: VertInterp
+    simulated_variables:
+      - airTemperature
+      - windEastward
+      - windNorthward
+      - specificHumidity
+
+  - id: radiosonde
+    name: Radiosonde
+    file: observations/ioda/2018041500/sondes_obs_2018041500.h5
+    feedback_file: feedback/sondes_oman_2018041500.h5
+    operator: VertInterp
+    simulated_variables:
+      - airTemperature
+      - windEastward
+      - windNorthward
+      - specificHumidity
+
+  - id: sfc_corrected
+    name: SfcCorrected
+    file: observations/ioda/2018041500/sfc_obs_2018041500.h5
+    feedback_file: feedback/sfc_oman_2018041500.h5
+    operator: SfcPCorrected
+    simulated_variables:
+      - stationPressure
