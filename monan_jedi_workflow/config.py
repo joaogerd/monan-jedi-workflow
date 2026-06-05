@@ -122,7 +122,7 @@ def validate_experiment_config(config: ExperimentConfig) -> list[str]:
         raise ValueError("model_variables and background_state_variables must match")
 
     observer_names = [item.get("name") for item in observations]
-    expected_observers = ["Aircraft", "Radiosonde", "SfcCorrected"]
+    expected_observers = ["Radiosonde", "GnssroRefNCEP", "SfcCorrected"]
     if observer_names != expected_observers:
         raise ValueError(
             f"Expected observers {expected_observers}, got {observer_names}"
@@ -138,8 +138,9 @@ def validate_experiment_config(config: ExperimentConfig) -> list[str]:
     if not required_links:
         raise ValueError("runtime.required_links cannot be empty")
 
-    if "feedback" not in required_directories:
-        raise ValueError("runtime.required_directories must include feedback")
+    for directory in ["background", "Data/os", "Data/states", "testinput"]:
+        if directory not in required_directories:
+            raise ValueError(f"runtime.required_directories must include {directory}")
 
     for field in ["ivgtyp", "isltyp", "landmask", "znt", "t2m"]:
         if field not in stream_required:
@@ -167,7 +168,7 @@ def validate_experiment_config(config: ExperimentConfig) -> list[str]:
     messages.append("analysis variables: 5")
     messages.append("model variables: 30")
     messages.append("background state variables: 30")
-    messages.append("observers: Aircraft, Radiosonde, SfcCorrected")
+    messages.append("observers: Radiosonde, GnssroRefNCEP, SfcCorrected")
     messages.append("configuration contract: OK")
 
     return messages

@@ -63,26 +63,27 @@ def render_yaml(config: ExperimentConfig) -> str:
     variables = config.variables
     observations = require_key(config.observations, "observers", "observations.yaml")
 
-    runtime_dir = get_runtime_dir(config)
+    runtime_dir = get_runtime_dir(config).resolve()
 
     outer_namelist = runtime_dir / "namelist.atmosphere.outer"
     outer_streams = runtime_dir / "streams.atmosphere.outer"
     inner_namelist = runtime_dir / "namelist.atmosphere.inner"
     inner_streams = runtime_dir / "streams.atmosphere.inner"
 
-    background_file = runtime_dir / "background" / str(cycle.get("background_file", "mpasout.2018-04-14_21.00.00.nc"))
+    background_name = f"mpasout.{cycle.get('mpas_background_file_date', '2018-04-14_21.00.00')}.nc"
+    background_file = runtime_dir / "background" / background_name
 
     model_variables = require_key(variables, "model_variables", "variables.yaml")
     analysis_variables = require_key(variables, "analysis_variables", "variables.yaml")
 
-    background_date = str(method.get("covariance_date", cycle.get("background_iso8601")))
+    background_date = str(method.get("covariance_date", cycle.get("background_datetime")))
 
     lines: list[str] = [
         "cost function:",
         f"  cost type: {method['cost_type']}",
         "  time window:",
-        f"    begin: '{cycle['window']['begin']}'",
-        f"    length: {cycle['window']['length']}",
+        f"    begin: '{cycle['window_begin']}'",
+        f"    length: {cycle['window_length']}",
         "  geometry:",
         f"    nml_file: {_quote(str(outer_namelist))}",
         f"    streams_file: {_quote(str(outer_streams))}",
@@ -96,7 +97,7 @@ def render_yaml(config: ExperimentConfig) -> str:
         "  background:",
         "    state variables: *modvars",
         f"    filename: {_quote(str(background_file))}",
-        f"    date: '{cycle['background_iso8601']}'",
+        f"    date: '{cycle['background_datetime']}'",
         "  background error:",
         f"    covariance model: {method['covariance_model']}",
         f"    date: '{background_date}'",
@@ -112,11 +113,11 @@ def render_yaml(config: ExperimentConfig) -> str:
                 "        obsdatain:",
                 "          engine:",
                 "            type: H5File",
-                f"            obsfile: {obs['obsdatain']}",
+                f"            obsfile: {obs['obsdatain']['obsfile']}",
                 "        obsdataout:",
                 "          engine:",
                 "            type: H5File",
-                f"            obsfile: {obs['obsdataout']}",
+                f"            obsfile: {obs['obsdataout']['obsfile']}",
                 f"        simulated variables: {_inline_list(obs['simulated_variables'])}",
                 "      obs operator:",
                 f"        name: {obs['obs_operator']['name']}",
@@ -183,8 +184,8 @@ def render_pbs(config: ExperimentConfig) -> str:
     experiment = require_key(config.experiment, "experiment", "experiment.yaml")
     jedi = require_key(config.experiment, "jedi", "experiment.yaml")
 
-    runtime_dir = get_runtime_dir(config)
-    rendered_dir = get_rendered_dir(config)
+    runtime_dir = get_runtime_dir(config).resolve()
+    rendered_dir = get_rendered_dir(config).resolve()
     yaml_file = rendered_dir / f"{experiment['name']}.yaml"
 
     job_name = pbs.get("job_name", experiment["name"])
@@ -218,7 +219,7 @@ echo "Job finished at $(date -Is)"
 
 
 def write_rendered_yaml(config: ExperimentConfig) -> Path:
-    rendered_dir = get_rendered_dir(config)
+    rendered_dir = get_rendered_dir(config).resolve()
     experiment = require_key(config.experiment, "experiment", "experiment.yaml")
     rendered_dir.mkdir(parents=True, exist_ok=True)
     path = rendered_dir / f"{experiment['name']}.yaml"
@@ -227,7 +228,7 @@ def write_rendered_yaml(config: ExperimentConfig) -> Path:
 
 
 def write_rendered_pbs(config: ExperimentConfig) -> Path:
-    rendered_dir = get_rendered_dir(config)
+    rendered_dir = get_rendered_dir(config).resolve()
     experiment = require_key(config.experiment, "experiment", "experiment.yaml")
     rendered_dir.mkdir(parents=True, exist_ok=True)
     path = rendered_dir / f"{experiment['name']}.pbs"

@@ -22,6 +22,12 @@ model_variables:
   - skin_temperature_at_surface
   - ivgtyp
   - isltyp
+  - cloud_liquid_water
+  - cloud_liquid_ice
+  - rain_water
+  - snow_water
+  - graupel
+  - pressure_p
   - snowh
   - vegetation_area_fraction
   - eastward_wind_at_10m
@@ -29,12 +35,6 @@ model_variables:
   - lai
   - smois
   - tslb
-  - pressure_p
-  - cloud_liquid_water
-  - cloud_liquid_ice
-  - rain_water
-  - snow_water
-  - graupel
   - w
 
 background_state_variables:
@@ -54,6 +54,12 @@ background_state_variables:
   - skin_temperature_at_surface
   - ivgtyp
   - isltyp
+  - cloud_liquid_water
+  - cloud_liquid_ice
+  - rain_water
+  - snow_water
+  - graupel
+  - pressure_p
   - snowh
   - vegetation_area_fraction
   - eastward_wind_at_10m
@@ -61,10 +67,4 @@ background_state_variables:
   - lai
   - smois
   - tslb
-  - pressure_p
-  - cloud_liquid_water
-  - cloud_liquid_ice
-  - rain_water
-  - snow_water
-  - graupel
   - w
