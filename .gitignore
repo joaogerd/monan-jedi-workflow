@@ -7,3 +7,14 @@ logs/
 *.err
 __pycache__/
 .pytest_cache/
+
+# Generated MONAN-JEDI workflow artifacts
+build/
+data/
+mpas-jedi/
+*.orig
+*.original
+repodiff.diff
+reports_*.tar.gz
+monitor*.sh
+docs/analysis/
