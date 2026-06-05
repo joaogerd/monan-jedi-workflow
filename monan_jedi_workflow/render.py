@@ -55,6 +55,10 @@ def _render_filters(filters: list[dict[str, Any]], indent: int) -> list[str]:
     return lines
 
 
+def _shell_export(name: str, value: Any) -> str:
+    return f'export {name}="{value}"'
+
+
 def render_yaml(config: ExperimentConfig) -> str:
     """Render the validated 3D-FGAT MPASstatic YAML."""
     experiment = require_key(config.experiment, "experiment", "experiment.yaml")
@@ -160,7 +164,7 @@ def render_yaml(config: ExperimentConfig) -> str:
     lines.extend(
         [
             "output:",
-            _quote('dummy').replace('"dummy"', '  filename: "Data/states/mpas.3dfgat.$Y-$M-$D_$h.$m.$s.nc"'),
+            '  filename: "Data/states/mpas.3dfgat.$Y-$M-$D_$h.$m.$s.nc"',
             "  stream name: analysis",
             "variational:",
             "  minimizer:",
@@ -179,7 +183,7 @@ def render_yaml(config: ExperimentConfig) -> str:
 
 
 def render_pbs(config: ExperimentConfig) -> str:
-    """Render a minimal PBS script for the validated baseline experiment."""
+    """Render a PBS script for the validated JACI baseline experiment."""
     pbs = require_key(config.pbs, "pbs", "pbs.yaml")
     experiment = require_key(config.experiment, "experiment", "experiment.yaml")
     jedi = require_key(config.experiment, "jedi", "experiment.yaml")
@@ -191,30 +195,68 @@ def render_pbs(config: ExperimentConfig) -> str:
     job_name = pbs.get("job_name", experiment["name"])
     queue = pbs.get("queue", "pesqmini")
     walltime = pbs.get("walltime", "00:30:00")
-    nodes = int(pbs.get("nodes", 1))
+    select = int(pbs.get("select", pbs.get("nodes", 1)))
+    ncpus = int(pbs.get("ncpus", pbs.get("mpiprocs", 64)))
     mpiprocs = int(pbs.get("mpiprocs", 64))
     launcher = pbs.get("launcher", "mpiexec")
     executable = jedi["executable"]
 
+    environment = pbs.get("environment", {})
+    setup_script = environment.get("setup_script")
+    site_env = environment.get("site_env")
+
+    runtime_env = pbs.get("runtime", {})
+    export_map = {
+        "omp_num_threads": "OMP_NUM_THREADS",
+        "oops_trace": "OOPS_TRACE",
+        "oops_debug": "OOPS_DEBUG",
+        "gfortran_convert_unit": "GFORTRAN_CONVERT_UNIT",
+        "f_ufmtendian": "F_UFMTENDIAN",
+        "fi_cxi_rx_match_mode": "FI_CXI_RX_MATCH_MODE",
+    }
+    export_lines = [
+        _shell_export(env_name, runtime_env[key])
+        for key, env_name in export_map.items()
+        if key in runtime_env and runtime_env[key] is not None
+    ]
+
+    log_config = pbs.get("log", {})
+    log_directory = log_config.get("directory", "logs")
+    log_filename = log_config.get("filename", "run.${PBS_JOBID}.log")
+    log_path = f"{log_directory}/{log_filename}"
+    pbs_log_dir = runtime_dir / log_directory
+
+    source_line = ""
+    if setup_script and site_env:
+        source_line = f"source {setup_script} {site_env}\n\n"
+
+    exports_block = "\n".join(export_lines)
+    if exports_block:
+        exports_block += "\n\n"
+
     return f"""#!/usr/bin/env bash
 #PBS -N {job_name}
 #PBS -q {queue}
-#PBS -l select={nodes}:ncpus={mpiprocs}:mpiprocs={mpiprocs}
+#PBS -l select={select}:ncpus={ncpus}:mpiprocs={mpiprocs}
 #PBS -l walltime={walltime}
 #PBS -j oe
+#PBS -o {pbs_log_dir}
 
 set -euo pipefail
 
-cd {runtime_dir}
-mkdir -p Data/os Data/states logs
+{source_line}cd {runtime_dir}
+mkdir -p Data/os Data/states {log_directory}
 
-echo "Job started at $(date -Is)"
-echo "Runtime directory: $(pwd)"
-echo "YAML file: {yaml_file}"
+{exports_block}LOG="{log_path}"
 
-{launcher} -n {mpiprocs} {executable} {yaml_file}
-
-echo "Job finished at $(date -Is)"
+{{
+  echo "Job started at $(date -Is)"
+  echo "Runtime directory: $(pwd)"
+  echo "YAML file: {yaml_file}"
+  echo "MPI ranks: {mpiprocs}"
+  {launcher} -n {mpiprocs} {executable} {yaml_file}
+  echo "Job finished at $(date -Is)"
+}} > "${{LOG}}" 2>&1
 """
 
 
