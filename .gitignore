@@ -18,3 +18,14 @@ repodiff.diff
 reports_*.tar.gz
 monitor*.sh
 docs/analysis/
+
+# Generated MONAN-JEDI workflow artifacts
+build/
+data/
+mpas-jedi/
+*.orig
+*.original
+repodiff.diff
+reports_*.tar.gz
+monitor*.sh
+docs/analysis/
