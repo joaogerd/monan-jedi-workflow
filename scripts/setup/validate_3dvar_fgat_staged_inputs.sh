@@ -46,6 +46,8 @@ fi
 
 log_info "Validating staged 3DVar-FGAT input files"
 log_info "Layout: ${layout}"
+log_info "FGAT real background must be mpasout.2018-04-14_21.00.00.nc"
+log_info "The 00Z background is retained only for the smoke-only 3DVar context."
 if [[ "${allow_missing}" == true ]]; then
   log_warn "Missing files will be reported as warnings."
 fi

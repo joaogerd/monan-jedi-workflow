@@ -1,15 +1,20 @@
 # Example rendering context for MONAN/JEDI 3DVar-FGAT templates.
 #
-# This file is intentionally small. It is meant to validate the template-rendering layer, not to
-# define a complete scientific experiment.
+# This context represents the official-style MPAS-JEDI 3D-FGAT timing for the
+# 2018-04-15T00 cycle. A real run requires a staged
+# mpasout.2018-04-14_21.00.00.nc background and namelist/streams files
+# compatible with that 21Z background start.
 
 experiment:
   name: jaci_3dvar_fgat_tutorial_2018041500
 
+variable_profile: tutorial_2024_mpas_8_2_fgat_canonical
+
 cycle:
   yyyymmddhh: "2018041500"
   analysis_iso8601: "2018-04-15T00:00:00Z"
-  mpas_file_date: "2018-04-15_00.00.00"
+  background_iso8601: "2018-04-14T21:00:00Z"
+  mpas_file_date: "2018-04-14_21.00.00"
   window:
     begin: "2018-04-14T21:00:00Z"
     length: PT6H
@@ -41,7 +46,6 @@ obs:
     feedback_file: "${MONAN_SCRATCH}/jaci_3dvar_fgat_tutorial_2018041500/feedback/sondes_oman_2018041500.h5"
     simulated_variables:
       - airTemperature
-      - virtualTemperature
       - windEastward
       - windNorthward
       - specificHumidity
@@ -57,12 +61,14 @@ jedi:
   background_prefix: mpasout
   streams_file_member: ""
   obs_perturbations: false
+  model_tstep: PT45M
   minimizer: |2
-        algorithm: DRIPCG
+        algorithm: DRPCG
   iterations: |2
       - <<: *iterationConfig
-        ninner: 60
-        gradient norm reduction: 1e-3
+        ninner: '10'
+        gradient norm reduction: 1e-10
+        test: 'on'
   analysis_variables:
     - air_temperature
     - water_vapor_mixing_ratio_wrt_moist_air

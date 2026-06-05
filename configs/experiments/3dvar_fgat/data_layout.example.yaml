@@ -7,6 +7,9 @@ data_layout:
   root: "${MONAN_DATA_ROOT}"
   cycle: "2018041500"
   directories:
+    # FGAT real uses the background at the beginning of the assimilation window.
+    # The local staging path may be a symlink to:
+    # ${MONAN_EXTERNAL_DATA_ROOT}/background/2018041418/mpasout.2018-04-14_21.00.00.nc
     - background/2018041500
     - observations/ioda/2018041500
     - covariance
@@ -16,10 +19,19 @@ data_layout:
     - static
 
   expected_files:
-    # Background state
-    - path: background/2018041500/mpasout.2018-04-15_00.00.00.nc
-      required_for: 3dvar_fgat
-      status: staged_from_tutorial
+    # FGAT real background state. This must be the beginning of the FGAT window,
+    # not the central 00Z state used by the smoke-only 3DVar context.
+    - name: fgat_background_state_21z
+      path: background/2018041500/mpasout.2018-04-14_21.00.00.nc
+      external_source: "${MONAN_EXTERNAL_DATA_ROOT}/background/2018041418/mpasout.2018-04-14_21.00.00.nc"
+      required_for: 3dvar_fgat_real
+      status: staged_from_tutorial_21z
+
+    # Smoke-only 3DVar background state. This must not satisfy FGAT validation.
+    - name: smoke_3dvar_background_state_00z
+      path: background/2018041500/mpasout.2018-04-15_00.00.00.nc
+      required_for: 3dvar_smoke_only
+      status: staged_from_tutorial_00z
 
     # Conventional IODA observations
     - path: observations/ioda/2018041500/aircraft_obs_2018041500.h5

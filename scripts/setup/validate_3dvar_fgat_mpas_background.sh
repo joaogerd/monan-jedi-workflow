@@ -59,7 +59,9 @@ if [[ "${strict}" == true ]]; then
   args+=(--strict)
 fi
 
-log_info "Validating 3DVar-FGAT MPAS background"
+log_info "Validating real 3D-FGAT MPAS background"
+log_info "Expected FGAT background: mpasout.2018-04-14_21.00.00.nc"
+log_info "Smoke-only 00Z background must not satisfy this FGAT validation."
 if [[ "${strict}" == true ]]; then
   log_warn "Strict mode enabled. Missing or invalid background will fail."
 else
