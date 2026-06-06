@@ -1,0 +1,30 @@
+site:
+  name: jaci
+  workspace: /p/projetos/monan_das/joao.gerd
+  workflow_root: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow
+  work_root: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow
+  scratch: /p/projetos/monan_das/joao.gerd/scratch/monan-jedi-workflow
+  data_root: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow/data
+  external_data_root: /p/projetos/monan_das/joao.gerd/external-inputs/3dvar_fgat
+  experiment_root: /p/projetos/monan_das/joao.gerd/scratch/monan-jedi-workflow/experiments
+
+stack:
+  load: true
+  root: /p/projetos/monan_das/joao.gerd/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack
+  env_name: jaci-mpas-jedi-gcc12-craympich
+  module_root: /p/projetos/monan_das/joao.gerd/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack/envs/jaci-mpas-jedi-gcc12-craympich/modules
+  env_module: cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0
+  site_setup: /p/projetos/monan_das/joao.gerd/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack/configs/sites/tier2/jaci/setup.sh
+
+jedi:
+  mpas_bundle_build: /p/projetos/monan_das/joao.gerd/work/monan-jedi-mpas/build
+  variational_exe: /p/projetos/monan_das/joao.gerd/work/monan-jedi-mpas/build/bin/mpasjedi_variational.x
+
+mpi:
+  launcher: /opt/cray/pals/1.6/bin/mpiexec
+  tasks_flag: -n
+
+runtime:
+  unload_anaconda: true
+  validate_python: true
+  expected_python_abi: "3.11"
