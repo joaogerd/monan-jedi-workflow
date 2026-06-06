@@ -1,0 +1,33 @@
+validation:
+  profile: strict_baseline
+
+  expected:
+    experiment_name: 3dfgat_mpastatic_x1.10242_2018041500
+    cost_type: 3D-FGAT
+    covariance_model: MPASstatic
+    covariance_date: '2018-04-14T21:00:00Z'
+    mesh: x1.10242
+    np: 64
+    mpiprocs: 64
+
+    analysis_variables_count: 5
+    model_variables_count: 30
+    background_state_variables_count: 30
+
+    observers:
+      - Radiosonde
+      - GnssroRefNCEP
+      - SfcCorrected
+
+    required_runtime_directories:
+      - background
+      - Data/os
+      - Data/states
+      - testinput
+
+    required_background_fields:
+      - ivgtyp
+      - isltyp
+      - landmask
+      - znt
+      - t2m
