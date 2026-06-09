@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .fragments import resolve_observation_config
+from .fragments import resolve_observation_config, resolve_variable_config
 from .yaml_utils import load_yaml_file
 
 
@@ -39,19 +39,9 @@ class ExperimentConfig:
 def load_experiment_config(config_dir: Path) -> ExperimentConfig:
     """Load all YAML files that define one experiment.
 
-    ``observations.yaml`` may contain either the legacy fully expanded
-    ``observers`` list or the new compact selector syntax:
-
-    ```yaml
-    observations:
-      use:
-        - radiosonde
-        - gnssro_ref_ncep
-        - sfc_corrected
-    ```
-
-    The selector is resolved to the legacy ``{"observers": [...]}`` structure
-    during loading so the current validator and renderer remain unchanged.
+    ``variables.yaml`` and ``observations.yaml`` may contain either the legacy
+    fully expanded structures or compact selector syntax that points to
+    reusable fragments under ``configs/fragments/jedi``.
     """
     config_dir = config_dir.resolve()
     loaded: dict[str, dict[str, Any]] = {}
@@ -59,6 +49,9 @@ def load_experiment_config(config_dir: Path) -> ExperimentConfig:
     for key, filename in REQUIRED_CONFIG_FILES.items():
         loaded[key] = load_yaml_file(config_dir / filename)
 
+    loaded["variables"] = resolve_variable_config(
+        config_dir, loaded["variables"]
+    )
     loaded["observations"] = resolve_observation_config(
         config_dir, loaded["observations"]
     )
