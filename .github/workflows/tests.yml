@@ -36,3 +36,9 @@ jobs:
 
       - name: Run tests
         run: make test
+
+      - name: Check safe workflow targets
+        run: |
+          make validate
+          make render-yaml
+          make render-pbs
