@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "monan-jedi-workflow"
 version = "0.1.0"
@@ -9,6 +13,10 @@ dependencies = [
 
 [project.scripts]
 monan-jedi-workflow = "monan_jedi_workflow.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["monan_jedi_workflow*"]
+exclude = ["configs*", "tests*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
