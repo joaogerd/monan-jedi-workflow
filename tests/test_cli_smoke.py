@@ -87,3 +87,4 @@ def test_render_pbs_cli_detects_mpi_layout_from_pbs_nodefile(
     assert "NP=$(wc -l <" in content
     assert "NNODES=$(sort -u" in content
     assert "mpiexec -n \"${NP}\"" in content
+    assert "run_3dfgat_workflow_geometry_background_np${NP}.${PBS_JOBID}.log" in content
