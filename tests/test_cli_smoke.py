@@ -67,4 +67,24 @@ def test_render_pbs_cli_avoids_legacy_workflow_environment_source(
 
     assert status == 0
     assert "source /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow" not in content
-    assert "/p/projetos/monan_das/${USER}/builds/monan-jedi-mpas/bin/mpasjedi_variational.x" in content
+    assert "export MONAN_JEDI_INSTALL_BIN_DIR=" in content
+    assert "export JEDI_EXECUTABLE=" in content
+
+
+def test_render_pbs_cli_detects_mpi_layout_from_pbs_nodefile(
+    monkeypatch, tmp_path, capsys
+):
+    monkeypatch.chdir(tmp_path)
+
+    status = run_cli(monkeypatch, "render-pbs", str(EXPERIMENT_DIR))
+
+    capsys.readouterr()
+    rendered = tmp_path / "build/rendered" / f"{EXPERIMENT_NAME}.pbs"
+    content = rendered.read_text()
+
+    assert status == 0
+    assert "PBS_NODEFILE" in content
+    assert "NP=$(wc -l <" in content
+    assert "NNODES=$(sort -u" in content
+    assert "mpiexec -n \"${NP}\"" in content
+    assert "run_3dfgat_workflow_geometry_background_np${NP}.${PBS_JOBID}.log" in content
