@@ -19,4 +19,4 @@ pbs:
 
   log:
     directory: logs
-    filename: "run_3dfgat_workflow_geometry_background_np64.${PBS_JOBID}.log"
+    filename: "run_3dfgat_workflow_geometry_background_np${NP}.${PBS_JOBID}.log"
