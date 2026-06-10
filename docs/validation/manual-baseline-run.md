@@ -6,7 +6,7 @@ This document records manual execution checks for the first validated MONAN-JEDI
 
 | Field | Value |
 | --- | --- |
-| Date | 2026-06-09 |
+| Date | 2026-06-10 |
 | Reporter | João Gerd Zell de Mattos |
 | Repository | `joaogerd/monan-jedi-workflow` |
 | Baseline | `3dfgat_mpastatic_x1.10242_2018041500` |
@@ -15,7 +15,7 @@ This document records manual execution checks for the first validated MONAN-JEDI
 | Mesh | `x1.10242` |
 | Cycle | `2018041500` |
 | MPI layout | `np64` |
-| Result | Manual test completed successfully |
+| Result | Manual JACI execution completed successfully |
 
 ## Scope validated
 
@@ -56,33 +56,60 @@ mpirun
 mpasjedi_variational.x
 ```
 
-## Details not yet recorded
+The rendered PBS script may contain the explicit MPI launch command, but job submission remains a manual user action.
 
-The manual test was reported as successful, but the following execution details were not recorded in this first validation note:
+## Post-PR24 JACI execution record
 
-- JACI login node used;
-- PBS job ID;
-- exact branch or commit checked out locally;
-- path of the rendered YAML used in the execution;
-- path of the rendered PBS script used in the execution;
-- runtime directory path;
-- final log excerpt;
-- list of generated output files.
+This execution validates the generic PBS renderer merged through PR #24.
 
-Future validation records should include these fields when available.
+```text
+job_id: 264572.pbs-ha
+login_node: ian05
+workdir: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow_v2/build/rendered
+runtime_dir: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow_v2/build/runtime/3dfgat_mpastatic_x1.10242_2018041500/2018041500
+rendered_yaml: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow_v2/build/rendered/3dfgat_mpastatic_x1.10242_2018041500.yaml
+rendered_pbs: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow_v2/build/rendered/3dfgat_mpastatic_x1.10242_2018041500.pbs
+log_file: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow_v2/build/runtime/3dfgat_mpastatic_x1.10242_2018041500/2018041500/logs/run_3dfgat_workflow_geometry_background_np64.264572.pbs-ha.log
+mpi_ranks: 64
+result: success
+final_status: Run: Finishing oops::Variational<MPAS, UFO and IODA observations> with status = 0
+```
+
+## Generated output files
+
+The successful run generated the following analysis and observation-space output files:
+
+```text
+Data/states/mpas.3dfgat.2018-04-15_00.00.00.nc
+Data/os/obsout_3dfgat_sondes.nc4
+Data/os/obsout_3dfgat_sfc.nc4
+Data/os/obsout_3dfgat_gnssroref.nc4
+```
+
+Observed file sizes:
+
+```text
+Data/states/mpas.3dfgat.2018-04-15_00.00.00.nc: 31M
+Data/os/obsout_3dfgat_sondes.nc4: 734K
+Data/os/obsout_3dfgat_sfc.nc4: 381K
+Data/os/obsout_3dfgat_gnssroref.nc4: 97K
+```
 
 ## Follow-up recommendation
 
-For the next real run, capture a short execution record containing:
+Future validation records should keep capturing:
 
 ```text
 commit:
+tag:
 job_id:
+login_node:
 runtime_dir:
 rendered_yaml:
 rendered_pbs:
 log_file:
+output_files:
 result:
 ```
 
-This will make the baseline validation fully auditable and easier to compare when new cycles, observation sets or covariance options are added.
+This will make baseline validation fully auditable and easier to compare when new cycles, observation sets or covariance options are added.
