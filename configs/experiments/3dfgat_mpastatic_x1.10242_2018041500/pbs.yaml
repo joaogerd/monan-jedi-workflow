@@ -9,10 +9,6 @@ pbs:
 
   launcher: /opt/cray/pals/1.6/bin/mpiexec
 
-  environment:
-    setup_script: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow/scripts/env/load_jaci_env.sh
-    site_env: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow/configs/sites/jaci/site.env
-
   runtime:
     omp_num_threads: 1
     oops_trace: 0

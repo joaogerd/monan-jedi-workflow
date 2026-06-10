@@ -32,4 +32,4 @@ paths:
   rendered_dir: build/rendered
   scratch_root: /p/projetos/monan_das/joao.gerd/scratch/monan-jedi-workflow
 jedi:
-  executable: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/bin/mpasjedi_variational.x
+  executable: /p/projetos/monan_das/${USER}/builds/monan-jedi-mpas/bin/mpasjedi_variational.x
