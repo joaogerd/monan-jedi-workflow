@@ -52,3 +52,19 @@ def test_render_pbs_cli_writes_executable_script(monkeypatch, tmp_path, capsys):
     assert rendered.stat().st_mode & 0o111
     assert "[OK] rendered PBS:" in captured.out
     assert "mpasjedi_variational.x" in rendered.read_text()
+
+
+def test_render_pbs_cli_avoids_legacy_workflow_environment_source(
+    monkeypatch, tmp_path, capsys
+):
+    monkeypatch.chdir(tmp_path)
+
+    status = run_cli(monkeypatch, "render-pbs", str(EXPERIMENT_DIR))
+
+    capsys.readouterr()
+    rendered = tmp_path / "build/rendered" / f"{EXPERIMENT_NAME}.pbs"
+    content = rendered.read_text()
+
+    assert status == 0
+    assert "source /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow" not in content
+    assert "/p/projetos/monan_das/${USER}/builds/monan-jedi-mpas/bin/mpasjedi_variational.x" in content
