@@ -11,6 +11,11 @@ dependencies = [
   "PyYAML>=6.0"
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
 [project.scripts]
 monan-jedi-workflow = "monan_jedi_workflow.cli:main"
 
