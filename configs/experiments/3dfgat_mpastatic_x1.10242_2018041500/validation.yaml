@@ -31,3 +31,7 @@ validation:
       - landmask
       - znt
       - t2m
+
+    required_xtime_files:
+      - background/mpasout.2018-04-14_21.00.00.nc
+      - templateFields.10242.nc
