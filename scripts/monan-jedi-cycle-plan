@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Print a resolved 3DVar-FGAT cycle plan without creating files."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from monan_jedi_workflow.cycle_plan import plan_cycle
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="monan-jedi-cycle-plan",
+        description="Resolve a cyclic 3DVar-FGAT trajectory without side effects.",
+    )
+    parser.add_argument("experiment", type=Path)
+    args = parser.parse_args()
+    print(plan_cycle(args.experiment))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
