@@ -1,0 +1,6 @@
+observations:
+  set: conv_basic
+  instruments:
+    - radiosonde
+    - gnssro_ref_ncep
+    - sfc_corrected
