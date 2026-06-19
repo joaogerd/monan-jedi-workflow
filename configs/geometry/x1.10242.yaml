@@ -1,0 +1,5 @@
+geometry:
+  name: x1.10242
+  mesh: x1.10242
+  invariant_file: x1.10242.invariant.nc
+  partition_file: x1.10242.graph.info.part.64
