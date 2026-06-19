@@ -13,38 +13,45 @@ from monan_jedi_workflow.timeline import (
 )
 
 
-def test_baseline_fgat_time_resolution() -> None:
-    """The historical 2018041500 baseline resolves to its known 21Z background."""
-    definition = CycleDefinition.from_mapping(
+def gsi_style_definition(*, end: str = "2018-04-15T06:00:00Z") -> CycleDefinition:
+    """Create the familiar 6-hour cycle with a [-3, 0, +3] FGAT trajectory."""
+    return CycleDefinition.from_mapping(
         {
             "start": "2018-04-15T00:00:00Z",
-            "end": "2018-04-15T06:00:00Z",
+            "end": end,
             "interval_hours": 6,
         },
-        background_offset_hours=-3,
-        window_length_hours=6,
+        trajectory_offsets_hours=[-3, 0, 3],
     )
 
-    [instance] = resolve_cycle_instances(definition)
+
+def test_gsi_style_fgat_trajectory_for_2018041500() -> None:
+    """A 00Z analysis uses 3 h, 6 h and 9 h forecasts from the prior 18Z analysis."""
+    [instance] = resolve_cycle_instances(gsi_style_definition())
 
     assert instance.cycle_id == "2018041500"
-    assert format_mpas_timestamp(instance.background_time) == "2018-04-14_21.00.00"
-    assert instance.window_begin == instance.background_time
+    assert instance.forecast_start_time == parse_utc_datetime("2018-04-14T18:00:00Z")
+    assert instance.forecast_end_time == parse_utc_datetime("2018-04-15T03:00:00Z")
+    assert instance.forecast_length == timedelta(hours=9)
+    assert [state.valid_time for state in instance.trajectory] == [
+        parse_utc_datetime("2018-04-14T21:00:00Z"),
+        parse_utc_datetime("2018-04-15T00:00:00Z"),
+        parse_utc_datetime("2018-04-15T03:00:00Z"),
+    ]
+    assert [state.forecast_lead for state in instance.trajectory] == [
+        timedelta(hours=3),
+        timedelta(hours=6),
+        timedelta(hours=9),
+    ]
+    assert instance.window_begin == parse_utc_datetime("2018-04-14T21:00:00Z")
     assert instance.window_end == parse_utc_datetime("2018-04-15T03:00:00Z")
+    assert format_mpas_timestamp(instance.background_time) == "2018-04-14_21.00.00"
 
 
 def test_one_day_has_four_six_hour_analysis_cycles() -> None:
-    definition = CycleDefinition.from_mapping(
-        {
-            "start": "2018-04-15T00:00:00Z",
-            "end": "2018-04-16T00:00:00Z",
-            "interval_hours": 6,
-        },
-        background_offset_hours=-3,
-        window_length_hours=6,
+    instances = resolve_cycle_instances(
+        gsi_style_definition(end="2018-04-16T00:00:00Z")
     )
-
-    instances = resolve_cycle_instances(definition)
 
     assert [item.cycle_id for item in instances] == [
         "2018041500",
@@ -52,7 +59,12 @@ def test_one_day_has_four_six_hour_analysis_cycles() -> None:
         "2018041512",
         "2018041518",
     ]
-    assert instances[1].background_time == parse_utc_datetime("2018-04-15T03:00:00Z")
+    assert instances[1].forecast_start_time == parse_utc_datetime("2018-04-15T00:00:00Z")
+    assert [state.valid_time for state in instances[1].trajectory] == [
+        parse_utc_datetime("2018-04-15T03:00:00Z"),
+        parse_utc_datetime("2018-04-15T06:00:00Z"),
+        parse_utc_datetime("2018-04-15T09:00:00Z"),
+    ]
 
 
 def test_cycle_end_is_exclusive() -> None:
@@ -60,8 +72,11 @@ def test_cycle_end_is_exclusive() -> None:
         start=parse_utc_datetime("2018-04-15T00:00:00Z"),
         end=parse_utc_datetime("2018-04-15T06:00:00Z"),
         interval=timedelta(hours=6),
-        background_offset=timedelta(hours=-3),
-        window_length=timedelta(hours=6),
+        trajectory_offsets=(
+            timedelta(hours=-3),
+            timedelta(hours=0),
+            timedelta(hours=3),
+        ),
     )
 
     assert [item.cycle_id for item in resolve_cycle_instances(definition)] == ["2018041500"]
@@ -85,8 +100,17 @@ def test_cycle_definition_rejects_invalid_bounds() -> None:
             start=parse_utc_datetime("2018-04-15T06:00:00Z"),
             end=parse_utc_datetime("2018-04-15T00:00:00Z"),
             interval=timedelta(hours=6),
-            background_offset=timedelta(hours=-3),
-            window_length=timedelta(hours=6),
+            trajectory_offsets=(timedelta(hours=-3),),
+        )
+
+
+def test_cycle_definition_rejects_unsorted_trajectory_offsets() -> None:
+    with pytest.raises(ValueError, match="ordered"):
+        CycleDefinition(
+            start=parse_utc_datetime("2018-04-15T00:00:00Z"),
+            end=parse_utc_datetime("2018-04-15T06:00:00Z"),
+            interval=timedelta(hours=6),
+            trajectory_offsets=(timedelta(hours=0), timedelta(hours=-3)),
         )
 
 
