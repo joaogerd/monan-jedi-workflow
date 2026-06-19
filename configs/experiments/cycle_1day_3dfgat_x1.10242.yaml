@@ -1,0 +1,34 @@
+experiment:
+  name: cycle_1day_3dfgat_x1.10242
+
+cycle:
+  start: 2018-04-15T00:00:00Z
+  end: 2018-04-16T00:00:00Z
+  interval_hours: 6
+
+assimilation:
+  method: 3dvar_fgat
+  outer_loops: 2
+  inner_iterations: 10
+  fgat:
+    trajectory_offsets_hours: [-3, 0, 3]
+
+forecast:
+  profile: mpas_fgat_3h
+
+background:
+  source: previous_forecast
+
+bmatrix:
+  name: mpasstatic_x1.10242
+
+observations:
+  set: conv_basic
+
+geometry:
+  name: x1.10242
+
+run:
+  platform: jaci
+  tasks: 64
+  walltime: '00:30:00'
