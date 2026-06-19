@@ -25,6 +25,7 @@ def write_config(
     checks: list[dict[str, object]],
     *,
     temporal: bool = False,
+    run_tasks: int | None = None,
 ) -> Path:
     config: dict[str, object] = {"doctor": {"checks": checks}}
     if temporal:
@@ -41,6 +42,8 @@ def write_config(
                 },
             }
         )
+    if run_tasks is not None:
+        config["run"] = {"tasks": run_tasks}
     path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     return path
 
@@ -127,6 +130,50 @@ def test_doctor_distinguishes_executable_present_and_missing(tmp_path: Path) -> 
     assert [result.ok for result in report.results] == [True, False]
     assert report.results[0].detail == "executable file"
     assert report.results[1].detail == "missing"
+
+
+def test_doctor_binds_partition_filename_to_declared_run_tasks(tmp_path: Path) -> None:
+    partition = tmp_path / "x1.10242.graph.info.part.64"
+    partition.write_text("partition", encoding="utf-8")
+    config = write_config(
+        tmp_path / "doctor.yaml",
+        [
+            {
+                "name": "MPAS partition",
+                "path": "x1.10242.graph.info.part.{tasks}",
+                "kind": "file",
+            }
+        ],
+        run_tasks=64,
+    )
+
+    report = run_doctor(config)
+
+    assert report.ok
+    assert report.results[0].path == partition
+
+
+def test_doctor_fails_when_partition_for_declared_tasks_is_absent(tmp_path: Path) -> None:
+    (tmp_path / "x1.10242.graph.info.part.64").write_text(
+        "partition", encoding="utf-8"
+    )
+    config = write_config(
+        tmp_path / "doctor.yaml",
+        [
+            {
+                "name": "MPAS partition",
+                "path": "x1.10242.graph.info.part.{tasks}",
+                "kind": "file",
+            }
+        ],
+        run_tasks=32,
+    )
+
+    report = run_doctor(config)
+
+    assert not report.ok
+    assert report.results[0].path.name == "x1.10242.graph.info.part.32"
+    assert report.results[0].detail == "missing"
 
 
 def test_doctor_reports_required_access_without_touching_resources(
