@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Report a cyclic experiment plan without creating files or jobs."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from monan_jedi_workflow.dry_run import dry_run_experiment
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="monan-jedi-cycle-dry-run",
+        description="Resolve a cyclic MONAN-JEDI experiment without side effects.",
+    )
+    parser.add_argument("experiment", type=Path)
+    args = parser.parse_args()
+    print(dry_run_experiment(args.experiment))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
