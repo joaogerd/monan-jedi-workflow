@@ -1,0 +1,6 @@
+forecast:
+  profile: mpas_fgat_3h
+  output_interval_hours: 3
+  required_trajectory_offsets_hours: [-3, 0, 3]
+  runtime_products:
+    trajectory_prefix: mpasout
