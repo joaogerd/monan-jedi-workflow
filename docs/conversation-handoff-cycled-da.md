@@ -1,29 +1,31 @@
 # Contexto de continuidade — Ciclo de AD MONAN-JEDI
 
-Este documento registra o estado da conversa e da implementação na branch
-`feature/cycled-da-roadmap`, para continuidade em outra sessão.
+Este documento registra o estado atual da implementação na branch
+`feature/cycled-da-roadmap`.
 
 ## Objetivo geral
 
-Evoluir o repositório `monan-jedi-workflow` para montar e executar, de modo
+Evoluir `joaogerd/monan-jedi-workflow` para montar e executar, de modo
 progressivo e testável, um ciclo de assimilação de dados com MPAS-JEDI.
 
-A estratégia é:
+A ordem obrigatória permanece:
 
-1. reproduzir primeiro o caso manual já validado;
-2. separar a configuração em componentes YAML;
-3. manter o YAML principal de experimento mínimo;
-4. usar Python somente como motor de composição, validação, planejamento,
-   renderização e preparação;
-5. evoluir de caso único para dois ciclos, um dia, uma semana, um mês e ciclo
-   contínuo.
+```text
+planejamento/local puro
+-> integração local sem dados reais
+-> comparação com baseline
+-> preparação no JACI
+-> smoke PBS
+-> dois ciclos
+-> um dia, semana, mês e operação contínua
+```
 
-O repositório principal é `joaogerd/monan-jedi-workflow`. Não criar um novo
-repositório para a ciclagem.
+Nenhuma etapa cara no JACI deve ser usada para identificar erro de YAML, datas,
+composição, paths, dependências ou templates.
 
 ## Caso de referência
 
-Baseline validado atualmente:
+O baseline manual validado permanece:
 
 ```text
 3D-FGAT
@@ -34,206 +36,59 @@ matriz de covariância de erros de background MPASstatic
 observações Radiosonde, GnssroRefNCEP e SfcCorrected
 ```
 
-O baseline antigo permanece a referência de regressão. A nova arquitetura não
-deve remover ou alterar seu comportamento antes de conseguir renderizar um caso
+O baseline antigo é referência de regressão. A nova arquitetura não deve
+remover ou alterar seu comportamento antes de renderizar um caso
 semanticamente equivalente.
 
-## Decisões arquiteturais
-
-### Separação entre Python, YAML e templates
+## Decisões arquiteturais que continuam válidas
 
 ```text
 Python = motor do workflow
 YAMLs = configuração científica e operacional
-Templates = arquivos finais de MPAS, JEDI e PBS
+Templates = arquivos finais MPAS, JEDI e PBS
 Runtime renderizado = produto, não fonte de verdade
 ```
 
-Não colocar no código Python:
+O YAML mínimo seleciona método, perfil de forecast, estratégia de background,
+matriz B, observações, geometria e plataforma. Detalhes científicos, filtros
+UFO, caminhos de dados e templates completos não devem ser codificados no
+motor Python.
 
-- detalhes de observações;
-- filtros UFO;
-- operadores de observação;
-- caminhos detalhados de dados;
-- parâmetros científicos completos;
-- YAML JEDI completo;
-- PBS completo;
-- namelist ou streams fixos.
-
-### YAML mínimo de experimento
-
-O experimento deve expressar escolhas frequentes:
-
-```yaml
-experiment:
-  name: cycle_1day_3dfgat_x1.10242
-
-cycle:
-  start: 2018-04-15T00:00:00Z
-  end: 2018-04-16T00:00:00Z
-  interval_hours: 6
-
-assimilation:
-  method: 3dvar_fgat
-  outer_loops: 2
-  inner_iterations: 10
-  fgat:
-    trajectory_offsets_hours: [-3, 0, 3]
-
-forecast:
-  profile: mpas_fgat_3h
-
-background:
-  source: previous_forecast
-
-bmatrix:
-  name: mpasstatic_x1.10242
-
-observations:
-  set: conv_basic
-
-geometry:
-  name: x1.10242
-
-run:
-  platform: jaci
-  tasks: 64
-  walltime: '00:30:00'
-```
-
-A configuração grossa pertence a componentes separados:
-
-```text
-configs/
-  assimilation/
-  forecast/
-  background/
-  bmatrix/
-  geometry/
-  observations/
-  platforms/
-```
-
-## Modelo FGAT adotado
-
-A discussão corrigiu a hipótese inicial de um único background. Para 3DVar-FGAT,
-a assimilação usa uma trajetória de forecast.
-
-Convenção usada no GSI/SMNA para ciclo de 6 h:
+A convenção FGAT de referência é:
 
 ```text
 janela relativa: [-3 h, 0 h, +3 h]
-
 análise em T
-forecast começa em T - 6 h (análise anterior)
-forecast termina em T + 3 h
+forecast inicia em T - 6 h
 saídas necessárias: T - 3 h, T, T + 3 h
 leads: 3 h, 6 h, 9 h
 ```
 
-Exemplo para análise em 2018-04-15 00Z:
+## O que já existe na branch
 
-```text
-análise anterior: 2018-04-14 18Z
-forecast: 18Z -> 03Z
-
-21Z = lead 3 h = offset -3 h
-00Z = lead 6 h = offset  0 h
-03Z = lead 9 h = offset +3 h
-```
-
-O modelo deve permitir futuramente outras janelas, intervalos e origens de
-forecast sem modificar o motor Python.
-
-## Regra de testes
-
-Cada passo precisa ser testável antes de avançar.
-
-Ordem obrigatória:
-
-```text
-unitário local
--> integração local sem dados reais
--> comparação com baseline
--> preparação no JACI
--> smoke test PBS
--> dois ciclos
--> um dia
--> semana
--> mês
-```
-
-Nenhuma etapa cara no JACI deve ser usada para descobrir erros simples de YAML,
-datas, dependências, composição ou paths.
-
-## O que já foi criado na branch
-
-### Documentação
-
-```text
-docs/roadmap-cycled-da.md
-docs/baseline-3dfgat-inventory.md
-docs/fgat-trajectory-model.md
-docs/testing-strategy-cycled-da.md
-docs/cycle-dry-run.md
-```
-
-### Planejamento temporal
+### Planejamento e composição sem efeitos colaterais
 
 ```text
 monan_jedi_workflow/timeline.py
-tests/test_timeline.py
-```
-
-Implementa:
-
-- parsing UTC;
-- IDs de ciclo;
-- timestamps MPAS;
-- `CycleDefinition`;
-- trajetória FGAT configurável;
-- `CycleInstance`;
-- estados da trajetória com tempo válido, offset e lead.
-
-### Planejador de ciclo
-
-```text
 monan_jedi_workflow/cycle_plan.py
-scripts/monan-jedi-cycle-plan
-tests/test_cycle_plan.py
-tests/test_cycle_plan_example.py
+monan_jedi_workflow/components.py
+monan_jedi_workflow/composition.py
+monan_jedi_workflow/dry_run.py
 ```
 
-Uso:
+Comandos existentes:
 
 ```bash
 python scripts/monan-jedi-cycle-plan \
   configs/experiments/cycle_1day_3dfgat_x1.10242.yaml
+
+python scripts/monan-jedi-cycle-dry-run \
+  configs/experiments/cycle_1day_3dfgat_x1.10242.yaml
 ```
 
-Não cria arquivos nem submete jobs.
+Esses comandos não criam arquivos e não submetem jobs.
 
-### Componentes e composição
-
-```text
-monan_jedi_workflow/components.py
-monan_jedi_workflow/composition.py
-
-tests/test_components.py
-tests/test_committed_component_resolution.py
-tests/test_composition.py
-```
-
-Implementa:
-
-- resolução por nome dos componentes;
-- leitura de YAMLs em `configs/<categoria>/<nome>.yaml`;
-- `deep_merge`;
-- composição em memória dos defaults dos componentes com overrides mínimos do
-  experimento;
-- sem alteração no renderer do baseline atual.
-
-### Componentes reais iniciais
+### Componentes iniciais
 
 ```text
 configs/assimilation/3dvar_fgat.yaml
@@ -243,183 +98,155 @@ configs/bmatrix/mpasstatic_x1.10242.yaml
 configs/geometry/x1.10242.yaml
 configs/platforms/jaci.yaml
 configs/observations/conv_basic.yaml
+configs/experiments/cycle_1day_3dfgat_x1.10242.yaml
 ```
 
-### Dry-run
+O experimento de um dia ainda é um exemplo de planejamento e composição; ele
+não é um caso executável no JACI.
+
+## Doctor implementado
+
+O `doctor` foi implementado como ferramenta estritamente somente de leitura:
 
 ```text
-monan_jedi_workflow/dry_run.py
-scripts/monan-jedi-cycle-dry-run
-tests/test_dry_run.py
+monan_jedi_workflow/doctor.py
+scripts/monan-jedi-cycle-doctor
+tests/test_doctor.py
+docs/cycle-doctor.md
 ```
 
 Uso:
 
 ```bash
-python scripts/monan-jedi-cycle-dry-run \
-  configs/experiments/cycle_1day_3dfgat_x1.10242.yaml
+python scripts/monan-jedi-cycle-doctor EXPERIMENT.yaml
 ```
 
-O dry-run:
+Ele não cria arquivos, diretórios ou links; não renderiza YAML/PBS; não executa
+MPAS ou MPAS-JEDI; e não chama `qsub`.
 
-- resolve componentes;
-- calcula os quatro ciclos do exemplo de um dia;
-- lista trajetórias FGAT;
-- lista tarefas planejadas;
-- lista artefatos runtime futuros;
-- não cria arquivos;
-- não submete jobs.
+### Contrato declarativo
 
-## Arquivo de experimento atual
+Cada item em `doctor.checks` declara:
+
+```yaml
+- name: recurso identificado para o relatório
+  path: /caminho/para/recurso
+  kind: file | directory | executable
+  scope: once | cycle | trajectory   # opcional; padrão once
+  access: [read, write, execute]     # opcional
+```
+
+São suportados:
+
+- arquivos, diretórios e executáveis;
+- permissões de leitura, escrita e execução;
+- placeholders temporais por ciclo e por estado de trajetória FGAT;
+- `{tasks}`, resolvido a partir de `run.tasks`;
+- `{experiment_name}`, resolvido a partir de `experiment.name`.
+
+Para a partição MPI, o padrão correto é:
+
+```yaml
+- name: partição compatível com run.tasks
+  path: /caminho/x1.10242.graph.info.part.{tasks}
+  kind: file
+  access: [read]
+```
+
+Assim, `run.tasks: 64` exige `.part.64`; a existência de uma partição para
+outro número de tarefas não é aceita.
+
+Para estados FGAT, `scope: trajectory` expande para os estados planejados pelo
+resolvedor temporal, por exemplo:
+
+```yaml
+- name: estados da trajetória FGAT
+  path: /dados/states/{cycle_id}/x1.10242.init.{valid_mpas_time}.nc
+  kind: file
+  scope: trajectory
+  access: [read]
+```
+
+A documentação completa está em `docs/cycle-doctor.md`.
+
+## Cobertura de testes do doctor
+
+`tests/test_doctor.py` cobre:
+
+1. arquivo regular existente;
+2. arquivo ausente, sem criá-lo;
+3. diretório existente;
+4. executável presente e ausente;
+5. permissões declaradas;
+6. partição selecionada por `run.tasks` e falha por incompatibilidade;
+7. placeholders temporais para todos os estados FGAT previstos;
+8. YAML inválido;
+9. placeholder inválido;
+10. garantia de que o filesystem não é modificado;
+11. integração local da CLI com recursos temporários.
+
+Validação efetivamente executada nesta sessão, em uma cópia temporária dos
+arquivos publicados:
 
 ```text
-configs/experiments/cycle_1day_3dfgat_x1.10242.yaml
+python -m compileall -q monan_jedi_workflow scripts
+python -m pytest -q tests/test_doctor.py
+12 passed
 ```
 
-Ele é um exemplo mínimo para planejamento, composição e dry-run. Ainda não é
-um caso executável no JACI.
-
-## Testes locais atuais
-
-Executar:
-
-```bash
-python -m pytest \
-  tests/test_timeline.py \
-  tests/test_cycle_plan.py \
-  tests/test_cycle_plan_example.py \
-  tests/test_components.py \
-  tests/test_committed_component_resolution.py \
-  tests/test_composition.py \
-  tests/test_dry_run.py
-```
-
-Antes de continuar, rodar também a suíte completa:
+A suíte completa do repositório **não foi reexecutada nesta sessão** porque o
+ambiente de validação não conseguiu clonar o repositório por falha de resolução
+de `github.com`. Não registrar uma aprovação de suíte completa sem executar,
+num checkout real, o comando abaixo:
 
 ```bash
 python -m pytest
 ```
 
-## Próximo passo recomendado
-
-Implementar `doctor` como ferramenta somente de leitura.
-
-Objetivo:
+## Commits do doctor
 
 ```text
-validar recursos reais no JACI antes de gerar runtime ou PBS
+ee54061 feat: add read-only cyclic doctor core
+3247160 feat: add cyclic doctor command
+da3ba8b test: cover read-only cyclic doctor
+d30fb1 docs: describe read-only cyclic doctor
+ab79924 feat: bind doctor partition checks to run tasks
+335fb42 test: bind doctor partitions to declared tasks
+82b9e9c docs: require task-aware doctor partition paths
 ```
 
-O `doctor` deverá verificar, por configuração declarativa:
+## Próximo passo obrigatório
 
-- executável `mpasjedi_variational.x`;
-- matriz B e metadados;
-- arquivo invariante da geometria;
-- partição compatível com `run.tasks`;
-- arquivos de física;
-- arquivos/raízes de observação;
-- estados da trajetória previstos para cada ciclo;
-- permissões de leitura/escrita nos diretórios necessários.
+Antes de qualquer preparação de runtime, renderer ou PBS, executar em um
+checkout normal:
 
-Comportamento obrigatório:
-
-```text
-não criar arquivos
-não criar links
-não criar diretórios
-não renderizar YAML/PBS
-não executar MPAS
-não executar MPAS-JEDI
-não submeter qsub
+```bash
+python -m pytest
 ```
 
-Formato desejado no YAML:
+Critério de aceite: suíte completa aprovada.
 
-```yaml
-doctor:
-  checks:
-    - name: mpas-jedi executable
-      path: /p/projetos/.../mpasjedi_variational.x
-      kind: executable
+Depois, no JACI e ainda sem criar runtime ou submeter jobs, preparar um YAML de
+experimento com os paths reais e executar:
 
-    - name: B matrix
-      path: /p/projetos/.../mpasstatic.nc
-      kind: file
-
-    - name: MPAS invariant
-      path: /p/projetos/.../x1.10242.invariant.nc
-      kind: file
-
-    - name: physics directory
-      path: /p/projetos/.../physics
-      kind: directory
+```bash
+python scripts/monan-jedi-cycle-doctor EXPERIMENT.yaml
 ```
 
-Testes obrigatórios para o `doctor`:
+O YAML deve verificar, no mínimo:
 
-1. arquivo existente;
-2. arquivo ausente;
-3. diretório existente;
-4. executável presente/ausente;
-5. placeholders temporais por ciclo, quando implementados;
-6. YAML inválido;
-7. garantia de que nada foi modificado no filesystem;
-8. integração local com diretório temporário;
-9. só depois teste no JACI com paths reais.
+- `mpasjedi_variational.x`;
+- matriz B e seus metadados;
+- invariante da geometria;
+- partição com `{tasks}`;
+- arquivos ou diretório de física;
+- raízes/arquivos de observação;
+- estados previstos da trajetória FGAT;
+- permissões necessárias para leitura e para o futuro diretório de runtime.
 
-## Limitação encontrada
+Critério de aceite JACI: todos os checks passam sem criar recursos, renderizar
+arquivos ou submeter job.
 
-Na sessão anterior, tentativas de criar o módulo `doctor` pela integração de
-GitHub foram bloqueadas antes de gerar commit. Portanto, **o doctor ainda não
-existe na branch**.
-
-Não assumir que ele foi implementado.
-
-## Commits relevantes da branch
-
-```text
-b522218 docs: add cycled data assimilation roadmap
-22a8f29 docs: inventory baseline configuration for component migration
-4b519ab feat: add pure cycle timeline resolver
-fea346b test: cover cycle timeline resolution
-df4967 feat: model FGAT trajectories instead of one background time
-3defe8 test: verify GSI-style FGAT trajectory planning
-2066aba docs: define configurable FGAT trajectory model
-cea2c54 docs: define incremental testing strategy for cycled DA
-873e8f1 feat: add side-effect-free cycle planning
-5ae0c49 test: cover side-effect-free cycle planning
-b07a041 feat: add standalone cycle planning command
-6ec9681 feat: add minimal one-day FGAT plan configuration
-f5402d5 test: validate committed one-day cycle plan example
-cf5eb07 feat: add declarative component repository resolver
-0748246 test: cover named component resolution
-f7759d1 feat: add 3DVar-FGAT method component
-739dd37 feat: add three-hour MPAS FGAT forecast profile
-f351531 feat: add previous forecast background component
-36b7b12 feat: add MPASstatic B matrix component
-b0fb9bf feat: add x1 geometry component
-83df075 feat: add JACI platform component
-5f4e8af feat: add conventional observation set component
-0e44eb9 test: resolve all components for committed cycle example
-8151e1e feat: compose effective cyclic experiment configuration
-7892ea0 test: verify effective cyclic experiment composition
-bad6bb4 feat: add side-effect-free cyclic dry run
-47f486c feat: add standalone cyclic dry run command
-53fbe27 test: cover side-effect-free cyclic dry run
-d271595 docs: describe cyclic dry run workflow check
-```
-
-## Prompt para retomar em nova conversa
-
-```text
-Continue o trabalho no repositório joaogerd/monan-jedi-workflow, branch
-feature/cycled-da-roadmap.
-
-Leia primeiro docs/conversation-handoff-cycled-da.md e siga as decisões e o
-estado registrados nele.
-
-A próxima tarefa é implementar o comando/ferramenta doctor, somente de leitura,
-com testes locais completos antes de qualquer validação no JACI. Não alterar o
-renderer do baseline nem criar/submeter jobs. Cada mudança deve ter testes
-executáveis e critério de aceite.
-```
+Somente depois disso, o próximo incremento de código é a preparação/renderização
+incremental com comparação semântica ao baseline. Não modificar o renderer do
+baseline até esse ponto.
