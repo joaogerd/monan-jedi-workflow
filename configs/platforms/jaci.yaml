@@ -1,0 +1,7 @@
+platform:
+  name: jaci
+  scheduler: PBS
+  defaults:
+    queue: pesqmini
+    tasks: 64
+    walltime: '00:30:00'
