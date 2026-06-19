@@ -133,14 +133,41 @@ def _parse_check(value: object, index: int) -> DoctorCheck:
     )
 
 
-def load_doctor_checks(config_path: Path) -> list[DoctorCheck]:
-    """Load and validate the ``doctor.checks`` declaration from a YAML file."""
-    config = load_yaml_file(config_path)
+def _doctor_checks_from_config(config: Mapping[str, Any]) -> list[DoctorCheck]:
     doctor = _require_mapping(config.get("doctor"), "Missing required mapping: doctor")
     checks = doctor.get("checks")
     if not isinstance(checks, list) or not checks:
         raise DoctorConfigError("doctor.checks must be a non-empty YAML list")
     return [_parse_check(value, index) for index, value in enumerate(checks)]
+
+
+def load_doctor_checks(config_path: Path) -> list[DoctorCheck]:
+    """Load and validate the ``doctor.checks`` declaration from a YAML file."""
+    return _doctor_checks_from_config(load_yaml_file(config_path))
+
+
+def _global_context(config: Mapping[str, Any]) -> dict[str, str]:
+    """Return optional non-temporal placeholders from experiment selections.
+
+    A partition path can use ``{tasks}``, which makes the check depend on the
+    declared ``run.tasks`` value instead of hard-coding an MPI decomposition.
+    ``{experiment_name}`` is available when the experiment metadata supplies a
+    non-empty name.
+    """
+    context: dict[str, str] = {}
+    experiment = config.get("experiment")
+    if isinstance(experiment, Mapping):
+        name = experiment.get("name")
+        if isinstance(name, str) and name.strip():
+            context["experiment_name"] = name
+
+    run = config.get("run")
+    if isinstance(run, Mapping):
+        tasks = run.get("tasks")
+        if isinstance(tasks, int) and tasks > 0:
+            context["tasks"] = str(tasks)
+
+    return context
 
 
 def _iso(value: object) -> str:
@@ -196,14 +223,16 @@ def _path_from_template(template: str, config_path: Path) -> Path:
 
 def _expanded_checks(
     config_path: Path,
+    config: Mapping[str, Any],
     checks: list[DoctorCheck],
 ) -> list[tuple[DoctorCheck, Path]]:
     expanded: list[tuple[DoctorCheck, Path]] = []
+    global_context = _global_context(config)
     instances: list[CycleInstance] | None = None
 
     for check in checks:
         if check.scope == "once":
-            resolved = _format_path(check.path, {}, check.name)
+            resolved = _format_path(check.path, global_context, check.name)
             expanded.append((check, _path_from_template(resolved, config_path)))
             continue
 
@@ -211,17 +240,17 @@ def _expanded_checks(
             instances = resolve_cycle_instances(load_cycle_plan_definition(config_path))
 
         for instance in instances:
+            context = dict(global_context)
+            context.update(_cycle_context(instance))
             if check.scope == "cycle":
-                resolved = _format_path(check.path, _cycle_context(instance), check.name)
+                resolved = _format_path(check.path, context, check.name)
                 expanded.append((check, _path_from_template(resolved, config_path)))
                 continue
 
             for state in instance.trajectory:
-                resolved = _format_path(
-                    check.path,
-                    _trajectory_context(instance, state),
-                    check.name,
-                )
+                trajectory_context = dict(context)
+                trajectory_context.update(_trajectory_context(instance, state))
+                resolved = _format_path(check.path, trajectory_context, check.name)
                 expanded.append((check, _path_from_template(resolved, config_path)))
 
     return expanded
@@ -262,9 +291,11 @@ def _evaluate(check: DoctorCheck, path: Path) -> DoctorResult:
 
 def run_doctor(config_path: Path) -> DoctorReport:
     """Run every configured check without writing to the filesystem."""
-    checks = load_doctor_checks(config_path)
+    config = load_yaml_file(config_path)
+    checks = _doctor_checks_from_config(config)
     results = tuple(
-        _evaluate(check, path) for check, path in _expanded_checks(config_path, checks)
+        _evaluate(check, path)
+        for check, path in _expanded_checks(config_path, config, checks)
     )
     return DoctorReport(results=results)
 
