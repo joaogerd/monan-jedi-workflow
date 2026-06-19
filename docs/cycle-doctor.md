@@ -30,6 +30,12 @@ Adicione uma seção `doctor` ao YAML do experimento. Cada entrada em `checks`
 tem `name`, `path` e `kind` obrigatórios.
 
 ```yaml
+experiment:
+  name: cycle_1day_3dfgat_x1.10242
+
+run:
+  tasks: 64
+
 doctor:
   checks:
     - name: executável MPAS-JEDI
@@ -52,8 +58,8 @@ doctor:
       kind: file
       access: [read]
 
-    - name: partição para 64 tarefas
-      path: /p/projetos/monan_das/USUARIO/data/mesh/x1.10242.graph.info.part.64
+    - name: partição compatível com run.tasks
+      path: /p/projetos/monan_das/USUARIO/data/mesh/x1.10242.graph.info.part.{tasks}
       kind: file
       access: [read]
 
@@ -63,10 +69,15 @@ doctor:
       access: [read, execute]
 
     - name: diretório de runtime futuro
-      path: /p/projetos/monan_das/USUARIO/runs/cycle_1day_3dfgat_x1.10242
+      path: /p/projetos/monan_das/USUARIO/runs/{experiment_name}
       kind: directory
       access: [read, write, execute]
 ```
+
+A expansão de `{tasks}` obriga o `doctor` a procurar a partição correspondente
+ao valor declarado em `run.tasks`. Por exemplo, `run.tasks: 64` exige o arquivo
+`x1.10242.graph.info.part.64`; a presença isolada de uma partição `.part.32`
+ou `.part.128` não aprova o experimento.
 
 Os caminhos são avaliados como absolutos quando começam com `/`. Caminhos
 relativos são interpretados em relação ao diretório do YAML. O caractere `~`
@@ -112,7 +123,15 @@ doctor:
       access: [read]
 ```
 
-Os placeholders disponíveis para `scope: cycle` são:
+Os placeholders globais abaixo estão disponíveis em qualquer `scope`, quando
+os campos correspondentes existem no YAML:
+
+```text
+{experiment_name}
+{tasks}
+```
+
+Os placeholders adicionais disponíveis para `scope: cycle` são:
 
 ```text
 {cycle_id}
@@ -131,7 +150,8 @@ Em `scope: trajectory`, também podem ser usados:
 {forecast_lead_hours}
 ```
 
-O `scope` padrão é `once`; nesse modo não há placeholders temporais.
+O `scope` padrão é `once`. Nesse modo os placeholders globais podem ser usados,
+mas placeholders temporais não estão disponíveis.
 
 ## Critérios de aceite local
 
@@ -143,9 +163,9 @@ python -m pytest
 ```
 
 A suíte específica cobre: arquivo existente e ausente, diretório, executável
-presente e ausente, permissões declaradas, expansão de estados FGAT, YAML
-inválido, placeholder inválido, ausência de modificações no filesystem e
-integração da CLI com recursos temporários.
+presente e ausente, permissões declaradas, partição vinculada a `run.tasks`,
+expansão de estados FGAT, YAML inválido, placeholder inválido, ausência de
+modificações no filesystem e integração da CLI com recursos temporários.
 
 A validação com caminhos reais no JACI é deliberadamente posterior a esses
 testes locais.
