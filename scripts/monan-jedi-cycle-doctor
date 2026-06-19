@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Verify declared cyclic resources without creating runtime files or jobs."""
+
+from monan_jedi_workflow.doctor import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
