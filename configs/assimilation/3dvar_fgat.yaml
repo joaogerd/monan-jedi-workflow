@@ -1,0 +1,13 @@
+assimilation:
+  method: 3dvar_fgat
+  cost_type: 3D-FGAT
+  minimizer:
+    name: DRPCG
+    default_inner_iterations: 10
+    gradient_norm_reduction: 1.0e-10
+  fgat:
+    trajectory_offsets_hours: [-3, 0, 3]
+    forecast_origin: previous_analysis
+  model:
+    name: MPAS
+    time_step: PT45M
