@@ -1,0 +1,7 @@
+bmatrix:
+  name: mpasstatic_x1.10242
+  covariance_model: MPASstatic
+  geometry: x1.10242
+  metadata_required:
+    - covariance_date
+    - file
