@@ -1,0 +1,7 @@
+background:
+  source: previous_forecast
+  trajectory:
+    source_cycle: previous_analysis
+    product: forecast_trajectory
+  validation:
+    required_fields: [ivgtyp, isltyp, landmask, znt, t2m]
