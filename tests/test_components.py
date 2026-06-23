@@ -27,7 +27,7 @@ background: {source: previous_forecast}
 bmatrix: {name: mpasstatic_x1.10242}
 geometry: {name: x1.10242}
 observations: {set: conv_basic}
-run: {platform: jaci}
+run: {site: jaci}
 """,
     )
     values = {
@@ -37,7 +37,7 @@ run: {platform: jaci}
         "bmatrix/mpasstatic_x1.10242.yaml": "bmatrix: {type: MPASstatic}\n",
         "geometry/x1.10242.yaml": "geometry: {mesh: x1.10242}\n",
         "observations/conv_basic.yaml": "observations: {members: [radiosonde]}\n",
-        "platforms/jaci.yaml": "platform: {scheduler: PBS}\n",
+        "sites/jaci.yaml": "site: {scheduler: PBS}\n",
     }
     for relative, content in values.items():
         write(root / relative, content)
@@ -51,8 +51,25 @@ def test_resolve_experiment_components_loads_all_named_parts(tmp_path: Path) -> 
 
     assert resolved["components"]["assimilation"]["method"]["kind"] == "3D-FGAT"
     assert resolved["components"]["forecast"]["forecast"]["output_interval_hours"] == 3
-    assert resolved["components"]["platform"]["platform"]["scheduler"] == "PBS"
+    assert resolved["components"]["site"]["site"]["scheduler"] == "PBS"
     assert resolved["experiment"]["observations"]["set"] == "conv_basic"
+
+
+def test_legacy_platform_selector_is_site_alias(tmp_path: Path) -> None:
+    root = create_component_tree(tmp_path)
+    write(root / "experiments/example.yaml", """
+assimilation: {method: 3dvar_fgat}
+forecast: {profile: mpas_fgat_3h}
+background: {source: previous_forecast}
+bmatrix: {name: mpasstatic_x1.10242}
+geometry: {name: x1.10242}
+observations: {set: conv_basic}
+run: {platform: jaci}
+""")
+
+    resolved = resolve_experiment_components(root / "experiments/example.yaml")
+
+    assert resolved["components"]["site"]["site"]["scheduler"] == "PBS"
 
 
 def test_component_resolver_reports_missing_component(tmp_path: Path) -> None:
