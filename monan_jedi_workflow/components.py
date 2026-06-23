@@ -106,6 +106,10 @@ def resolve_experiment_components(
         category = "sites" if label == "site" else label
         components[label] = repository.load(category, selected)
 
+    # Backward-compatible alias while older tests and callers still refer to the
+    # selected execution environment as ``platform``.
+    components["platform"] = components["site"]
+
     return {
         "experiment": experiment,
         "components": components,
