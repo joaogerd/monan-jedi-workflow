@@ -1,0 +1,122 @@
+workflow:
+  name: monan-jedi-3dfgat-mpastatic-x1.10242
+
+context:
+  experiment: 3dfgat_mpastatic_x1.10242_2018041500
+  experiment_dir: configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
+  rendered_dir: build/rendered
+  runtime_dir: build/runtime/3dfgat_mpastatic_x1.10242_2018041500/2018041500
+  rendered_yaml: build/rendered/3dfgat_mpastatic_x1.10242_2018041500.yaml
+  rendered_pbs: build/rendered/3dfgat_mpastatic_x1.10242_2018041500.pbs
+  simpleworkflow_log_dir: build/simpleworkflow/3dfgat_mpastatic_x1.10242_2018041500/logs
+  simpleworkflow_validation: build/simpleworkflow/3dfgat_mpastatic_x1.10242_2018041500/validation.json
+  mpasjedi_executable: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/bin/mpasjedi_variational.x
+  mpi_ranks: '64'
+
+# This example intentionally does not submit PBS jobs. Run it from inside an
+# already allocated PBS job when reaching run_3dvar_fgat, so the wrapper exit
+# status represents the real MPAS-JEDI exit status.
+tasks:
+  - name: validate_config
+    argv:
+      - python3
+      - -m
+      - monan_jedi_workflow.cli
+      - validate-config
+      - '{experiment_dir}'
+    inputs:
+      required:
+        - '{experiment_dir}/experiment.yaml'
+        - '{experiment_dir}/runtime.yaml'
+        - '{experiment_dir}/validation.yaml'
+
+  - name: prepare_runtime
+    argv:
+      - python3
+      - -m
+      - monan_jedi_workflow.cli
+      - prepare-runtime
+      - '{experiment_dir}'
+    depends_on:
+      - validate_config
+    inputs:
+      required:
+        - '{experiment_dir}/experiment.yaml'
+        - '{experiment_dir}/runtime.yaml'
+        - '{experiment_dir}/validation.yaml'
+    outputs:
+      required:
+        - '{runtime_dir}'
+
+  - name: render_yaml
+    argv:
+      - python3
+      - -m
+      - monan_jedi_workflow.cli
+      - render-yaml
+      - '{experiment_dir}'
+    depends_on:
+      - prepare_runtime
+    inputs:
+      required:
+        - '{runtime_dir}'
+    outputs:
+      required:
+        - '{rendered_yaml}'
+
+  - name: render_pbs
+    argv:
+      - python3
+      - -m
+      - monan_jedi_workflow.cli
+      - render-pbs
+      - '{experiment_dir}'
+    depends_on:
+      - render_yaml
+    inputs:
+      required:
+        - '{rendered_yaml}'
+    outputs:
+      required:
+        - '{rendered_pbs}'
+
+  - name: run_3dvar_fgat
+    argv:
+      - bash
+      - examples/simpleworkflow/3dfgat_mpastatic_x1.10242/wrappers/jaci/run_3dfgat.sh
+    depends_on:
+      - render_pbs
+    env:
+      MONAN_JEDI_EXECUTABLE: '{mpasjedi_executable}'
+      MONAN_JEDI_YAML: '{rendered_yaml}'
+      MONAN_JEDI_NP: '{mpi_ranks}'
+      MONAN_JEDI_LOG: '{simpleworkflow_log_dir}/3dvar_fgat.log'
+      OMP_NUM_THREADS: '1'
+      FI_CXI_RX_MATCH_MODE: hybrid
+      GFORTRAN_CONVERT_UNIT: big_endian:101-200
+    inputs:
+      required:
+        - '{rendered_yaml}'
+        - '{rendered_pbs}'
+        - '{mpasjedi_executable}'
+    outputs:
+      required:
+        - '{simpleworkflow_log_dir}/3dvar_fgat.log'
+    input_fingerprint: metadata
+
+  - name: validate_cycle_outputs
+    argv:
+      - python3
+      - examples/simpleworkflow/3dfgat_mpastatic_x1.10242/validate_outputs.py
+      - --log
+      - '{simpleworkflow_log_dir}/3dvar_fgat.log'
+      - --output-json
+      - '{simpleworkflow_validation}'
+    depends_on:
+      - run_3dvar_fgat
+    inputs:
+      required:
+        - '{simpleworkflow_log_dir}/3dvar_fgat.log'
+    outputs:
+      required:
+        - '{simpleworkflow_validation}'
