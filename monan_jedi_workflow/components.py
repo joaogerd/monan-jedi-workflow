@@ -108,7 +108,10 @@ def resolve_experiment_components(
 
     # Backward-compatible alias while older tests and callers still refer to the
     # selected execution environment as ``platform``.
-    components["platform"] = components["site"]
+    components["platform"] = {
+        **components["site"],
+        "platform": components["site"]["site"],
+    }
 
     return {
         "experiment": experiment,
