@@ -20,7 +20,7 @@ COMPONENT_SELECTIONS: dict[str, tuple[str, str]] = {
     "background": ("background", "source"),
     "bmatrix": ("bmatrix", "name"),
     "geometry": ("geometry", "name"),
-    "platform": ("run", "platform"),
+    "site": ("run", "site"),
     "observations": ("observations", "set"),
 }
 
@@ -35,6 +35,17 @@ def _safe_component_name(name: str) -> str:
     if not name or name in {".", ".."} or "/" in name or "\\" in name:
         raise ValueError(f"Invalid component name: {name!r}")
     return name
+
+
+def _selected_site(section: dict[str, Any]) -> str:
+    site = section.get("site")
+    platform = section.get("platform")
+    if site is not None and platform is not None and site != platform:
+        raise ValueError("run.site and run.platform select different targets")
+    selected = site if site is not None else platform
+    if not isinstance(selected, str):
+        raise TypeError("run.site must be a component name string")
+    return selected
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -81,13 +92,7 @@ def resolve_experiment_components(
     *,
     config_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Resolve the component selections from a minimal experiment YAML.
-
-    The returned mapping preserves the experiment's choices under ``experiment``
-    and provides the full selected definitions under ``components``. Overrides
-    remain separate for now; a later renderer decides which fields are allowed
-    to override each component default.
-    """
+    """Resolve component selections from a minimal experiment YAML."""
     experiment = load_yaml_file(experiment_path)
     root = config_root.resolve() if config_root is not None else infer_config_root(experiment_path)
     repository = ComponentRepository(root)
@@ -95,10 +100,10 @@ def resolve_experiment_components(
 
     for label, (section_name, key_name) in COMPONENT_SELECTIONS.items():
         section = _require_mapping(experiment.get(section_name), section_name)
-        selected = section.get(key_name)
+        selected = _selected_site(section) if label == "site" else section.get(key_name)
         if not isinstance(selected, str):
             raise TypeError(f"{section_name}.{key_name} must be a component name string")
-        category = "platforms" if label == "platform" else label
+        category = "sites" if label == "site" else label
         components[label] = repository.load(category, selected)
 
     return {
