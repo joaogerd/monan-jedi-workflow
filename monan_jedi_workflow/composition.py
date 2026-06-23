@@ -72,6 +72,9 @@ def compose_cyclic_experiment(experiment_path: Path) -> dict[str, Any]:
         ),
         "run": deep_merge(site_default_run, _without_selector(run_choice, "site", "platform")),
         "site": site_defaults,
+        # Backward-compatible alias while older dry-run/report code still uses
+        # ``platform`` to describe the execution environment.
+        "platform": site_defaults,
     }
 
     for section in ("installation", "jedi", "model", "observation_conversion", "mpi", "stack", "runtime"):
