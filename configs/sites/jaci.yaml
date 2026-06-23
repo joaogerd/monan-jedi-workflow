@@ -1,0 +1,61 @@
+site:
+  name: jaci
+  scheduler: PBS
+  workspace: /p/projetos/monan_das/joao.gerd
+  workflow_root: "{site.workspace}/projects/monan-jedi-workflow"
+  work_root: "{site.workspace}/work/monan-jedi-workflow"
+  scratch_root: "{site.workspace}/scratch/monan-jedi-workflow"
+  experiment_root: "{site.scratch_root}/experiments"
+  external_data_root: "{site.workspace}/external-inputs"
+  data:
+    observations_raw_root: "{site.external_data_root}/observations/raw"
+    observations_ioda_root: "{site.external_data_root}/observations/ioda"
+    backgrounds_root: "{site.external_data_root}/backgrounds"
+    bmatrix_root: "{site.external_data_root}/bmatrix"
+    mesh_root: "{site.external_data_root}/mesh"
+    model_fixed_root: "{site.external_data_root}/model-fixed"
+    physics_root: "{site.external_data_root}/physics"
+  defaults:
+    queue: pesqmini
+    tasks: 64
+    walltime: '00:30:00'
+
+installation:
+  root: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas
+  bin_root: "{installation.root}/bin"
+  lib_root: "{installation.root}/lib"
+  share_root: "{installation.root}/share"
+
+jedi:
+  variational: "{installation.bin_root}/mpasjedi_variational.x"
+  forecast: "{installation.bin_root}/mpasjedi_forecast.x"
+  hofx: "{installation.bin_root}/mpasjedi_hofx.x"
+  error_covariance_toolbox: "{installation.bin_root}/mpasjedi_error_covariance_toolbox.x"
+
+model:
+  init: "{installation.bin_root}/mpas_init_atmosphere"
+  atmosphere: "{installation.bin_root}/mpas_atmosphere"
+  build_tables: "{installation.bin_root}/mpas_atmosphere_build_tables"
+  init_share: "{installation.share_root}/MPAS/core_init_atmosphere"
+  atmosphere_share: "{installation.share_root}/MPAS/core_atmosphere"
+
+observation_conversion:
+  obs2ioda: "{installation.bin_root}/obs2ioda.x"
+  obs2ioda_v3: "{installation.bin_root}/obs2ioda_v3"
+
+mpi:
+  launcher: /opt/cray/pals/1.6/bin/mpiexec
+  tasks_flag: -n
+
+stack:
+  load: true
+  root: /p/projetos/monan_das/joao.gerd/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack
+  env_name: jaci-mpas-jedi-gcc12-craympich
+  module_root: "{stack.root}/envs/{stack.env_name}/modules"
+  site_setup: "{stack.root}/configs/sites/tier2/jaci/setup.sh"
+  env_module: cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0
+
+runtime:
+  unload_anaconda: true
+  validate_python: true
+  expected_python_abi: '3.11'
