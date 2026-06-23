@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .components import deep_merge, resolve_experiment_components
+from .references import resolve_references
 
 
 def _mapping(value: Any, context: str) -> dict[str, Any]:
@@ -14,8 +15,8 @@ def _mapping(value: Any, context: str) -> dict[str, Any]:
     return value
 
 
-def _without_selector(section: dict[str, Any], selector: str) -> dict[str, Any]:
-    return {key: value for key, value in section.items() if key != selector}
+def _without_selector(section: dict[str, Any], *selectors: str) -> dict[str, Any]:
+    return {key: value for key, value in section.items() if key not in selectors}
 
 
 def compose_cyclic_experiment(experiment_path: Path) -> dict[str, Any]:
@@ -38,8 +39,9 @@ def compose_cyclic_experiment(experiment_path: Path) -> dict[str, Any]:
     observations_choice = _mapping(experiment["observations"], "observations")
     run_choice = _mapping(experiment["run"], "run")
 
-    platform_defaults = _mapping(components["platform"].get("platform"), "platform")
-    platform_default_run = _mapping(platform_defaults.get("defaults", {}), "platform.defaults")
+    site_component = _mapping(components["site"], "component site")
+    site_defaults = _mapping(site_component.get("site"), "site")
+    site_default_run = _mapping(site_defaults.get("defaults", {}), "site.defaults")
 
     effective = {
         "experiment": experiment.get("experiment", {}),
@@ -68,7 +70,12 @@ def compose_cyclic_experiment(experiment_path: Path) -> dict[str, Any]:
             _mapping(components["observations"].get("observations"), "component observations"),
             _without_selector(observations_choice, "set"),
         ),
-        "run": deep_merge(platform_default_run, _without_selector(run_choice, "platform")),
-        "platform": platform_defaults,
+        "run": deep_merge(site_default_run, _without_selector(run_choice, "site", "platform")),
+        "site": site_defaults,
     }
-    return effective
+
+    for section in ("installation", "jedi", "model", "observation_conversion", "mpi", "stack", "runtime"):
+        if section in site_component:
+            effective[section] = site_component[section]
+
+    return resolve_references(effective)
