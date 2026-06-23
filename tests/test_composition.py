@@ -29,4 +29,7 @@ def test_committed_cycle_composes_component_defaults_and_overrides() -> None:
     ]
     assert effective["run"]["tasks"] == 64
     assert effective["run"]["walltime"] == "00:30:00"
-    assert effective["platform"]["scheduler"] == "PBS"
+    assert effective["site"]["scheduler"] == "PBS"
+    assert effective["installation"]["bin_root"].endswith("/bin")
+    assert effective["jedi"]["variational"].endswith("/mpasjedi_variational.x")
+    assert effective["model"]["atmosphere"].endswith("/mpas_atmosphere")
