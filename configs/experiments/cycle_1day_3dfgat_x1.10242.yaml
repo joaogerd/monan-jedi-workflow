@@ -29,6 +29,6 @@ geometry:
   name: x1.10242
 
 run:
-  platform: jaci
+  site: jaci
   tasks: 64
   walltime: '00:30:00'
