@@ -8,8 +8,8 @@ simpleworkflow run examples/simpleworkflow/3dfgat_mpastatic_x1.10242_2018041500/
   --workdir build/simpleworkflow/3dfgat_mpastatic_x1.10242_2018041500
 ```
 
-O YAML apenas encadeia `validate-config`, `prepare-runtime`, `render-yaml`, `render-pbs`, `submit`, `wait` e `validate-run`.
+O YAML apenas encadeia `validate-config`, `prepare-runtime`, `render-yaml`, `render-pbs`, `submit --wait` e `validate-run`.
 
-`submit` persiste o Job ID no runtime e evita uma submissão PBS duplicada em retomadas. `wait` confirma apenas o término no scheduler. A confirmação científica ocorre em `validate-run`, conforme o contrato em `validation.yaml`.
+`submit --wait` persiste o Job ID no runtime, evita submissão PBS duplicada em retomadas e espera apenas a conclusão no scheduler. A confirmação científica ocorre em `validate-run`, conforme o contrato declarado em `validation.yaml`.
 
-Este exemplo é estático. A ciclagem temporal deve ser habilitada depois que as etapas de MPAS e Obs2IODA prepararem dados por ciclo.
+Este exemplo é estático. A ciclagem temporal será habilitada quando as etapas de MPAS e Obs2IODA prepararem entradas e produtos específicos por ciclo.
