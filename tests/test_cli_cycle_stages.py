@@ -18,3 +18,22 @@ def test_cycle_stage_commands_require_cycle_time() -> None:
     ])
     assert args.command == "obs2ioda-run"
     assert args.force is False
+
+
+def test_operational_obs2ioda_commands_are_public() -> None:
+    parser = cli.build_parser()
+    doctor = parser.parse_args([
+        "obs2ioda-doctor", "configs/example", "--cycle", "2018-04-15T00:00:00Z"
+    ])
+    assert doctor.command == "obs2ioda-doctor"
+    assert doctor.cycle == "2018-04-15T00:00:00Z"
+
+    prepare = parser.parse_args([
+        "obs2ioda-prepare", "configs/example", "--cycle", "2018-04-15T00:00:00Z", "--refresh"
+    ])
+    assert prepare.refresh is True
+
+    validate = parser.parse_args([
+        "obs2ioda-validate", "configs/example", "--cycle", "2018-04-15T00:00:00Z"
+    ])
+    assert validate.command == "obs2ioda-validate"
