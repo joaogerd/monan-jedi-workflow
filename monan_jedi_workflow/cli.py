@@ -7,7 +7,12 @@ from pathlib import Path
 
 from .config import load_experiment_config, validate_experiment_config
 from .mpas_stage import prepare_mpas, submit_mpas, validate_mpas, wait_mpas
-from .obs2ioda_stage import prepare_obs2ioda, run_obs2ioda
+from .obs2ioda_stage import (
+    doctor_obs2ioda,
+    prepare_obs2ioda,
+    run_obs2ioda,
+    validate_obs2ioda,
+)
 from .render import write_rendered_pbs, write_rendered_yaml
 from .run_validation import validate_run
 from .runtime import prepare_runtime
@@ -79,14 +84,27 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_dir(mpas_validate)
     _add_cycle_argument(mpas_validate)
 
+    obs_doctor = sub.add_parser("obs2ioda-doctor")
+    _add_config_dir(obs_doctor)
+    _add_cycle_argument(obs_doctor)
+
     obs_prepare = sub.add_parser("obs2ioda-prepare")
     _add_config_dir(obs_prepare)
     _add_cycle_argument(obs_prepare)
+    obs_prepare.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Replace a non-successful conversion plan after configuration corrections.",
+    )
 
     obs_run = sub.add_parser("obs2ioda-run")
     _add_config_dir(obs_run)
     _add_cycle_argument(obs_run)
     obs_run.add_argument("--force", action="store_true")
+
+    obs_validate = sub.add_parser("obs2ioda-validate")
+    _add_config_dir(obs_validate)
+    _add_cycle_argument(obs_validate)
 
     return parser
 
@@ -206,11 +224,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "mpas-validate":
         validate_mpas(args.config_dir, args.cycle)
         return 0
+    if args.command == "obs2ioda-doctor":
+        doctor_obs2ioda(args.config_dir, args.cycle)
+        return 0
     if args.command == "obs2ioda-prepare":
-        prepare_obs2ioda(args.config_dir, args.cycle)
+        prepare_obs2ioda(args.config_dir, args.cycle, refresh=args.refresh)
         return 0
     if args.command == "obs2ioda-run":
         run_obs2ioda(args.config_dir, args.cycle, force=args.force)
+        return 0
+    if args.command == "obs2ioda-validate":
+        validate_obs2ioda(args.config_dir, args.cycle)
         return 0
     raise RuntimeError(f"Unsupported command: {args.command}")
 
