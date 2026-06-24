@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class CycleTimeError(ValueError):
@@ -57,4 +57,4 @@ def parse_cycle_time(value: str) -> CycleContext:
         raise CycleTimeError(f"Invalid cycle time: {value!r}") from error
     if parsed.tzinfo is None:
         raise CycleTimeError("cycle time must include a UTC offset or trailing Z.")
-    return CycleContext(parsed.astimezone(UTC))
+    return CycleContext(parsed.astimezone(timezone.utc))
