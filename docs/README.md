@@ -1,6 +1,6 @@
 # Documentação do MONAN-JEDI Workflow
 
-Esta documentação descreve o fluxo operacional do workflow MONAN-JEDI para o experimento `3dfgat_mpastatic_x1.10242_2018041500`.
+Esta documentação descreve o fluxo operacional do workflow MONAN-JEDI para o experimento `3dfgat_mpastatic_x1.10242_2018041500` e seus componentes reutilizáveis.
 
 O objetivo é registrar, de forma clara e reproduzível, o que entra no processo, o que sai, qual a ordem correta de execução e por que cada etapa é necessária.
 
@@ -13,10 +13,11 @@ O objetivo é registrar, de forma clara e reproduzível, o que entra no processo
 5. [Execução PBS no JACI](execucao-pbs-jaci.md)
 6. [Entradas e saídas](entradas-e-saidas.md)
 7. [Diagnóstico e logs](diagnostico-e-logs.md)
+8. [Pipeline operacional Obs2IODA](obs2ioda-pipeline.md)
 
 ## Fluxo resumido
 
-A ordem correta do processo é:
+A ordem correta para o baseline de assimilação é:
 
 ```bash
 python3 -m py_compile monan_jedi_workflow/*.py
@@ -33,10 +34,14 @@ python3 -m monan_jedi_workflow.cli render-yaml \
 python3 -m monan_jedi_workflow.cli render-pbs \
   configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
 
-qsub build/rendered/3dfgat_mpastatic_x1.10242_2018041500.pbs
+python3 -m monan_jedi_workflow.cli submit --wait \
+  configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
+
+python3 -m monan_jedi_workflow.cli validate-run \
+  configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
 ```
 
-O `prepare-runtime` deve ser executado antes da renderização final e antes do `qsub`, porque o MPAS-JEDI depende de arquivos resolvidos relativamente ao diretório de execução.
+O Obs2IODA pode ser preparado e validado independentemente por ciclo antes de integrá-lo a esse caso. Consulte o documento específico para o contrato de conversão e validação.
 
 ## Conceito central
 
@@ -46,4 +51,4 @@ Por isso, este workflow separa o processo em três responsabilidades principais:
 
 - os arquivos YAML em `configs/` descrevem o experimento;
 - o comando `prepare-runtime` monta o diretório real de execução;
-- os comandos `render-yaml` e `render-pbs` geram os arquivos finais consumidos pelo JEDI e pelo PBS.
+- os comandos `render-yaml`, `render-pbs`, `submit --wait` e `validate-run` produzem, executam e validam o caso.
