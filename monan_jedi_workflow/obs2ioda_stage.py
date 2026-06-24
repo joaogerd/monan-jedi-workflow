@@ -1,8 +1,17 @@
-"""Cycle-aware Obs2IODA conversion stage for MONAN-JEDI experiments."""
+"""Operational, cycle-aware Obs2IODA conversion support.
+
+The scientific meaning and command-line syntax of each converter are declared
+in ``obs2ioda.yaml``. This module owns the operational contract around those
+commands: preflight, tool checks, immutable plans, logs, provenance and IODA
+header validation. No shell is invoked for either conversion or inspection.
+"""
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,8 +28,18 @@ from .stage_config import (
 )
 
 
+class Obs2IODADoctorError(RuntimeError):
+    """The configured Obs2IODA tools or inputs are not usable."""
+
+
+class Obs2IODAValidationError(RuntimeError):
+    """A converter completed but did not produce a valid declared IODA file."""
+
+
 @dataclass(frozen=True)
 class Obs2IODARun:
+    """Resolved filesystem and configuration state for one observation cycle."""
+
     cycle: CycleContext
     work_dir: Path
     manifest_path: Path
@@ -29,13 +48,24 @@ class Obs2IODARun:
     context: dict[str, str]
 
 
+@dataclass(frozen=True)
+class ToolCheck:
+    """Availability status for one executable referenced by the stage."""
+
+    command: str
+    resolved_path: str | None
+    executable: bool
+
+
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _require_list(value: Any, label: str) -> list[Any]:
+def _require_list(value: Any, label: str, *, non_empty: bool = False) -> list[Any]:
     if not isinstance(value, list):
         raise StageConfigurationError(f"{label} must be a list.")
+    if non_empty and not value:
+        raise StageConfigurationError(f"{label} cannot be empty.")
     return value
 
 
@@ -45,15 +75,75 @@ def _require_mapping(value: Any, label: str) -> dict[str, Any]:
     return value
 
 
+def _require_string(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise StageConfigurationError(f"{label} must be a non-empty string.")
+    return value
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _file_record(path: Path, *, include_sha256: bool) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "path": str(path),
+        "exists": path.exists(),
+        "is_file": path.is_file(),
+    }
+    if path.is_file():
+        stat = path.stat()
+        record.update(
+            {
+                "size_bytes": stat.st_size,
+                "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z"),
+            }
+        )
+        if include_sha256:
+            record["sha256"] = _sha256(path)
+    return record
+
+
+def _config_sha256(value: Any) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _tool_check(command: str) -> ToolCheck:
+    candidate = Path(command).expanduser()
+    if candidate.is_absolute() or "/" in command:
+        resolved = candidate.resolve() if candidate.exists() else None
+    else:
+        found = shutil.which(command)
+        resolved = Path(found).resolve() if found else None
+    return ToolCheck(
+        command=command,
+        resolved_path=str(resolved) if resolved else None,
+        executable=bool(resolved and os.access(resolved, os.X_OK)),
+    )
+
+
+def _provenance_options(config: dict[str, Any]) -> dict[str, bool]:
+    raw = _require_mapping(config.get("provenance", {}), "obs2ioda.provenance")
+    include_sha256 = raw.get("sha256", False)
+    if not isinstance(include_sha256, bool):
+        raise StageConfigurationError("obs2ioda.provenance.sha256 must be a boolean.")
+    return {"sha256": include_sha256}
+
+
 def load_obs2ioda_run(config_dir: Path, cycle_time: str) -> Obs2IODARun:
     """Load ``obs2ioda.yaml`` and resolve its cycle-specific work directory."""
     config_dir = config_dir.resolve()
     config = load_stage_config(config_dir, "obs2ioda.yaml", "obs2ioda")
     cycle = parse_cycle_time(cycle_time)
     context = cycle_render_context(cycle)
-    work_dir_value = config.get("work_dir")
-    if not isinstance(work_dir_value, str) or not work_dir_value:
-        raise StageConfigurationError("obs2ioda.work_dir must be a non-empty string.")
+    work_dir_value = _require_string(config.get("work_dir"), "obs2ioda.work_dir")
     work_dir = resolve_path(
         work_dir_value,
         config_dir=config_dir,
@@ -71,57 +161,116 @@ def load_obs2ioda_run(config_dir: Path, cycle_time: str) -> Obs2IODARun:
     )
 
 
+def _render_inspection(
+    run: Obs2IODARun,
+    converter: dict[str, Any],
+    output: Path,
+) -> dict[str, Any]:
+    """Resolve the header inspection contract for one expected IODA output."""
+    global_inspection = _require_mapping(run.config.get("inspection", {}), "obs2ioda.inspection")
+    converter_validation = _require_mapping(
+        converter.get("validation", {}),
+        f"obs2ioda converter '{converter['name']}'.validation",
+    )
+    local_inspection = _require_mapping(
+        converter_validation.get("inspection", {}),
+        f"obs2ioda converter '{converter['name']}'.validation.inspection",
+    )
+
+    command = local_inspection.get("argv", global_inspection.get("argv"))
+    markers = converter_validation.get(
+        "required_header_markers", global_inspection.get("required_header_markers", [])
+    )
+    timeout_seconds = local_inspection.get(
+        "timeout_seconds", global_inspection.get("timeout_seconds", 60)
+    )
+    if command is None:
+        raise StageConfigurationError(
+            "Obs2IODA validation requires inspection.argv globally or per converter."
+        )
+    argv = _require_list(command, "obs2ioda inspection.argv", non_empty=True)
+    if any(not isinstance(item, str) or not item for item in argv):
+        raise StageConfigurationError("obs2ioda inspection.argv must contain non-empty strings.")
+    markers = _require_list(markers, "obs2ioda inspection.required_header_markers")
+    if any(not isinstance(item, str) or not item for item in markers):
+        raise StageConfigurationError(
+            "obs2ioda inspection.required_header_markers must contain non-empty strings."
+        )
+    if not isinstance(timeout_seconds, int) or timeout_seconds < 1:
+        raise StageConfigurationError("obs2ioda inspection.timeout_seconds must be a positive integer.")
+
+    context = {**run.context, "output": str(output)}
+    return {
+        "argv": [render_text(item, context, label="obs2ioda inspection.argv item") for item in argv],
+        "required_header_markers": markers,
+        "timeout_seconds": timeout_seconds,
+    }
+
+
 def _render_converter(run: Obs2IODARun, entry: dict[str, Any], index: int) -> dict[str, Any]:
-    name = entry.get("name")
-    if not isinstance(name, str) or not name:
-        raise StageConfigurationError(f"obs2ioda.converters[{index}].name must be a non-empty string.")
-    argv = _require_list(entry.get("argv"), f"obs2ioda.converters[{index}].argv")
+    name = _require_string(entry.get("name"), f"obs2ioda.converters[{index}].name")
+    argv = _require_list(entry.get("argv"), f"obs2ioda.converters[{index}].argv", non_empty=True)
     if any(not isinstance(item, str) or not item for item in argv):
         raise StageConfigurationError(
             f"obs2ioda.converters[{index}].argv must contain non-empty strings."
         )
     inputs = _require_list(entry.get("inputs", []), f"obs2ioda.converters[{index}].inputs")
-    outputs = _require_list(entry.get("outputs"), f"obs2ioda.converters[{index}].outputs")
-    if not outputs:
-        raise StageConfigurationError(f"obs2ioda.converters[{index}].outputs cannot be empty.")
+    outputs = _require_list(entry.get("outputs"), f"obs2ioda.converters[{index}].outputs", non_empty=True)
+    if any(not isinstance(item, str) or not item for item in inputs + outputs):
+        raise StageConfigurationError(
+            f"obs2ioda.converters[{index}] inputs and outputs must contain non-empty strings."
+        )
+    timeout_seconds = entry.get("timeout_seconds", run.config.get("timeout_seconds", 900))
+    if not isinstance(timeout_seconds, int) or timeout_seconds < 1:
+        raise StageConfigurationError(f"obs2ioda.converters[{index}].timeout_seconds must be positive.")
 
-    rendered_argv = [
-        render_text(item, run.context, label=f"obs2ioda.converters[{index}].argv item")
-        for item in argv
-    ]
-    rendered_inputs = [
-        resolve_path(
-            item,
-            config_dir=run.config_dir,
-            context=run.context,
-            label=f"obs2ioda.converters[{index}].inputs item",
-        )
-        for item in inputs
-    ]
-    rendered_outputs = [
-        resolve_path(
-            item,
-            config_dir=run.config_dir,
-            context=run.context,
-            label=f"obs2ioda.converters[{index}].outputs item",
-        )
-        for item in outputs
-    ]
-    return {
+    converter = {
         "name": name,
-        "argv": rendered_argv,
-        "inputs": [str(path) for path in rendered_inputs],
-        "outputs": [str(path) for path in rendered_outputs],
+        "argv": [
+            render_text(item, run.context, label=f"obs2ioda.converters[{index}].argv item")
+            for item in argv
+        ],
+        "inputs": [
+            str(resolve_path(item, config_dir=run.config_dir, context=run.context, label=f"obs2ioda.converters[{index}].inputs item"))
+            for item in inputs
+        ],
+        "outputs": [
+            str(resolve_path(item, config_dir=run.config_dir, context=run.context, label=f"obs2ioda.converters[{index}].outputs item"))
+            for item in outputs
+        ],
+        "timeout_seconds": timeout_seconds,
+        "validation": entry.get("validation", {}),
     }
+    converter["plan_sha256"] = _config_sha256(converter)
+    return converter
+
+
+def _build_plan(run: Obs2IODARun) -> dict[str, Any]:
+    entries = _require_list(run.config.get("converters"), "obs2ioda.converters", non_empty=True)
+    converters = [
+        _render_converter(run, _require_mapping(item, f"obs2ioda.converters[{index}]"), index)
+        for index, item in enumerate(entries)
+    ]
+    plan = {
+        "cycle_time": run.cycle.cycle_time,
+        "cycle_id": run.cycle.cycle_id,
+        "work_dir": str(run.work_dir),
+        "converters": converters,
+        "provenance": _provenance_options(run.config),
+    }
+    plan["plan_sha256"] = _config_sha256(plan)
+    return plan
 
 
 def _load_manifest(run: Obs2IODARun) -> dict[str, Any]:
     if not run.manifest_path.exists():
         raise FileNotFoundError(
-            "Obs2IODA manifest not found. Run 'obs2ioda-prepare' first: "
-            f"{run.manifest_path}"
+            "Obs2IODA manifest not found. Run 'obs2ioda-prepare' first: " f"{run.manifest_path}"
         )
-    payload = json.loads(run.manifest_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(run.manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise StageConfigurationError(f"Invalid Obs2IODA manifest: {run.manifest_path}") from error
     if not isinstance(payload, dict):
         raise StageConfigurationError(f"Obs2IODA manifest must be a JSON object: {run.manifest_path}")
     return payload
@@ -129,72 +278,156 @@ def _load_manifest(run: Obs2IODARun) -> dict[str, Any]:
 
 def _write_manifest(run: Obs2IODARun, payload: dict[str, Any]) -> None:
     run.manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    run.manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary = run.manifest_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(run.manifest_path)
 
 
-def prepare_obs2ioda(config_dir: Path, cycle_time: str) -> Obs2IODARun:
-    """Preflight input files and persist the conversion plan for one cycle."""
+def doctor_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
+    """Check resolved converter and inspection executables for one cycle plan."""
+    run = load_obs2ioda_run(config_dir, cycle_time)
+    plan = _build_plan(run)
+    checks: list[dict[str, Any]] = []
+    problems: list[str] = []
+    for converter in plan["converters"]:
+        tool = _tool_check(converter["argv"][0])
+        checks.append({"role": f"converter:{converter['name']}", **tool.__dict__})
+        if not tool.executable:
+            problems.append(f"converter executable unavailable: {tool.command}")
+        for output in converter["outputs"]:
+            inspection = _render_inspection(run, converter, Path(output))
+            inspector = _tool_check(inspection["argv"][0])
+            checks.append({"role": f"inspector:{converter['name']}", **inspector.__dict__})
+            if not inspector.executable:
+                problems.append(f"inspection executable unavailable: {inspector.command}")
+    report = {
+        "schema_version": 1,
+        "checked_at": _timestamp(),
+        "cycle_time": run.cycle.cycle_time,
+        "cycle_id": run.cycle.cycle_id,
+        "plan_sha256": plan["plan_sha256"],
+        "checks": checks,
+        "valid": not problems,
+        "problems": problems,
+    }
+    report_path = run.work_dir / ".monan-jedi-workflow" / "obs2ioda-doctor.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if problems:
+        raise Obs2IODADoctorError("Obs2IODA doctor failed: " + "; ".join(problems))
+    print(f"[OK] Obs2IODA doctor: {report_path}")
+    return report_path
+
+
+def prepare_obs2ioda(config_dir: Path, cycle_time: str, *, refresh: bool = False) -> Obs2IODARun:
+    """Preflight inputs and persist a reproducible conversion plan for one cycle.
+
+    A completed plan is reused only when the resolved converter plan is unchanged.
+    ``refresh`` permits replacing a plan that has not produced converted or
+    validated products; it never removes prior output files.
+    """
     run = load_obs2ioda_run(config_dir, cycle_time)
     run.work_dir.mkdir(parents=True, exist_ok=True)
-    entries = _require_list(run.config.get("converters"), "obs2ioda.converters")
-    converters = [
-        _render_converter(run, _require_mapping(item, f"obs2ioda.converters[{index}]"), index)
-        for index, item in enumerate(entries)
-    ]
-    for converter in converters:
-        missing = [path for path in converter["inputs"] if not Path(path).is_file()]
-        if missing:
-            raise FileNotFoundError(
-                f"Obs2IODA converter '{converter['name']}' input(s) missing: " + ", ".join(missing)
+    plan = _build_plan(run)
+    provenance = plan["provenance"]
+
+    input_records: dict[str, list[dict[str, Any]]] = {}
+    missing: list[str] = []
+    for converter in plan["converters"]:
+        records = [_file_record(Path(path), include_sha256=provenance["sha256"]) for path in converter["inputs"]]
+        input_records[converter["name"]] = records
+        missing.extend(record["path"] for record in records if not record["is_file"])
+    if missing:
+        raise FileNotFoundError("Obs2IODA input(s) missing: " + ", ".join(missing))
+
+    if run.manifest_path.exists():
+        existing = _load_manifest(run)
+        existing_state = existing.get("state")
+        if existing.get("plan_sha256") == plan["plan_sha256"] and not refresh:
+            print(f"[SKIP] existing Obs2IODA plan: {run.cycle.cycle_time}")
+            return run
+        if existing_state in {"converted", "validated"}:
+            raise StageConfigurationError(
+                "Obs2IODA products already exist for a previous plan. Use a new output "
+                "directory or explicit versioned cycle rather than replacing provenance."
             )
-    _write_manifest(
-        run,
-        {
-            "schema_version": 1,
-            "prepared_at": _timestamp(),
-            "cycle_time": run.cycle.cycle_time,
-            "cycle_id": run.cycle.cycle_id,
-            "work_dir": str(run.work_dir),
-            "state": "prepared",
-            "converters": converters,
-        },
-    )
+
+    manifest = {
+        "schema_version": 2,
+        "prepared_at": _timestamp(),
+        "state": "prepared",
+        **plan,
+        "input_records": input_records,
+        "runs": [],
+        "validations": [],
+    }
+    _write_manifest(run, manifest)
     print(f"[OK] prepared Obs2IODA cycle: {run.cycle.cycle_time}")
     return run
 
 
+def _outputs_complete(outputs: list[str]) -> bool:
+    return all(Path(path).is_file() and Path(path).stat().st_size > 0 for path in outputs)
+
+
 def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> Path:
-    """Run configured converters, preserving per-product logs and products."""
+    """Run declared converters, preserving logs and output provenance per product."""
     run = load_obs2ioda_run(config_dir, cycle_time)
     manifest = _load_manifest(run)
-    converters = _require_list(manifest.get("converters"), "obs2ioda manifest converters")
+    converters = _require_list(manifest.get("converters"), "obs2ioda manifest converters", non_empty=True)
+    provenance = _require_mapping(manifest.get("provenance", {}), "obs2ioda manifest provenance")
+    include_sha256 = bool(provenance.get("sha256", False))
     logs_dir = run.work_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     for converter in converters:
         converter = _require_mapping(converter, "obs2ioda manifest converter")
-        name = converter.get("name")
-        if not isinstance(name, str) or not name:
-            raise StageConfigurationError("Obs2IODA manifest converter has no valid name.")
-        outputs = [Path(value) for value in _require_list(converter.get("outputs"), f"{name}.outputs")]
-        complete = all(path.is_file() and path.stat().st_size > 0 for path in outputs)
-        if complete and not force:
+        name = _require_string(converter.get("name"), "obs2ioda manifest converter name")
+        outputs = _require_list(converter.get("outputs"), f"{name}.outputs", non_empty=True)
+        if _outputs_complete(outputs) and not force:
             print(f"[SKIP] Obs2IODA converter already produced outputs: {name}")
             continue
 
         for output in outputs:
-            output.parent.mkdir(parents=True, exist_ok=True)
-        stdout_path = logs_dir / f"{name}.stdout.log"
-        stderr_path = logs_dir / f"{name}.stderr.log"
-        process = subprocess.run(
-            _require_list(converter.get("argv"), f"{name}.argv"),
-            cwd=run.work_dir,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+        attempt = len(manifest.get("runs", [])) + 1
+        stdout_path = logs_dir / f"{name}.attempt-{attempt}.stdout.log"
+        stderr_path = logs_dir / f"{name}.attempt-{attempt}.stderr.log"
+        started_at = _timestamp()
+        try:
+            process = subprocess.run(
+                _require_list(converter.get("argv"), f"{name}.argv", non_empty=True),
+                cwd=run.work_dir,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=converter.get("timeout_seconds", 900),
+            )
+        except subprocess.TimeoutExpired as error:
+            stdout_path.write_text(error.stdout or "", encoding="utf-8")
+            stderr_path.write_text(error.stderr or "", encoding="utf-8")
+            manifest.update({"state": "failed", "failed_converter": name})
+            manifest.setdefault("runs", []).append(
+                {"name": name, "attempt": attempt, "started_at": started_at, "finished_at": _timestamp(), "timeout": True}
+            )
+            _write_manifest(run, manifest)
+            raise RuntimeError(f"Obs2IODA converter '{name}' timed out.") from error
+
         stdout_path.write_text(process.stdout, encoding="utf-8")
         stderr_path.write_text(process.stderr, encoding="utf-8")
+        output_records = [_file_record(Path(path), include_sha256=include_sha256) for path in outputs]
+        run_record = {
+            "name": name,
+            "attempt": attempt,
+            "argv": converter["argv"],
+            "started_at": started_at,
+            "finished_at": _timestamp(),
+            "returncode": process.returncode,
+            "stdout": str(stdout_path),
+            "stderr": str(stderr_path),
+            "outputs": output_records,
+        }
+        manifest.setdefault("runs", []).append(run_record)
         if process.returncode != 0:
             manifest.update({"state": "failed", "failed_converter": name})
             _write_manifest(run, manifest)
@@ -202,17 +435,97 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
                 f"Obs2IODA converter '{name}' failed with return code {process.returncode}. "
                 f"See {stdout_path} and {stderr_path}."
             )
-        missing = [str(path) for path in outputs if not path.is_file() or path.stat().st_size == 0]
-        if missing:
+        if any(not record["is_file"] or record.get("size_bytes", 0) == 0 for record in output_records):
             manifest.update({"state": "invalid-output", "failed_converter": name})
             _write_manifest(run, manifest)
-            raise RuntimeError(
-                f"Obs2IODA converter '{name}' did not create required output(s): "
-                + ", ".join(missing)
-            )
+            raise RuntimeError(f"Obs2IODA converter '{name}' did not create all declared outputs.")
+        _write_manifest(run, manifest)
         print(f"[OK] Obs2IODA converter: {name}")
 
-    manifest.update({"state": "success", "finished_at": _timestamp()})
+    manifest.update({"state": "converted", "converted_at": _timestamp()})
     _write_manifest(run, manifest)
-    print(f"[OK] completed Obs2IODA cycle: {run.cycle.cycle_time}")
+    print(f"[OK] completed Obs2IODA conversion: {run.cycle.cycle_time}")
     return run.manifest_path
+
+
+def validate_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
+    """Inspect every IODA output and enforce configured header markers."""
+    run = load_obs2ioda_run(config_dir, cycle_time)
+    manifest = _load_manifest(run)
+    converters = _require_list(manifest.get("converters"), "obs2ioda manifest converters", non_empty=True)
+    logs_dir = run.work_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    validation_records: list[dict[str, Any]] = []
+    problems: list[str] = []
+
+    for converter in converters:
+        converter = _require_mapping(converter, "obs2ioda manifest converter")
+        name = _require_string(converter.get("name"), "obs2ioda manifest converter name")
+        for index, output_text in enumerate(_require_list(converter.get("outputs"), f"{name}.outputs", non_empty=True)):
+            output = Path(output_text)
+            output_record = _file_record(output, include_sha256=False)
+            record: dict[str, Any] = {"converter": name, "output": output_record}
+            if not output_record["is_file"] or output_record.get("size_bytes", 0) == 0:
+                record["valid"] = False
+                record["problem"] = "missing or empty output"
+                problems.append(f"{name}: {output}")
+                validation_records.append(record)
+                continue
+
+            inspection = _render_inspection(run, converter, output)
+            stdout_path = logs_dir / f"{name}.inspect-{index + 1}.stdout.log"
+            stderr_path = logs_dir / f"{name}.inspect-{index + 1}.stderr.log"
+            try:
+                process = subprocess.run(
+                    inspection["argv"],
+                    cwd=run.work_dir,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=inspection["timeout_seconds"],
+                )
+                stdout_path.write_text(process.stdout, encoding="utf-8")
+                stderr_path.write_text(process.stderr, encoding="utf-8")
+                header = process.stdout + "\n" + process.stderr
+                missing_markers = [
+                    marker for marker in inspection["required_header_markers"] if marker not in header
+                ]
+                record.update(
+                    {
+                        "inspection_argv": inspection["argv"],
+                        "inspection_returncode": process.returncode,
+                        "inspection_stdout": str(stdout_path),
+                        "inspection_stderr": str(stderr_path),
+                        "missing_header_markers": missing_markers,
+                        "valid": process.returncode == 0 and not missing_markers,
+                    }
+                )
+                if not record["valid"]:
+                    problems.append(f"{name}: invalid IODA header for {output}")
+            except subprocess.TimeoutExpired as error:
+                stdout_path.write_text(error.stdout or "", encoding="utf-8")
+                stderr_path.write_text(error.stderr or "", encoding="utf-8")
+                record.update({"valid": False, "problem": "inspection timeout"})
+                problems.append(f"{name}: IODA inspection timed out for {output}")
+            validation_records.append(record)
+
+    report = {
+        "schema_version": 1,
+        "validated_at": _timestamp(),
+        "cycle_time": run.cycle.cycle_time,
+        "cycle_id": run.cycle.cycle_id,
+        "plan_sha256": manifest.get("plan_sha256"),
+        "valid": not problems,
+        "records": validation_records,
+        "problems": problems,
+    }
+    report_path = run.manifest_path.with_name("obs2ioda-validation.json")
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest.setdefault("validations", []).append({"validated_at": report["validated_at"], "valid": report["valid"], "report": str(report_path)})
+    manifest["state"] = "validated" if report["valid"] else "invalid"
+    _write_manifest(run, manifest)
+
+    if problems:
+        raise Obs2IODAValidationError("Obs2IODA validation failed: " + "; ".join(problems))
+    print(f"[OK] validated Obs2IODA cycle: {report_path}")
+    return report_path
