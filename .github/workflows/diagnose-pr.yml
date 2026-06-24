@@ -1,0 +1,22 @@
+name: Diagnose PR
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest-diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run focused test report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          git clone -q --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git" repo
+          cd repo
+          git fetch -q origin "refs/pull/${PR_NUMBER}/merge"
+          git checkout -q FETCH_HEAD
+          python -m pip install -q -e . pytest
+          python -m pytest -q --tb=short
