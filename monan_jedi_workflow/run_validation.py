@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .config import ExperimentConfig, require_key
-from .pbs import load_submission, manifest_path
 from .runtime import get_runtime_dir
+from .scheduler import load_submission, manifest_path
 
 
 class RunValidationError(RuntimeError):
@@ -17,7 +17,7 @@ class RunValidationError(RuntimeError):
 
 
 def _timestamp() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _validation_config(config: ExperimentConfig) -> dict[str, Any]:
@@ -58,12 +58,7 @@ def _write_report(config: ExperimentConfig, report: dict[str, Any]) -> Path:
 
 
 def validate_run(config: ExperimentConfig) -> Path:
-    """Validate job-specific logs and declared runtime products.
-
-    The required markers and outputs belong in ``validation.yaml`` under
-    ``validation.run``. This keeps the validator reusable across experiments
-    while avoiding hard-coded observation or state-file names in Python.
-    """
+    """Validate the job-specific log and declared runtime products."""
     runtime_dir = get_runtime_dir(config).resolve()
     submission = load_submission(config)
     contract = _validation_config(config)
@@ -78,6 +73,10 @@ def validate_run(config: ExperimentConfig) -> Path:
     ):
         if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
             raise TypeError(f"{field} must be a list of non-empty strings.")
+    if not required_markers:
+        raise ValueError("validation.run.required_log_markers cannot be empty.")
+    if not required_outputs:
+        raise ValueError("validation.run.required_outputs cannot be empty.")
 
     logs = _main_log_candidates(config, submission.job_id)
     log_path = logs[-1] if logs else None
@@ -87,20 +86,18 @@ def validate_run(config: ExperimentConfig) -> Path:
 
     output_records: list[dict[str, Any]] = []
     missing_outputs: list[str] = []
-    for relative_path in required_outputs:
-        path = _resolve_path(runtime_dir, relative_path)
+    for configured_path in required_outputs:
+        path = _resolve_path(runtime_dir, configured_path)
         valid = path.is_file() and path.stat().st_size > 0
-        output_records.append(
-            {
-                "configured_path": relative_path,
-                "path": str(path),
-                "exists": path.exists(),
-                "non_empty_file": valid,
-                "size_bytes": path.stat().st_size if path.is_file() else None,
-            }
-        )
+        output_records.append({
+            "configured_path": configured_path,
+            "path": str(path),
+            "exists": path.exists(),
+            "non_empty_file": valid,
+            "size_bytes": path.stat().st_size if path.is_file() else None,
+        })
         if not valid:
-            missing_outputs.append(relative_path)
+            missing_outputs.append(configured_path)
 
     valid = log_path is not None and not missing_markers and not missing_outputs
     report = {
@@ -117,7 +114,6 @@ def validate_run(config: ExperimentConfig) -> Path:
         "missing_outputs": missing_outputs,
     }
     report_path = _write_report(config, report)
-
     if not valid:
         problems: list[str] = []
         if log_path is None:
