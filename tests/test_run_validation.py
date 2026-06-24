@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from monan_jedi_workflow.config import ExperimentConfig
-from monan_jedi_workflow.pbs import manifest_path
 from monan_jedi_workflow.run_validation import validate_run
+from monan_jedi_workflow.scheduler import manifest_path
 
 
 def make_config(tmp_path: Path) -> ExperimentConfig:
