@@ -20,14 +20,10 @@ tasks:
     depends_on: [render_yaml]
     argv: [monan-jedi-workflow, render-pbs, "{experiment_dir}"]
 
-  - name: submit
+  - name: submit_and_wait
     depends_on: [render_pbs]
-    argv: [monan-jedi-workflow, submit, "{experiment_dir}"]
-
-  - name: wait
-    depends_on: [submit]
-    argv: [monan-jedi-workflow, wait, "{experiment_dir}"]
+    argv: [monan-jedi-workflow, submit, "--wait", "{experiment_dir}"]
 
   - name: validate_run
-    depends_on: [wait]
+    depends_on: [submit_and_wait]
     argv: [monan-jedi-workflow, validate-run, "{experiment_dir}"]
