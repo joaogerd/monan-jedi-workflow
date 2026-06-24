@@ -130,8 +130,7 @@ def _tool_check(command: str) -> ToolCheck:
 
 
 def _provenance_options(config: dict[str, Any]) -> dict[str, bool]:
-    raw = config.get("provenance", {})
-    raw = _require_mapping(raw, "obs2ioda.provenance")
+    raw = _require_mapping(config.get("provenance", {}), "obs2ioda.provenance")
     include_sha256 = raw.get("sha256", False)
     if not isinstance(include_sha256, bool):
         raise StageConfigurationError("obs2ioda.provenance.sha256 must be a boolean.")
@@ -168,15 +167,14 @@ def _render_inspection(
     output: Path,
 ) -> dict[str, Any]:
     """Resolve the header inspection contract for one expected IODA output."""
-    global_inspection = run.config.get("inspection", {})
-    global_inspection = _require_mapping(global_inspection, "obs2ioda.inspection")
-    converter_validation = converter.get("validation", {})
+    global_inspection = _require_mapping(run.config.get("inspection", {}), "obs2ioda.inspection")
     converter_validation = _require_mapping(
-        converter_validation, f"obs2ioda converter '{converter['name']}'.validation"
+        converter.get("validation", {}),
+        f"obs2ioda converter '{converter['name']}'.validation",
     )
-    local_inspection = converter_validation.get("inspection", {})
     local_inspection = _require_mapping(
-        local_inspection, f"obs2ioda converter '{converter['name']}'.validation.inspection"
+        converter_validation.get("inspection", {}),
+        f"obs2ioda converter '{converter['name']}'.validation.inspection",
     )
 
     command = local_inspection.get("argv", global_inspection.get("argv"))
@@ -226,33 +224,20 @@ def _render_converter(run: Obs2IODARun, entry: dict[str, Any], index: int) -> di
     if not isinstance(timeout_seconds, int) or timeout_seconds < 1:
         raise StageConfigurationError(f"obs2ioda.converters[{index}].timeout_seconds must be positive.")
 
-    rendered_argv = [
-        render_text(item, run.context, label=f"obs2ioda.converters[{index}].argv item")
-        for item in argv
-    ]
-    rendered_inputs = [
-        resolve_path(
-            item,
-            config_dir=run.config_dir,
-            context=run.context,
-            label=f"obs2ioda.converters[{index}].inputs item",
-        )
-        for item in inputs
-    ]
-    rendered_outputs = [
-        resolve_path(
-            item,
-            config_dir=run.config_dir,
-            context=run.context,
-            label=f"obs2ioda.converters[{index}].outputs item",
-        )
-        for item in outputs
-    ]
     converter = {
         "name": name,
-        "argv": rendered_argv,
-        "inputs": [str(path) for path in rendered_inputs],
-        "outputs": [str(path) for path in rendered_outputs],
+        "argv": [
+            render_text(item, run.context, label=f"obs2ioda.converters[{index}].argv item")
+            for item in argv
+        ],
+        "inputs": [
+            str(resolve_path(item, config_dir=run.config_dir, context=run.context, label=f"obs2ioda.converters[{index}].inputs item"))
+            for item in inputs
+        ],
+        "outputs": [
+            str(resolve_path(item, config_dir=run.config_dir, context=run.context, label=f"obs2ioda.converters[{index}].outputs item"))
+            for item in outputs
+        ],
         "timeout_seconds": timeout_seconds,
         "validation": entry.get("validation", {}),
     }
@@ -266,13 +251,12 @@ def _build_plan(run: Obs2IODARun) -> dict[str, Any]:
         _render_converter(run, _require_mapping(item, f"obs2ioda.converters[{index}]"), index)
         for index, item in enumerate(entries)
     ]
-    provenance = _provenance_options(run.config)
     plan = {
         "cycle_time": run.cycle.cycle_time,
         "cycle_id": run.cycle.cycle_id,
         "work_dir": str(run.work_dir),
         "converters": converters,
-        "provenance": provenance,
+        "provenance": _provenance_options(run.config),
     }
     plan["plan_sha256"] = _config_sha256(plan)
     return plan
@@ -339,8 +323,8 @@ def prepare_obs2ioda(config_dir: Path, cycle_time: str, *, refresh: bool = False
     """Preflight inputs and persist a reproducible conversion plan for one cycle.
 
     A completed plan is reused only when the resolved converter plan is unchanged.
-    ``refresh`` permits replacing a non-successful manifest after configuration
-    corrections; it never removes prior output files.
+    ``refresh`` permits replacing a plan that has not produced converted or
+    validated products; it never removes prior output files.
     """
     run = load_obs2ioda_run(config_dir, cycle_time)
     run.work_dir.mkdir(parents=True, exist_ok=True)
@@ -358,13 +342,14 @@ def prepare_obs2ioda(config_dir: Path, cycle_time: str, *, refresh: bool = False
 
     if run.manifest_path.exists():
         existing = _load_manifest(run)
+        existing_state = existing.get("state")
         if existing.get("plan_sha256") == plan["plan_sha256"] and not refresh:
             print(f"[SKIP] existing Obs2IODA plan: {run.cycle.cycle_time}")
             return run
-        if existing.get("state") == "success" and not refresh:
+        if existing_state in {"converted", "validated"}:
             raise StageConfigurationError(
-                "Obs2IODA plan changed after a successful conversion. Use --refresh only "
-                "after deliberately invalidating or versioning the existing outputs."
+                "Obs2IODA products already exist for a previous plan. Use a new output "
+                "directory or explicit versioned cycle rather than replacing provenance."
             )
 
     manifest = {
@@ -421,8 +406,7 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
         except subprocess.TimeoutExpired as error:
             stdout_path.write_text(error.stdout or "", encoding="utf-8")
             stderr_path.write_text(error.stderr or "", encoding="utf-8")
-            manifest["state"] = "failed"
-            manifest["failed_converter"] = name
+            manifest.update({"state": "failed", "failed_converter": name})
             manifest.setdefault("runs", []).append(
                 {"name": name, "attempt": attempt, "started_at": started_at, "finished_at": _timestamp(), "timeout": True}
             )
