@@ -35,3 +35,15 @@ validation:
     required_xtime_files:
       - background/mpasout.2018-04-14_21.00.00.nc
       - templateFields.10242.nc
+
+  run:
+    required_log_markers:
+      - "with status = 0"
+      - "OOPS Ending"
+    warning_log_markers:
+      - "[CRAYBLAS_WARNING]"
+    required_outputs:
+      - Data/states/mpas.3dfgat.2018-04-15_00.00.00.nc
+      - Data/os/obsout_3dfgat_gnssroref.nc4
+      - Data/os/obsout_3dfgat_sfc.nc4
+      - Data/os/obsout_3dfgat_sondes.nc4
