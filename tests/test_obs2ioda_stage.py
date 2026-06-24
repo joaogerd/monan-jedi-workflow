@@ -15,7 +15,7 @@ def test_obs2ioda_stage_prepares_and_runs_cycle_converter(tmp_path: Path) -> Non
   work_dir: work/obs2ioda/{{cycle_id}}
   converters:
     - name: sample
-      inputs: [inputs/{{cycle_id}}.bufr]
+      inputs: ["inputs/{{cycle_id}}.bufr"]
       outputs: ["{{work_dir}}/sample.nc4"]
       argv:
         - {sys.executable}
