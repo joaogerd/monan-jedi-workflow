@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +30,7 @@ class Obs2IODARun:
 
 
 def _timestamp() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _require_list(value: Any, label: str) -> list[Any]:
@@ -137,8 +137,10 @@ def prepare_obs2ioda(config_dir: Path, cycle_time: str) -> Obs2IODARun:
     run = load_obs2ioda_run(config_dir, cycle_time)
     run.work_dir.mkdir(parents=True, exist_ok=True)
     entries = _require_list(run.config.get("converters"), "obs2ioda.converters")
-    converters = [_render_converter(run, _require_mapping(item, f"obs2ioda.converters[{index}]"), index)
-                  for index, item in enumerate(entries)]
+    converters = [
+        _render_converter(run, _require_mapping(item, f"obs2ioda.converters[{index}]"), index)
+        for index, item in enumerate(entries)
+    ]
     for converter in converters:
         missing = [path for path in converter["inputs"] if not Path(path).is_file()]
         if missing:
@@ -162,7 +164,7 @@ def prepare_obs2ioda(config_dir: Path, cycle_time: str) -> Obs2IODARun:
 
 
 def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> Path:
-    """Run declared Obs2IODA converters and validate their configured outputs."""
+    """Run configured converters, preserving per-product logs and products."""
     run = load_obs2ioda_run(config_dir, cycle_time)
     manifest = _load_manifest(run)
     converters = _require_list(manifest.get("converters"), "obs2ioda manifest converters")
@@ -194,8 +196,7 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
         stdout_path.write_text(process.stdout, encoding="utf-8")
         stderr_path.write_text(process.stderr, encoding="utf-8")
         if process.returncode != 0:
-            manifest["state"] = "failed"
-            manifest["failed_converter"] = name
+            manifest.update({"state": "failed", "failed_converter": name})
             _write_manifest(run, manifest)
             raise RuntimeError(
                 f"Obs2IODA converter '{name}' failed with return code {process.returncode}. "
@@ -203,8 +204,7 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
             )
         missing = [str(path) for path in outputs if not path.is_file() or path.stat().st_size == 0]
         if missing:
-            manifest["state"] = "invalid-output"
-            manifest["failed_converter"] = name
+            manifest.update({"state": "invalid-output", "failed_converter": name})
             _write_manifest(run, manifest)
             raise RuntimeError(
                 f"Obs2IODA converter '{name}' did not create required output(s): "
@@ -212,8 +212,7 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
             )
         print(f"[OK] Obs2IODA converter: {name}")
 
-    manifest["state"] = "success"
-    manifest["finished_at"] = _timestamp()
+    manifest.update({"state": "success", "finished_at": _timestamp()})
     _write_manifest(run, manifest)
     print(f"[OK] completed Obs2IODA cycle: {run.cycle.cycle_time}")
     return run.manifest_path
