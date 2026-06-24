@@ -6,11 +6,11 @@ import argparse
 from pathlib import Path
 
 from .config import load_experiment_config, validate_experiment_config
-from .pbs import submit as submit_pbs
-from .pbs import wait as wait_pbs
 from .render import write_rendered_pbs, write_rendered_yaml
 from .run_validation import validate_run
 from .runtime import prepare_runtime
+from .scheduler import submit as submit_pbs
+from .scheduler import wait as wait_pbs
 
 
 def _add_config_dir(parser: argparse.ArgumentParser) -> None:
