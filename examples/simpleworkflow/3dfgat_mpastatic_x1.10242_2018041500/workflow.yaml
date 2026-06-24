@@ -1,0 +1,33 @@
+workflow:
+  name: monan_jedi_3dfgat_mpastatic_x1_10242
+
+context:
+  experiment_dir: configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
+
+tasks:
+  - name: validate_config
+    argv: [monan-jedi-workflow, validate-config, "{experiment_dir}"]
+
+  - name: prepare_runtime
+    depends_on: [validate_config]
+    argv: [monan-jedi-workflow, prepare-runtime, "{experiment_dir}"]
+
+  - name: render_yaml
+    depends_on: [prepare_runtime]
+    argv: [monan-jedi-workflow, render-yaml, "{experiment_dir}"]
+
+  - name: render_pbs
+    depends_on: [render_yaml]
+    argv: [monan-jedi-workflow, render-pbs, "{experiment_dir}"]
+
+  - name: submit
+    depends_on: [render_pbs]
+    argv: [monan-jedi-workflow, submit, "{experiment_dir}"]
+
+  - name: wait
+    depends_on: [submit]
+    argv: [monan-jedi-workflow, wait, "{experiment_dir}"]
+
+  - name: validate_run
+    depends_on: [wait]
+    argv: [monan-jedi-workflow, validate-run, "{experiment_dir}"]
