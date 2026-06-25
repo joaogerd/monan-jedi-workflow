@@ -23,23 +23,35 @@ def write_config(tmp_path: Path, *, markers: list[str] | None = None) -> Path:
     config_dir = tmp_path / "experiment"
     (config_dir / "inputs").mkdir(parents=True)
     (config_dir / "inputs" / "20180415T000000Z.bufr").write_bytes(b"bufr")
-    header = "MetaData\\nObsValue\\nObsError\\nPreQC"
+    header = "MetaData\nObsValue\nObsError\nPreQC"
     content = {
         "obs2ioda": {
-            "work_dir": "work/obs2ioda/{cycle_id}",
+            "variables": {
+                "converter_python": sys.executable,
+                "input_root": "inputs",
+                "output_root": "work/obs2ioda",
+            },
+            "work_dir": "{output_root}/{cycle_id}",
             "provenance": {"sha256": True},
+            "probes": [
+                {
+                    "name": "converter-interface",
+                    "argv": ["{converter_python}", "-c", "print('probe-ok')"],
+                    "required_output_markers": ["probe-ok"],
+                }
+            ],
             "inspection": {
-                "argv": [sys.executable, "-c", f"print({header!r})", "{output}"],
+                "argv": ["{converter_python}", "-c", f"print({header!r})", "{output}"],
                 "required_header_markers": markers or ["MetaData", "ObsValue", "ObsError", "PreQC"],
                 "timeout_seconds": 10,
             },
             "converters": [
                 {
                     "name": "sample",
-                    "inputs": ["inputs/{cycle_id}.bufr"],
+                    "inputs": ["{input_root}/{cycle_id}.bufr"],
                     "outputs": ["{work_dir}/sample.nc4"],
                     "argv": [
-                        sys.executable,
+                        "{converter_python}",
                         "-c",
                         "from pathlib import Path; Path(r'{work_dir}/sample.nc4').write_bytes(b'ioda')",
                     ],
@@ -56,11 +68,13 @@ def test_operational_obs2ioda_records_provenance_and_validates(tmp_path: Path) -
 
     doctor = json.loads(doctor_obs2ioda(config_dir, CYCLE).read_text())
     assert doctor["valid"] is True
+    assert doctor["probes"][0]["valid"] is True
 
     run = prepare_obs2ioda(config_dir, CYCLE)
     manifest = json.loads(run.manifest_path.read_text())
     assert manifest["input_records"]["sample"][0]["sha256"]
     assert manifest["plan_sha256"]
+    assert manifest["converters"][0]["argv"][0] == sys.executable
 
     run_obs2ioda(config_dir, CYCLE)
     report = json.loads(validate_obs2ioda(config_dir, CYCLE).read_text())
