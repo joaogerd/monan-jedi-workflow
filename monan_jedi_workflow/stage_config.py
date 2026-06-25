@@ -35,6 +35,36 @@ def render_text(value: str, context: dict[str, str], *, label: str) -> str:
         ) from error
 
 
+def render_declared_variables(
+    section: dict[str, Any],
+    context: dict[str, str],
+    *,
+    label: str,
+) -> dict[str, str]:
+    """Extend a cycle context with ordered, string-only YAML variables.
+
+    Variables are rendered in declaration order. A variable may reference the
+    standard cycle fields and variables declared above it, but it may not
+    replace a standard field such as ``cycle_id`` or ``work_dir``.
+    """
+    variables = section.get("variables", {})
+    if variables is None:
+        variables = {}
+    if not isinstance(variables, dict):
+        raise StageConfigurationError(f"{label}.variables must be a mapping.")
+
+    rendered = dict(context)
+    for name, value in variables.items():
+        if not isinstance(name, str) or not name:
+            raise StageConfigurationError(f"{label}.variables keys must be non-empty strings.")
+        if name in rendered:
+            raise StageConfigurationError(
+                f"{label}.variables may not replace reserved context field {name!r}."
+            )
+        rendered[name] = render_text(value, rendered, label=f"{label}.variables.{name}")
+    return rendered
+
+
 def resolve_path(value: str, *, config_dir: Path, context: dict[str, str], label: str) -> Path:
     """Render a path and resolve relative paths from the experiment directory."""
     rendered = Path(render_text(value, context, label=label))
