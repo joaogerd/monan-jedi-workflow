@@ -1,0 +1,48 @@
+# Perfil de validação PREPBUFR do tutorial NCAR de 2018-04-15 00 UTC.
+#
+# O teste no JACI produziu e validou as seis coleções abaixo. Este perfil é
+# intencionalmente estrito para detectar regressões do conversor ou do ambiente.
+
+obs2ioda:
+  variables:
+    workflow_root: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow
+    obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
+    prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
+
+    prepbufr_input: /p/projetos/monan_das/USUARIO/external-inputs/mpasjedi_tutorial202509NCAR/obs_bufr/2018041500/prepbufr.gdas.20180415.t00z.nr.48h
+    output_root: /p/projetos/monan_das/USUARIO/work/obs2ioda-tutorial
+
+  work_dir: "{output_root}/{cycle_yyyymmddhh}"
+
+  inspection:
+    argv: [ncdump, -h, "{output}"]
+    timeout_seconds: 60
+    required_header_markers:
+      - MetaData
+      - ObsValue
+      - ObsError
+      - PreQC
+
+  provenance:
+    sha256: true
+
+  converters:
+    - name: prepbufr-conventional-tutorial
+      inputs:
+        - "{prepbufr_input}"
+        - "{prepbufr_runner}"
+      outputs:
+        - "{work_dir}/sondes_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/aircraft_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/sfc_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/satwind_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/profiler_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/ascat_obs_{cycle_yyyymmddhh}.h5"
+      timeout_seconds: 1800
+      argv:
+        - bash
+        - "{prepbufr_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
+        - --input
+        - "{prepbufr_input}"
