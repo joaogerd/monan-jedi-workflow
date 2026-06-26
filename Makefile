@@ -1,5 +1,6 @@
 PYTHON ?= python
 CONFIG_DIR ?= configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
+PYTEST_REPORT ?= build/pytest.xml
 
 .PHONY: help install test validate render-yaml render-pbs
 
@@ -19,7 +20,8 @@ install:
 	$(PYTHON) -m pip install -e . pytest
 
 test:
-	$(PYTHON) -m pytest -q --tb=short
+	mkdir -p $(dir $(PYTEST_REPORT))
+	$(PYTHON) -m pytest -q --tb=short --junitxml=$(PYTEST_REPORT)
 
 validate:
 	$(PYTHON) -m monan_jedi_workflow.cli validate-config $(CONFIG_DIR)
