@@ -1,37 +1,24 @@
-# Copie este arquivo para obs2ioda.yaml e preencha somente os valores locais.
+# Perfil PREPBUFR -> IODA que exige somente a coleção de sondagens.
 #
-# O wrapper de conversão é intencional: a interface do conversor de sondagem
-# precisa ser a que foi validada no JACI para a versão publicada do Obs2IODA.
-# O pipeline registra a chamada efetiva, entradas, saídas, logs e inspeção IODA.
+# Use este perfil quando a assimilação requer sondagens e o PREPBUFR do ciclo
+# realmente contém esse tipo observacional. Para o teste operacional de
+# 2026-06-26T00:00:00Z, por exemplo, este perfil deve falhar corretamente:
+# aquele PREPBUFR continha somente observações de superfície após o QC.
 
 obs2ioda:
   variables:
-    # Executável publicado pelo bundle MONAN-JEDI.
-    obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi/bin/obs2ioda_v3
+    workflow_root: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow
+    obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
+    prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
 
-    # Inspecionador NetCDF/HDF5 disponível no ambiente de execução.
-    ncdump_executable: ncdump
-
-    # Wrapper local que encapsula a chamada comprovada para sondagens.
-    sonde_converter: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow/scripts/obs2ioda/convert_sondes.sh
-
-    # Raiz com arquivos de entrada por ciclo; ajustar ao catálogo adotado.
-    sonde_input_root: /p/projetos/monan_das/USUARIO/data/observations/sondes
-
-    # Área de produtos versionada para este caso de conversão.
+    # Ajuste para o arquivo PREPBUFR associado ao ciclo escolhido.
+    prepbufr_input: /p/caminho/para/prepbufr.bufr
     output_root: /p/projetos/monan_das/USUARIO/work/obs2ioda-sondes
 
-  work_dir: "{output_root}/{cycle_id}"
-
-  # Probes são opcionais. Só mantenha comandos que funcionem na instalação local.
-  probes:
-    - name: obs2ioda-interface
-      argv: ["{obs2ioda_executable}", "--help"]
-      required_output_markers: []
-      timeout_seconds: 30
+  work_dir: "{output_root}/{cycle_yyyymmddhh}"
 
   inspection:
-    argv: ["{ncdump_executable}", -h, "{output}"]
+    argv: [ncdump, -h, "{output}"]
     required_header_markers:
       - MetaData
       - ObsValue
@@ -39,26 +26,21 @@ obs2ioda:
       - PreQC
     timeout_seconds: 60
 
-  # SHA-256 é útil para rastreabilidade, mas pode ser caro para grandes volumes.
   provenance:
     sha256: false
 
   converters:
-    - name: sondes
+    - name: prepbufr-sondes
       inputs:
-        - "{sonde_input_root}/{cycle_id}.bufr"
+        - "{prepbufr_input}"
+        - "{prepbufr_runner}"
       outputs:
-        - "{work_dir}/sondes.nc4"
+        - "{work_dir}/sondes_obs_{cycle_yyyymmddhh}.h5"
       timeout_seconds: 900
       argv:
-        - "{sonde_converter}"
+        - bash
+        - "{prepbufr_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
         - --input
-        - "{sonde_input_root}/{cycle_id}.bufr"
-        - --output
-        - "{work_dir}/sondes.nc4"
-      validation:
-        required_header_markers:
-          - MetaData
-          - ObsValue
-          - ObsError
-          - PreQC
+        - "{prepbufr_input}"
