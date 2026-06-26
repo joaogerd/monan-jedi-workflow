@@ -4,10 +4,14 @@
 
 ```text
 mpas-prepare CONFIG_DIR --cycle TIME
-mpas-submit CONFIG_DIR --cycle TIME --wait
+mpas-submit CONFIG_DIR --cycle TIME
+mpas-wait CONFIG_DIR --cycle TIME
 mpas-validate CONFIG_DIR --cycle TIME
+
+obs2ioda-doctor CONFIG_DIR --cycle TIME
 obs2ioda-prepare CONFIG_DIR --cycle TIME
 obs2ioda-run CONFIG_DIR --cycle TIME
+obs2ioda-validate CONFIG_DIR --cycle TIME
 ```
 
 Os comandos usam dois arquivos opcionais no diretório do experimento:
@@ -17,18 +21,25 @@ mpas.yaml
 obs2ioda.yaml
 ```
 
-Os dois aceitam os placeholders abaixo:
+## Contexto de ciclo
+
+Os dois arquivos aceitam os placeholders abaixo:
 
 ```text
-{cycle_time}      2018-04-15T00:00:00Z
-{cycle_id}        20180415T000000Z
-{mpas_time}       2018-04-15_00:00:00
-{valid_time}      instante após lead_hours
-{valid_id}        identificador UTC do instante válido
-{mpas_valid_time} instante válido no formato MPAS
-{lead_hours}      duração configurada do forecast
-{run_dir}         diretório resolvido da etapa
-{work_dir}        diretório resolvido do Obs2IODA
+{cycle_time}       2018-04-15T00:00:00Z
+{cycle_id}         20180415T000000Z
+{cycle_yyyymmddhh} 2018041500
+{cycle_year}       2018
+{cycle_month}      04
+{cycle_day}        15
+{cycle_hour}       00
+{mpas_time}        2018-04-15_00:00:00
+{valid_time}       instante após lead_hours
+{valid_id}         identificador UTC do instante válido
+{mpas_valid_time}  instante válido no formato MPAS
+{lead_hours}       duração configurada do forecast
+{run_dir}          diretório resolvido da etapa MPAS
+{work_dir}         diretório resolvido do Obs2IODA
 ```
 
 ## `mpas.yaml`
@@ -79,54 +90,81 @@ mpas:
       - mpasout.{mpas_valid_time}.nc
 ```
 
-`links` adapta a preparação concreta do MPAS existente no `mpaswf`: executável, condição inicial, malha, grafo, partição e arquivos de suporte ficam explícitos. Os templates devem conter os placeholders necessários para `config_start_time`, duração, streams `da_state` e arquivos de saída.
+`links` adapta a preparação concreta do MPAS: executável, condição inicial, malha, grafo, partição e arquivos de suporte ficam explícitos. Os templates devem conter os placeholders necessários para `config_start_time`, duração, streams `da_state` e arquivos de saída.
 
-## `obs2ioda.yaml`
+## `obs2ioda.yaml` com PREPBUFR
+
+O `obs2ioda_v3` testado no JACI não recebe uma interface genérica de `--input` e `--output`. Ele procura o nome fixo `./prepbufr.bufr` no diretório de trabalho e escreve as coleções IODA nesse mesmo diretório.
+
+O wrapper rastreável `scripts/obs2ioda/run_prepbufr.sh` cria ou verifica esse link e chama o binário sem argumentos:
 
 ```yaml
 obs2ioda:
-  work_dir: build/obs2ioda/{cycle_id}
+  variables:
+    workflow_root: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow
+    obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
+    prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
+
+    prepbufr_root: /oper/dados/bdados/assimila/gdas
+    prepbufr_input: "{prepbufr_root}/{cycle_year}/{cycle_month}/{cycle_day}/inpe.t{cycle_hour}z.prepbufr.nr"
+    output_root: /p/projetos/monan_das/USUARIO/work/obs2ioda-operational
+
+  work_dir: "{output_root}/{cycle_yyyymmddhh}"
+
+  inspection:
+    argv: [ncdump, -h, "{output}"]
+    required_header_markers: [MetaData, ObsValue, ObsError, PreQC]
+    timeout_seconds: 60
+
   converters:
-    - name: sondes
+    - name: prepbufr-surface
       inputs:
-        - /dados/obs/sondes/{cycle_id}.bufr
+        - "{prepbufr_input}"
+        - "{prepbufr_runner}"
       outputs:
-        - "{work_dir}/sondes.nc4"
+        - "{work_dir}/sfc_obs_{cycle_yyyymmddhh}.h5"
+      timeout_seconds: 900
       argv:
-        - /instalacoes/obs2ioda/bin/obs2ioda_v3
+        - bash
+        - "{prepbufr_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
         - --input
-        - /dados/obs/sondes/{cycle_id}.bufr
-        - --output
-        - "{work_dir}/sondes.nc4"
+        - "{prepbufr_input}"
 ```
 
-Cada conversor mantém seus próprios logs em `build/obs2ioda/<cycle-id>/logs/`. Uma nova execução pula conversores cujos produtos obrigatórios já existam e não estejam vazios; `--force` reexecuta todos os conversores daquele ciclo.
+A lista de produtos é parte do contrato de cada caso. O PREPBUFR tutorial de 2018-04-15 produziu seis coleções (`sondes`, `aircraft`, `sfc`, `satwind`, `profiler` e `ascat`); o PREPBUFR operacional testado em 2026-06-26 00 UTC produziu somente `sfc_obs_2026062600.h5`. A ausência de uma coleção não é, por si só, erro do conversor.
+
+Cada conversor mantém logs e manifestos em `<work_dir>/logs/` e `<work_dir>/.monan-jedi-workflow/`. Uma nova execução pula conversores cujos produtos obrigatórios já existam e não estejam vazios; `--force` reexecuta todos os conversores daquele ciclo.
 
 ## Uso no `simpleWorkflow`
 
-A DAG de pesquisa continua curta:
+O template pronto está em:
+
+```text
+examples/simpleworkflow/mpas_obs2ioda_cycle/workflow.yaml.example
+```
+
+A DAG por ciclo é:
+
+```text
+mpas_prepare
+  -> mpas_submit ──────────────┐
+                                ├-> mpas_wait -> mpas_validate
+obs_doctor -> obs_prepare -> obs_run -> obs_validate ┘
+```
+
+`mpas_submit` não usa `--wait`: o job PBS é submetido e o processo local continua com Obs2IODA. Quando as observações estiverem validadas, `mpas_wait` acompanha o job MPAS e `mpas_validate` verifica os produtos declarados.
+
+Para um período de pesquisa, o bloco genérico de ciclos é:
 
 ```yaml
 cycle:
-  start: 2018-04-15T00:00:00Z
-  end: 2018-04-30T18:00:00Z
+  start: "2018-04-15T00:00:00Z"
+  end: "2018-04-30T18:00:00Z"
   step: PT6H
-
-tasks:
-  - name: prepare_mpas
-    argv: [monan-jedi-workflow, mpas-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
-
-  - name: run_mpas
-    depends_on: [prepare_mpas]
-    argv: [monan-jedi-workflow, mpas-submit, "{experiment_dir}", --cycle, "{cycle_time}", --wait]
-
-  - name: prepare_obs
-    depends_on: [run_mpas]
-    argv: [monan-jedi-workflow, obs2ioda-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
-
-  - name: run_obs
-    depends_on: [prepare_obs]
-    argv: [monan-jedi-workflow, obs2ioda-run, "{experiment_dir}", --cycle, "{cycle_time}"]
 ```
 
-A posição relativa dessas tarefas em relação ao 3DVar/FGAT depende do experimento: para assimilação, as observações precisam estar prontas antes de `render-yaml` e `submit --wait`; para geração de ciclos de fundo, o MPAS pode produzir o estado que alimentará o ciclo posterior.
+O `simpleWorkflow` executa os ciclos sequencialmente e mantém estado e logs distintos por `cycle_id`. Use `--cycle-time`, `--from`, `--to` e `--step` para limitar ou substituir temporariamente o período sem alterar o YAML.
+
+A posição do JEDI deve ser posterior a `mpas_validate` e `obs_validate`, mas a integração cíclica do JEDI ainda requer comandos próprios que recebam `--cycle`. Os comandos estáticos `prepare-runtime`, `render-yaml`, `render-pbs`, `submit --wait` e `validate-run` não devem ser usados como etapa multi-ciclo até essa adaptação.
