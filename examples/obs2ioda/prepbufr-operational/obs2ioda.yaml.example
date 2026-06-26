@@ -1,0 +1,45 @@
+# Caso operacional PREPBUFR -> IODA para o diretório /oper do JACI.
+#
+# Este perfil exige somente superfície porque o teste de 2026-06-26T00:00:00Z
+# produziu sfc_obs_2026062600.h5 e não produziu outras coleções convencionais.
+# Ajuste explicitamente a lista outputs quando outro produto for requisito do caso.
+
+obs2ioda:
+  variables:
+    workflow_root: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow
+    obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
+    prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
+
+    prepbufr_root: /oper/dados/bdados/assimila/gdas
+    prepbufr_input: "{prepbufr_root}/{cycle_year}/{cycle_month}/{cycle_day}/inpe.t{cycle_hour}z.prepbufr.nr"
+    output_root: /p/projetos/monan_das/USUARIO/work/obs2ioda-operational
+
+  work_dir: "{output_root}/{cycle_yyyymmddhh}"
+
+  inspection:
+    argv: [ncdump, -h, "{output}"]
+    timeout_seconds: 60
+    required_header_markers:
+      - MetaData
+      - ObsValue
+      - ObsError
+      - PreQC
+
+  provenance:
+    sha256: false
+
+  converters:
+    - name: prepbufr-surface
+      inputs:
+        - "{prepbufr_input}"
+        - "{prepbufr_runner}"
+      outputs:
+        - "{work_dir}/sfc_obs_{cycle_yyyymmddhh}.h5"
+      timeout_seconds: 900
+      argv:
+        - bash
+        - "{prepbufr_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
+        - --input
+        - "{prepbufr_input}"
