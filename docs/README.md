@@ -14,6 +14,7 @@ O objetivo é registrar, de forma clara e reproduzível, o que entra no processo
 6. [Entradas e saídas](entradas-e-saidas.md)
 7. [Diagnóstico e logs](diagnostico-e-logs.md)
 8. [Pipeline operacional Obs2IODA](obs2ioda-pipeline.md)
+9. [Obs2IODA com PREPBUFR no JACI](obs2ioda-prepbufr.md)
 
 ## Fluxo resumido
 
@@ -41,7 +42,7 @@ python3 -m monan_jedi_workflow.cli validate-run \
   configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
 ```
 
-O Obs2IODA pode ser preparado e validado independentemente por ciclo antes de integrá-lo a esse caso. Consulte o documento específico para o contrato de conversão e validação.
+O Obs2IODA pode ser preparado e validado independentemente por ciclo antes de integrá-lo a esse caso. Consulte os documentos específicos para o contrato de conversão e para o comportamento testado com PREPBUFR no JACI.
 
 ## Conceito central
 

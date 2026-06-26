@@ -1,9 +1,8 @@
-# Perfil PREPBUFR -> IODA que exige somente a coleção de sondagens.
+# Caso operacional PREPBUFR -> IODA para o diretório /oper do JACI.
 #
-# Use este perfil quando a assimilação requer sondagens e o PREPBUFR do ciclo
-# realmente contém esse tipo observacional. Para o teste operacional de
-# 2026-06-26T00:00:00Z, por exemplo, este perfil deve falhar corretamente:
-# aquele PREPBUFR continha somente observações de superfície após o QC.
+# Este perfil exige somente superfície porque o teste de 2026-06-26T00:00:00Z
+# produziu sfc_obs_2026062600.h5 e não produziu outras coleções convencionais.
+# Ajuste explicitamente a lista outputs quando outro produto for requisito do caso.
 
 obs2ioda:
   variables:
@@ -11,31 +10,31 @@ obs2ioda:
     obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
     prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
 
-    # Ajuste para o arquivo PREPBUFR associado ao ciclo escolhido.
-    prepbufr_input: /p/caminho/para/prepbufr.bufr
-    output_root: /p/projetos/monan_das/USUARIO/work/obs2ioda-sondes
+    prepbufr_root: /oper/dados/bdados/assimila/gdas
+    prepbufr_input: "{prepbufr_root}/{cycle_year}/{cycle_month}/{cycle_day}/inpe.t{cycle_hour}z.prepbufr.nr"
+    output_root: /p/projetos/monan_das/USUARIO/work/obs2ioda-operational
 
   work_dir: "{output_root}/{cycle_yyyymmddhh}"
 
   inspection:
     argv: [ncdump, -h, "{output}"]
+    timeout_seconds: 60
     required_header_markers:
       - MetaData
       - ObsValue
       - ObsError
       - PreQC
-    timeout_seconds: 60
 
   provenance:
     sha256: false
 
   converters:
-    - name: prepbufr-sondes
+    - name: prepbufr-surface
       inputs:
         - "{prepbufr_input}"
         - "{prepbufr_runner}"
       outputs:
-        - "{work_dir}/sondes_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/sfc_obs_{cycle_yyyymmddhh}.h5"
       timeout_seconds: 900
       argv:
         - bash

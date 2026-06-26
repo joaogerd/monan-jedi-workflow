@@ -38,6 +38,11 @@ class CycleContext:
         return {
             "cycle_time": self.cycle_time,
             "cycle_id": self.cycle_id,
+            "cycle_yyyymmddhh": self.value.strftime("%Y%m%d%H"),
+            "cycle_year": self.value.strftime("%Y"),
+            "cycle_month": self.value.strftime("%m"),
+            "cycle_day": self.value.strftime("%d"),
+            "cycle_hour": self.value.strftime("%H"),
             "mpas_time": self.mpas_time,
             "valid_time": valid.isoformat(timespec="seconds").replace("+00:00", "Z"),
             "valid_id": valid.strftime("%Y%m%dT%H%M%SZ"),
