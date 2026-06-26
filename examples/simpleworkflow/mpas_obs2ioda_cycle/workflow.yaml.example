@@ -1,0 +1,66 @@
+# Template de orquestração cíclica MPAS + PREPBUFR/Obs2IODA.
+#
+# Copie este arquivo para o diretório do caso, substitua USUARIO e ajuste o
+# período. O diretório indicado por experiment_dir deve conter mpas.yaml e
+# obs2ioda.yaml. Carregue o ambiente JACI antes de chamar simpleworkflow.
+
+workflow:
+  name: monan_mpas_obs2ioda_x1_10242
+
+context:
+  experiment_dir: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow/cases/mpas_obs2ioda_x1.10242
+
+cycle:
+  start: "2026-06-26T00:00:00Z"
+  end: "2026-06-26T12:00:00Z"
+  step: PT6H
+
+tasks:
+  # Prepara links, namelist, streams, PBS e o manifesto MPAS do ciclo.
+  - name: mpas_prepare
+    argv: [monan-jedi-workflow, mpas-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
+    inputs:
+      required:
+        - "{experiment_dir}/mpas.yaml"
+
+  # Submete e retorna após obter o Job ID. Não use --wait aqui: Obs2IODA
+  # pode executar enquanto o job MPAS aguarda ou executa no PBS.
+  - name: mpas_submit
+    depends_on: [mpas_prepare]
+    argv: [monan-jedi-workflow, mpas-submit, "{experiment_dir}", --cycle, "{cycle_time}"]
+
+  - name: obs_doctor
+    argv: [monan-jedi-workflow, obs2ioda-doctor, "{experiment_dir}", --cycle, "{cycle_time}"]
+    inputs:
+      required:
+        - "{experiment_dir}/obs2ioda.yaml"
+
+  - name: obs_prepare
+    depends_on: [obs_doctor]
+    argv: [monan-jedi-workflow, obs2ioda-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
+
+  - name: obs_run
+    depends_on: [obs_prepare]
+    argv: [monan-jedi-workflow, obs2ioda-run, "{experiment_dir}", --cycle, "{cycle_time}"]
+
+  - name: obs_validate
+    depends_on: [obs_run]
+    argv: [monan-jedi-workflow, obs2ioda-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
+
+  # Esta dependência propositalmente deixa Obs2IODA acontecer entre a
+  # submissão e a espera do MPAS. O workflow continua sequencial no nó de
+  # login, mas há sobreposição com o job PBS já submetido.
+  - name: mpas_wait
+    depends_on: [mpas_submit, obs_validate]
+    argv:
+      - monan-jedi-workflow
+      - mpas-wait
+      - "{experiment_dir}"
+      - --cycle
+      - "{cycle_time}"
+      - --poll-seconds
+      - "30"
+
+  - name: mpas_validate
+    depends_on: [mpas_wait]
+    argv: [monan-jedi-workflow, mpas-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
