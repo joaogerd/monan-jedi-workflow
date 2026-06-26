@@ -1,0 +1,29 @@
+mpas_init:
+  variables:
+    install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
+    mesh: x1.10242
+    nproc: "128"
+    mesh_root: /p/projetos/monan_das/USUARIO/projects/mpas_meshes/quasi_uniform/x1.10242_240km
+    wps_file: /p/projetos/monan_das/USUARIO/work/monan-jedi-workflow/wps/{cycle_yyyymmddhh}/FILE:{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}
+    output_root: /p/projetos/monan_das/USUARIO/work/monan-jedi-workflow/mpas_init
+  run_dir: "{output_root}/{cycle_yyyymmddhh}"
+  links:
+    - {source: "{install}/bin/mpas_init_atmosphere", target: mpas_init_atmosphere}
+    - {source: "{mesh_root}/mesh/{mesh}.grid.nc", target: "{mesh}.grid.nc"}
+    - {source: "{mesh_root}/graph/{mesh}.graph.info", target: "{mesh}.graph.info"}
+    - {source: "{mesh_root}/partitions/{mesh}.graph.info.part.{nproc}", target: "{mesh}.graph.info.part.{nproc}"}
+    - {source: "{wps_file}", target: "FILE:{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}"}
+  templates:
+    - {source: templates/namelist.init_atmosphere.in, target: namelist.init_atmosphere}
+    - {source: templates/streams.init_atmosphere.in, target: streams.init_atmosphere}
+  pbs:
+    queue: pesqmini
+    ncpus: 128
+    mpiprocs: 128
+    walltime: "00:30:00"
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    command: [./mpas_init_atmosphere]
+  validation:
+    log: log.init_atmosphere.0000.out
+    required_log_markers: ["Critical error messages =            0", "Error messages =                     0"]
+    required_outputs: ["{run_dir}/{mesh}.init.{mpas_file_time}.nc"]
