@@ -19,7 +19,7 @@ install:
 	$(PYTHON) -m pip install -e . pytest
 
 test:
-	$(PYTHON) -m pytest
+	$(PYTHON) -m pytest -q --tb=short
 
 validate:
 	$(PYTHON) -m monan_jedi_workflow.cli validate-config $(CONFIG_DIR)
