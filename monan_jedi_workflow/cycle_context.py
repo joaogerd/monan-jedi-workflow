@@ -28,6 +28,10 @@ class CycleContext:
     def mpas_time(self) -> str:
         return self.value.strftime("%Y-%m-%d_%H:%M:%S")
 
+    @property
+    def mpas_file_time(self) -> str:
+        return self.value.strftime("%Y-%m-%d_%H.%M.%S")
+
     def valid_time(self, lead_hours: int) -> datetime:
         if lead_hours < 0:
             raise CycleTimeError("lead_hours must not be negative.")
@@ -44,9 +48,12 @@ class CycleContext:
             "cycle_day": self.value.strftime("%d"),
             "cycle_hour": self.value.strftime("%H"),
             "mpas_time": self.mpas_time,
+            "mpas_file_time": self.mpas_file_time,
             "valid_time": valid.isoformat(timespec="seconds").replace("+00:00", "Z"),
             "valid_id": valid.strftime("%Y%m%dT%H%M%SZ"),
             "mpas_valid_time": valid.strftime("%Y-%m-%d_%H:%M:%S"),
+            "mpas_valid_file_time": valid.strftime("%Y-%m-%d_%H.%M.%S"),
+            "mpas_run_duration": f"{lead_hours // 24}_{lead_hours % 24:02d}:00:00",
             "lead_hours": str(lead_hours),
         }
 
