@@ -2,7 +2,6 @@ workflow:
   name: monan_wps_mpas_init_obs_x1_10242
 
 context:
-  python: python
   experiment_dir: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow/cases/x1_10242_operational
 
 cycle:
@@ -12,31 +11,31 @@ cycle:
 
 tasks:
   - name: wps_prepare
-    argv: ["{python}", -m, monan_jedi_workflow.cli_extended, wps-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
+    argv: [monan-jedi-workflow, wps-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
 
   - name: wps_run
     depends_on: [wps_prepare]
-    argv: ["{python}", -m, monan_jedi_workflow.cli_extended, wps-run, "{experiment_dir}", --cycle, "{cycle_time}"]
+    argv: [monan-jedi-workflow, wps-run, "{experiment_dir}", --cycle, "{cycle_time}"]
 
   - name: wps_validate
     depends_on: [wps_run]
-    argv: ["{python}", -m, monan_jedi_workflow.cli_extended, wps-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
+    argv: [monan-jedi-workflow, wps-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
 
   - name: mpas_init_prepare
     depends_on: [wps_validate]
-    argv: ["{python}", -m, monan_jedi_workflow.cli_extended, mpas-init-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
+    argv: [monan-jedi-workflow, mpas-init-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
 
   - name: mpas_init_submit
     depends_on: [mpas_init_prepare]
-    argv: ["{python}", -m, monan_jedi_workflow.cli_extended, mpas-init-submit, "{experiment_dir}", --cycle, "{cycle_time}"]
+    argv: [monan-jedi-workflow, mpas-init-submit, "{experiment_dir}", --cycle, "{cycle_time}"]
 
   - name: mpas_init_wait
     depends_on: [mpas_init_submit]
-    argv: ["{python}", -m, monan_jedi_workflow.cli_extended, mpas-init-wait, "{experiment_dir}", --cycle, "{cycle_time}", --poll-seconds, "30"]
+    argv: [monan-jedi-workflow, mpas-init-wait, "{experiment_dir}", --cycle, "{cycle_time}", --poll-seconds, "30"]
 
   - name: mpas_init_validate
     depends_on: [mpas_init_wait]
-    argv: ["{python}", -m, monan_jedi_workflow.cli_extended, mpas-init-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
+    argv: [monan-jedi-workflow, mpas-init-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
 
   - name: mpas_prepare
     depends_on: [mpas_init_validate]
