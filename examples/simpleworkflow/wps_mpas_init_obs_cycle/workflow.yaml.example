@@ -45,7 +45,11 @@ tasks:
     depends_on: [mpas_prepare]
     argv: [monan-jedi-workflow, mpas-submit, "{experiment_dir}", --cycle, "{cycle_time}"]
 
+  - name: obs_doctor
+    argv: [monan-jedi-workflow, obs2ioda-doctor, "{experiment_dir}", --cycle, "{cycle_time}"]
+
   - name: obs_prepare
+    depends_on: [obs_doctor]
     argv: [monan-jedi-workflow, obs2ioda-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
 
   - name: obs_run
