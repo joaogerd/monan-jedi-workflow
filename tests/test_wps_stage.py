@@ -1,45 +1,42 @@
 from __future__ import annotations
 
+import json
+import sys
 from pathlib import Path
 
 from monan_jedi_workflow.wps_stage import prepare_wps, run_wps, validate_wps
 
 
-def _executable(path: Path, content: str) -> None:
-    path.write_text("#!/usr/bin/env bash\nset -euo pipefail\n" + content, encoding="utf-8")
-    path.chmod(0o755)
-
-
 def test_wps_stage_converts_declared_input_and_validates(tmp_path: Path) -> None:
-    tools = tmp_path / "tools"
-    tools.mkdir()
     input_file = tmp_path / "input.grib2"
     input_file.write_bytes(b"grib")
-    link = tools / "link_grib.csh"
-    ungrib = tools / "ungrib.exe"
-    vtable = tools / "Vtable.GFS"
-    vtable.write_text("vtable\n", encoding="utf-8")
-    _executable(link, "ln -sfn \"$1\" GRIBFILE.AAA\n")
-    _executable(ungrib, "test -r GRIBFILE.AAA\nprintf 'wps' > FILE:2018-04-15_00\nprintf 'complete\\n'\n")
     template = tmp_path / "namelist.wps.in"
     template.write_text("start = '{wps_time}'\n", encoding="utf-8")
     config = tmp_path / "case"
     config.mkdir()
+
+    link_code = (
+        "from pathlib import Path; import sys; "
+        "Path('GRIBFILE.AAA').symlink_to(Path(sys.argv[1]))"
+    )
+    ungrib_code = (
+        "from pathlib import Path; "
+        "assert Path('GRIBFILE.AAA').is_file(); "
+        "Path('FILE:2018-04-15_00').write_bytes(b'wps'); "
+        "print('complete')"
+    )
     (config / "wps.yaml").write_text(
         f"""wps:
   variables:
     root: {tmp_path}/work
     input: {input_file}
+    python: {sys.executable}
   work_dir: "{{root}}/{{cycle_yyyymmddhh}}"
-  links:
-    - {{source: {link}, target: link_grib.csh}}
-    - {{source: {ungrib}, target: ungrib.exe}}
-    - {{source: {vtable}, target: Vtable}}
   templates:
     - {{source: {template}, target: namelist.wps}}
   run:
-    link_grib_argv: [./link_grib.csh, "{{input}}"]
-    ungrib_argv: [./ungrib.exe]
+    link_grib_argv: ["{{python}}", -c, {json.dumps(link_code)}, "{{input}}"]
+    ungrib_argv: ["{{python}}", -c, {json.dumps(ungrib_code)}]
   validation:
     log: logs/ungrib.stdout.log
     required_log_markers: [complete]
@@ -52,6 +49,6 @@ def test_wps_stage_converts_declared_input_and_validates(tmp_path: Path) -> None
     run_wps(config, "2018-04-15T00:00:00Z")
     report = validate_wps(config, "2018-04-15T00:00:00Z")
 
-    work = tmp_path / "work" / "20180415T000000Z"
+    work = tmp_path / "work" / "2018041500"
     assert (work / "FILE:2018-04-15_00").read_bytes() == b"wps"
     assert report.is_file()
