@@ -17,7 +17,7 @@ dev = [
 ]
 
 [project.scripts]
-monan-jedi-workflow = "monan_jedi_workflow.cli:main"
+monan-jedi-workflow = "monan_jedi_workflow.cli_extended:main"
 
 [tool.setuptools.packages.find]
 include = ["monan_jedi_workflow*"]

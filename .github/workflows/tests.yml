@@ -35,7 +35,15 @@ jobs:
         run: make install
 
       - name: Run tests
-        run: make test
+        run: python -m pytest --junitxml=pytest-results.xml
+
+      - name: Upload pytest report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.python-version }}
+          path: pytest-results.xml
+          if-no-files-found: error
 
       - name: Check safe workflow targets
         run: |

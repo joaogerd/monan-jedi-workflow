@@ -1,0 +1,49 @@
+# WPS/UNGRIB operational case.
+#
+# The GRIB file is an explicit input. Acquisition is intentionally outside this
+# workflow so every cycle can record its source and checksum independently.
+
+wps:
+  variables:
+    monan_jedi_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
+    wps_root: "{monan_jedi_install}/wps/WPS-4.6.0"
+    ungrib: "{wps_root}/ungrib.exe"
+    link_grib: "{wps_root}/link_grib.csh"
+    vtable_gfs: "{wps_root}/ungrib/Variable_Tables/Vtable.GFS"
+
+    # Replace with the approved source layout for GFS GRIB2 files.
+    grib_input: /CAMINHO/EXPLICITO/gfs.t{cycle_hour}z.pgrb2.0p25.f000
+    output_root: /p/projetos/monan_das/USUARIO/work/monan-jedi-workflow/wps
+
+  work_dir: "{output_root}/{cycle_yyyymmddhh}"
+
+  clean_patterns:
+    - GRIBFILE.*
+    - FILE:*
+    - PFILE:*
+    - Vtable
+    - namelist.wps
+    - ungrib.exe
+    - link_grib.csh
+
+  links:
+    - source: "{ungrib}"
+      target: ungrib.exe
+    - source: "{link_grib}"
+      target: link_grib.csh
+    - source: "{vtable_gfs}"
+      target: Vtable
+
+  templates:
+    - source: namelist.wps.in
+      target: namelist.wps
+
+  run:
+    link_grib_argv: [./link_grib.csh, "{grib_input}"]
+    ungrib_argv: [./ungrib.exe]
+
+  validation:
+    log: logs/ungrib.stdout.log
+    required_log_markers: []
+    required_outputs:
+      - "{work_dir}/FILE:{wps_time}"
