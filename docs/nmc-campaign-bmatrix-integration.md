@@ -55,11 +55,31 @@ início é 48 h antes do primeiro tempo válido. Por isso, quatro pares não
 correspondem simplesmente a “dois dias de dados”: a geometria temporal precisa
 ser calculada a partir dos horários f024/f048.
 
-## Planejamento e entrega
+O `mpas.run_dir` deve incluir `{lead_hours}`. Em campanhas mais longas, o mesmo
+horário de inicialização pode ser usado tanto para um f024 quanto para um f048;
+diretórios separados evitam colisão de `namelist`, `streams`, logs, manifestos e
+produtos.
+
+## Planejamento e execução resumível
 
 ```bash
 # Não baixa, não roda WPS e não submete PBS.
 monan-jedi-workflow nmc-campaign-plan experiments/bmatrix
+
+# Comportamento dry-run: grava apenas o plano da campanha.
+monan-jedi-workflow nmc-campaign-run experiments/bmatrix
+
+# Executa somente a fronteira atual: entradas, WPS quando aplicável e preparação
+# dos inits ou forecasts ainda ausentes. Não submete PBS.
+monan-jedi-workflow nmc-campaign-run experiments/bmatrix --execute
+
+# Permite submissão explícita da fronteira atual; a próxima chamada retoma após
+# os produtos da camada anterior terem sido validados.
+monan-jedi-workflow nmc-campaign-run experiments/bmatrix --execute --submit
+
+# Para campanhas pequenas/smoke, aguarda e valida cada job antes de avançar.
+monan-jedi-workflow nmc-campaign-run experiments/bmatrix \
+  --execute --submit --wait --poll-seconds 30
 
 # Mostra o que já existe e o que falta para cada init, restart e mpasout.
 monan-jedi-workflow nmc-campaign-status experiments/bmatrix
@@ -67,6 +87,11 @@ monan-jedi-workflow nmc-campaign-status experiments/bmatrix
 # Só funciona quando todos os pares possuem restart e mpasout válidos.
 monan-jedi-workflow nmc-campaign-export-manifest experiments/bmatrix --checksum
 ```
+
+O estado é gravado em `products/nmc-campaign/nmc-campaign-execution.json`. Sem
+`--wait`, a execução para após submeter todos os jobs independentes da camada
+atual; isso impede forecasts de iniciarem antes de os `init.nc` correspondentes
+estarem validados.
 
 O último comando cria:
 
