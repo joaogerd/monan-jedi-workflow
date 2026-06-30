@@ -38,6 +38,15 @@ def _add_cycle_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_lead_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--lead-hours",
+        type=int,
+        default=None,
+        help="Override mpas.lead_hours for this run; useful for NMC f024/f048 campaigns.",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="monan-jedi-workflow",
@@ -67,10 +76,13 @@ def build_parser() -> argparse.ArgumentParser:
     mpas_prepare = sub.add_parser("mpas-prepare")
     _add_config_dir(mpas_prepare)
     _add_cycle_argument(mpas_prepare)
+    _add_lead_argument(mpas_prepare)
+    mpas_prepare.add_argument("--force", action="store_true", help="Allow cleanup of declared forecast outputs before preparation.")
 
     mpas_submit = sub.add_parser("mpas-submit")
     _add_config_dir(mpas_submit)
     _add_cycle_argument(mpas_submit)
+    _add_lead_argument(mpas_submit)
     mpas_submit.add_argument("--wait", action="store_true")
     mpas_submit.add_argument("--resubmit", action="store_true")
     _add_wait_options(mpas_submit)
@@ -78,11 +90,13 @@ def build_parser() -> argparse.ArgumentParser:
     mpas_wait = sub.add_parser("mpas-wait")
     _add_config_dir(mpas_wait)
     _add_cycle_argument(mpas_wait)
+    _add_lead_argument(mpas_wait)
     _add_wait_options(mpas_wait)
 
     mpas_validate = sub.add_parser("mpas-validate")
     _add_config_dir(mpas_validate)
     _add_cycle_argument(mpas_validate)
+    _add_lead_argument(mpas_validate)
 
     obs_doctor = sub.add_parser("obs2ioda-doctor")
     _add_config_dir(obs_doctor)
@@ -201,12 +215,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "validate-run":
         return run_validate_run(args.config_dir)
     if args.command == "mpas-prepare":
-        prepare_mpas(args.config_dir, args.cycle)
+        prepare_mpas(args.config_dir, args.cycle, lead_hours=args.lead_hours, force=args.force)
         return 0
     if args.command == "mpas-submit":
         submit_mpas(
             args.config_dir,
             args.cycle,
+            lead_hours=args.lead_hours,
             wait=args.wait,
             resubmit=args.resubmit,
             poll_seconds=args.poll_seconds,
@@ -217,12 +232,13 @@ def main(argv: list[str] | None = None) -> int:
         wait_mpas(
             args.config_dir,
             args.cycle,
+            lead_hours=args.lead_hours,
             poll_seconds=args.poll_seconds,
             timeout_seconds=args.timeout_seconds,
         )
         return 0
     if args.command == "mpas-validate":
-        validate_mpas(args.config_dir, args.cycle)
+        validate_mpas(args.config_dir, args.cycle, lead_hours=args.lead_hours)
         return 0
     if args.command == "obs2ioda-doctor":
         doctor_obs2ioda(args.config_dir, args.cycle)
