@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from monan_jedi_workflow.mpas_pipeline import build_plan, load_pipeline_run, validate_contract
 from monan_jedi_workflow.mpas_stage import prepare_mpas
 
 
@@ -65,3 +66,34 @@ def test_prepare_mpas_stages_links_templates_and_pbs(tmp_path: Path) -> None:
     pbs = run.pbs_path.read_text()
     assert "#PBS -q pesqmini" in pbs
     assert "mpiexec -n 2 ./mpas_atmosphere" in pbs
+
+
+def test_high_level_pipeline_selects_wps_and_validates_local_assets(tmp_path: Path) -> None:
+    mesh = tmp_path / "mesh.nc"
+    initial = tmp_path / "init.2018041500.nc"
+    mesh.write_bytes(b"mesh")
+    initial.write_bytes(b"init")
+    config = tmp_path / "pipeline.yaml"
+    config.write_text(
+        f"""pipeline:
+  work_root: {tmp_path}/work
+  forecast_hours: 6
+  inputs:
+    assets:
+      - name: initial
+        provider: local
+        path: {tmp_path}/init.{{cycle_yyyymmddhh}}.nc
+  static:
+    assets:
+      mesh: {mesh}
+  stages:
+    mode: forecast
+    wps: false
+""",
+        encoding="utf-8",
+    )
+    run = load_pipeline_run(config, "2018-04-15T00:00:00Z")
+    assert validate_contract(run)["valid"] is True
+    plan = build_plan(run)
+    assert [item.name for item in plan] == ["inputs", "static", "wps", "mpas_init", "mpas_forecast"]
+    assert plan[2].enabled is False
