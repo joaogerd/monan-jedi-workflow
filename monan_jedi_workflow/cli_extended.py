@@ -16,6 +16,7 @@ from .nmc_campaign import (
     write_bflow_manifest,
     write_nmc_campaign_plan,
 )
+from .nmc_campaign_runner import execute_nmc_campaign
 from .workflow_plan import (
     build_workflow_plan,
     execute_workflow,
@@ -32,7 +33,7 @@ _NEW = {
     "mpas-init-prepare", "mpas-init-submit", "mpas-init-wait", "mpas-init-validate",
     "input-validate", "input-fetch",
     "workflow-validate", "workflow-plan", "workflow-status", "workflow-run", "prepare-bmatrix",
-    "nmc-campaign-plan", "nmc-campaign-status", "nmc-campaign-export-manifest",
+    "nmc-campaign-plan", "nmc-campaign-status", "nmc-campaign-run", "nmc-campaign-export-manifest",
 }
 
 
@@ -94,6 +95,16 @@ def _parser() -> argparse.ArgumentParser:
     ):
         item = sub.add_parser(name, help=help_text)
         _with_campaign_config(item)
+
+    campaign_run = sub.add_parser("nmc-campaign-run", help="Prepare or submit the next safe NMC campaign frontier.")
+    campaign_run.add_argument("config_dir", type=Path)
+    campaign_run.add_argument("--execute", action="store_true", help="Execute; default only writes the campaign plan.")
+    campaign_run.add_argument("--submit", action="store_true", help="Permit PBS submission for the current init or forecast frontier.")
+    campaign_run.add_argument("--wait", action="store_true", help="Wait and validate each submitted job before advancing.")
+    campaign_run.add_argument("--resubmit", action="store_true", help="Permit replacement of an existing PBS submission.")
+    campaign_run.add_argument("--fetch-inputs", action="store_true", help="Permit download for configured remote input providers.")
+    campaign_run.add_argument("--poll-seconds", type=int, default=30)
+    campaign_run.add_argument("--timeout-seconds", type=int, default=None)
     return parser
 
 
@@ -148,6 +159,21 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "nmc-campaign-export-manifest":
             manifest, report = write_bflow_manifest(campaign, with_checksum=args.checksum)
             _emit({"manifest": str(manifest), "report": str(report), "pairs": len(campaign.pairs)})
+        elif args.command == "nmc-campaign-run":
+            if not args.execute:
+                path = write_nmc_campaign_plan(campaign)
+                _emit({"dry_run": True, "plan": str(path), "pairs": len(campaign.pairs)})
+            else:
+                execution = execute_nmc_campaign(
+                    campaign,
+                    submit=args.submit,
+                    wait=args.wait,
+                    resubmit=args.resubmit,
+                    fetch_inputs=args.fetch_inputs,
+                    poll_seconds=args.poll_seconds,
+                    timeout_seconds=args.timeout_seconds,
+                )
+                _emit({"dry_run": False, "execution": str(execution)})
     else:
         plan = build_workflow_plan(args.config_dir, args.cycle)
         if args.command == "workflow-validate":
