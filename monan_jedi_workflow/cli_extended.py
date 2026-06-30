@@ -9,6 +9,13 @@ from pathlib import Path
 from . import cli as legacy
 from .init_stage import prepare_mpas_init, submit_mpas_init, validate_mpas_init, wait_mpas_init
 from .input_sources import fetch_input_source, resolve_input_source, validate_input_source, write_input_report
+from .nmc_campaign import (
+    bflow_manifest_path,
+    build_nmc_campaign,
+    campaign_status,
+    write_bflow_manifest,
+    write_nmc_campaign_plan,
+)
 from .workflow_plan import (
     build_workflow_plan,
     execute_workflow,
@@ -25,12 +32,18 @@ _NEW = {
     "mpas-init-prepare", "mpas-init-submit", "mpas-init-wait", "mpas-init-validate",
     "input-validate", "input-fetch",
     "workflow-validate", "workflow-plan", "workflow-status", "workflow-run", "prepare-bmatrix",
+    "nmc-campaign-plan", "nmc-campaign-status", "nmc-campaign-export-manifest",
 }
 
 
 def _with_cycle(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("config_dir", type=Path)
     parser.add_argument("--cycle", required=True, help="Timezone-aware ISO-8601 cycle, e.g. 2018-04-15T00:00:00Z.")
+
+
+def _with_campaign_config(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("config_dir", type=Path)
+    parser.add_argument("--checksum", action="store_true", help="Include SHA-256 values in the status/provenance report.")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -71,6 +84,16 @@ def _parser() -> argparse.ArgumentParser:
     workflow_run.add_argument("--submit", action="store_true", help="Permit explicit PBS submission after preparation.")
     workflow_run.add_argument("--resubmit", action="store_true", help="Permit replacing a prior scheduler submission.")
     workflow_run.add_argument("--fetch-inputs", action="store_true", help="Permit explicit retrieval for remote configured providers.")
+
+    campaign_plan = sub.add_parser("nmc-campaign-plan", help="Resolve all GFS/WPS/init/f024/f048 requirements without executing them.")
+    _with_campaign_config(campaign_plan)
+    campaign_plan.add_argument("--force", action="store_true", help="Replace a prior campaign plan with a changed fingerprint.")
+    for name, help_text in (
+        ("nmc-campaign-status", "Report missing input, restart and da_state products for the campaign."),
+        ("nmc-campaign-export-manifest", "Write the tab-separated BFLOW manifest after all pairs are complete."),
+    ):
+        item = sub.add_parser(name, help=help_text)
+        _with_campaign_config(item)
     return parser
 
 
@@ -106,6 +129,25 @@ def main(argv: list[str] | None = None) -> int:
             report = validate_input_source(source, with_checksum=args.checksum)
             path = write_input_report(args.config_dir, source, report)
             _emit({"report": str(path), **report})
+    elif args.command.startswith("nmc-campaign-"):
+        campaign = build_nmc_campaign(args.config_dir)
+        if args.command == "nmc-campaign-plan":
+            path = write_nmc_campaign_plan(campaign, force=args.force)
+            _emit(
+                {
+                    "plan": str(path),
+                    "fingerprint": campaign.fingerprint,
+                    "initializations": len(campaign.initializations),
+                    "pairs": len(campaign.pairs),
+                    "minimum_pairs": campaign.minimum_pairs,
+                    "bflow_manifest": str(bflow_manifest_path(campaign)),
+                }
+            )
+        elif args.command == "nmc-campaign-status":
+            _emit(campaign_status(campaign, with_checksum=args.checksum))
+        elif args.command == "nmc-campaign-export-manifest":
+            manifest, report = write_bflow_manifest(campaign, with_checksum=args.checksum)
+            _emit({"manifest": str(manifest), "report": str(report), "pairs": len(campaign.pairs)})
     else:
         plan = build_workflow_plan(args.config_dir, args.cycle)
         if args.command == "workflow-validate":
