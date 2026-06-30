@@ -1,0 +1,23 @@
+workflow:
+  # prepare: inputs + optional initialization; forecast: preparation and model;
+  # cycle: forecast/background plus MPAS-JEDI; bmatrix: MPAS products + hand-off.
+  mode: cycle
+  mesh: x1.10242
+  input_source: gfs_grib2
+
+  # auto uses UNGRIB only for GRIB-family inputs. Set always or never only when
+  # the declared source contract requires an explicit override.
+  use_wps: auto
+
+  # Omitted stages use the safe defaults for the selected mode.
+  stages:
+    mpas_init: true
+    forecast: true
+    assimilation: true
+
+  # Used only in mode: bmatrix. This repository exports a portable manifest and
+  # does not execute VBAL, HDIAG, NICAS, DIRAC or SO.
+  bmatrix:
+    sample_glob: products/mpas/{cycle_id}/samples/*.nc
+    minimum_samples: 20
+    output_dir: products/bmatrix-handoff
