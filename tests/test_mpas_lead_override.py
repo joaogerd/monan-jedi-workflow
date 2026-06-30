@@ -28,7 +28,7 @@ def test_mpas_lead_override_changes_context_and_run_directory(tmp_path: Path) ->
     command: [./mpas_atmosphere]
     environment: {}
   validation:
-    required_outputs: [mpasout.{mpas_valid_file_time}.nc]
+    required_outputs: ["mpasout.{mpas_valid_file_time}.nc"]
     required_log_markers: [complete]
 """,
         encoding="utf-8",
@@ -40,4 +40,4 @@ def test_mpas_lead_override_changes_context_and_run_directory(tmp_path: Path) ->
     assert run.run_dir == config / "work/20180415T000000Z/f48"
     assert run.context["mpas_valid_time"] == "2018-04-17_00:00:00"
     assert prepared.manifest_path.is_file()
-    assert "lead=48h" not in prepared.pbs_path.read_text()
+    assert "mpiexec -n 1 ./mpas_atmosphere" in prepared.pbs_path.read_text()
