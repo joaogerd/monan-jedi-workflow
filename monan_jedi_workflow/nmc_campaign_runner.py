@@ -1,8 +1,8 @@
 """Resumable execution frontiers for an NMC forecast campaign.
 
-The runner intentionally advances one dependency layer at a time.  Local input
+The runner intentionally advances one dependency layer at a time. Local input
 and WPS work may complete immediately; PBS-backed init and forecast layers stop
-after submission unless ``wait`` is explicitly requested.  A later identical
+after submission unless ``wait`` is explicitly requested. A later identical
 invocation revalidates products before advancing.
 """
 from __future__ import annotations
@@ -24,6 +24,7 @@ from .mpas_stage import (
 )
 from .nmc_campaign import NMCCampaign, write_bflow_manifest
 from .provenance import write_json_atomic
+from .stage_config import load_stage_config
 from .wps_stage import WPSValidationError, prepare_wps, run_wps, validate_wps
 
 
@@ -46,6 +47,17 @@ def _record(campaign: NMCCampaign, state: str, **details: Any) -> Path:
             **details,
         },
     )
+
+
+def _validate_forecast_layout(campaign: NMCCampaign) -> None:
+    """Prevent f024/f048 from sharing a mutable MPAS working directory."""
+    config = load_stage_config(campaign.config_dir, "mpas.yaml", "mpas")
+    run_dir = config.get("run_dir")
+    if not isinstance(run_dir, str) or "{lead_hours}" not in run_dir:
+        raise ValueError(
+            "NMC campaigns require mpas.run_dir to include '{lead_hours}' so f024 and f048 "
+            "for the same initialization cannot overwrite each other."
+        )
 
 
 def _ensure_inputs_and_wps(campaign: NMCCampaign, *, fetch_inputs: bool) -> None:
@@ -183,13 +195,14 @@ def execute_nmc_campaign(
 ) -> Path:
     """Advance one safe frontier of the campaign and persist its execution state.
 
-    With no ``submit`` flag, the function only prepares missing PBS stages.  With
+    With no ``submit`` flag, the function only prepares missing PBS stages. With
     ``submit`` but no ``wait``, it submits every missing independent job in the
-    current layer and returns.  This prevents a later layer from starting before
+    current layer and returns. This prevents a later layer from starting before
     validated products exist.
     """
     if wait and not submit:
         raise ValueError("--wait requires --submit.")
+    _validate_forecast_layout(campaign)
     _ensure_inputs_and_wps(campaign, fetch_inputs=fetch_inputs)
 
     missing_init = _missing_initializations(campaign)
