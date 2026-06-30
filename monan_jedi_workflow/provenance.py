@@ -1,6 +1,7 @@
 """Small, dependency-free provenance helpers for resumable workflow stages."""
 from __future__ import annotations
 
+from datetime import date, datetime
 import hashlib
 import json
 from pathlib import Path
@@ -16,9 +17,24 @@ def sha256_file(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
     return digest.hexdigest()
 
 
+def _json_default(value: Any) -> str:
+    """Normalize declarative YAML values that are not native JSON scalars."""
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    raise TypeError(f"Value is not serializable for workflow provenance: {type(value).__name__}")
+
+
 def stable_digest(value: Any) -> str:
-    """Return a deterministic digest for a JSON-compatible value."""
-    serialized = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    """Return a deterministic digest for a JSON-like value, paths and timestamps."""
+    serialized = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        default=_json_default,
+    )
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
@@ -40,6 +56,9 @@ def write_json_atomic(path: Path, value: dict[str, Any]) -> Path:
     """Write a JSON mapping atomically, preserving a prior valid product on error."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(value, indent=2, sort_keys=True, default=_json_default) + "\n",
+        encoding="utf-8",
+    )
     temporary.replace(path)
     return path
