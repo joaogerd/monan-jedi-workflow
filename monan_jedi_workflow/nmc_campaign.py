@@ -3,7 +3,7 @@
 The module deliberately separates the producer and consumer repositories:
 ``monan-jedi-workflow`` owns data acquisition, WPS, MPAS initialization and
 forecast products; ``mpas-bmatrix-global`` consumes the resulting tab-separated
-BFLOW manifest.  No BUMP/SABER calibration command is executed here.
+BFLOW manifest. No BUMP/SABER calibration command is executed here.
 """
 from __future__ import annotations
 
@@ -15,9 +15,8 @@ from typing import Any, Iterable
 
 from .cycle_context import CycleContext, parse_cycle_time
 from .input_sources import InputSource, resolve_input_source
-from .mpas_stage import load_mpas_run
 from .provenance import file_record, stable_digest, write_json_atomic
-from .stage_config import render_text
+from .stage_config import cycle_render_context, load_stage_config, render_text, resolve_path
 from .workflow_plan import WorkflowConfigurationError, load_workflow_config
 
 _MINIMUM_NMC_PAIRS = 4
@@ -138,10 +137,17 @@ def _product_path(
     template: str,
     label: str,
 ) -> Path:
-    run = load_mpas_run(config_dir, init.cycle_time, lead_hours=lead_hours)
-    rendered = render_text(template, run.context, label=label)
+    """Resolve a lead-specific product path from the existing ``mpas.yaml`` contract."""
+    config = load_stage_config(config_dir, "mpas.yaml", "mpas")
+    context = cycle_render_context(init, lead_hours=lead_hours)
+    run_dir_value = config.get("run_dir")
+    if not isinstance(run_dir_value, str) or not run_dir_value:
+        raise NMCCampaignError("mpas.run_dir must be a non-empty string.")
+    run_dir = resolve_path(run_dir_value, config_dir=config_dir, context=context, label="mpas.run_dir")
+    context = {**context, "run_dir": str(run_dir)}
+    rendered = render_text(template, context, label=label)
     path = Path(rendered)
-    return path if path.is_absolute() else run.run_dir / path
+    return path if path.is_absolute() else run_dir / path
 
 
 def _campaign_spec(config_dir: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -154,9 +160,9 @@ def _campaign_spec(config_dir: Path) -> tuple[dict[str, Any], dict[str, Any], di
 def build_nmc_campaign(config_dir: Path) -> NMCCampaign:
     """Resolve the complete f048/f024 geometry declared in ``workflow.yaml``.
 
-    A campaign has at least four valid times.  It includes every required
+    A campaign has at least four valid times. It includes every required
     initialization time, each f024/f048 product path and the selected source for
-    data retrieval/WPS.  The function does not create directories, download data
+    data retrieval/WPS. The function does not create directories, download data
     or submit jobs.
     """
     config_dir = config_dir.resolve()
@@ -379,8 +385,8 @@ def campaign_status(campaign: NMCCampaign, *, with_checksum: bool = False) -> di
 def write_bflow_manifest(campaign: NMCCampaign, *, with_checksum: bool = False) -> tuple[Path, Path]:
     """Write the exact hand-off manifest accepted by ``mpasbflow --manifest``.
 
-    Both restart and ``da_state`` products must exist for every pair.  The TSV
-    carries the latter because BFLOW consumes `mpasout`, while restart files are
+    Both restart and ``da_state`` products must exist for every pair. The TSV
+    carries the latter because BFLOW consumes ``mpasout``, while restart files are
     retained as an independent NMC structural check.
     """
     status = campaign_status(campaign, with_checksum=with_checksum)
