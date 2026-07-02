@@ -60,12 +60,7 @@ def _has_wps(config: Mapping[str, object]) -> bool:
 
 
 def _partition_prefix(initialization: MpasInitializationStage) -> str | None:
-    """Return the declared MPAS decomposition prefix when one is available.
-
-    Generic planning and dry-run fixtures may intentionally omit static mesh
-    artifacts. A real WPS-backed initialization still fails during preparation
-    when it renders a namelist but lacks this required decomposition prefix.
-    """
+    """Return the declared MPAS decomposition prefix when one is available."""
     for link in initialization.links:
         name = link.target.name
         if ".graph.info.part." not in name:
@@ -95,7 +90,7 @@ def _attach_wps_file(config: Mapping[str, object], initialization: MpasInitializ
     if not candidate.name.startswith("FILE:"):
         raise ValueError("MPAS initialization WPS input target must use the FILE: prefix.")
     path = candidate if candidate.is_absolute() else initialization.run_dir / candidate
-    initialization.links = (*initialization.links, LinkSpec(forcing.product.intermediate, path))
+    initialization.links = (*initialization.links, LinkSpec(forcing.product.intermediate, path, upstream_artifact=True))
     initialization.values["met_input"] = str(forcing.product.intermediate)
     initialization.values["met_input_filename"] = path.name
     prefix = _partition_prefix(initialization)
