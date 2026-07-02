@@ -2,15 +2,13 @@
 
 ## Status
 
-Draft V2 workflow. The campaign now includes an explicit WPS `ungrib` producer when `model.wps` is declared, in addition to MPAS initialization, forecasts, NMC publication, JACI dry-run evidence, and persisted campaign audit. A real JACI campaign and BFLOW compatibility probe remain pending.
+Draft V2 workflow. The campaign includes an explicit WPS `ungrib` producer, MPAS initialization, forecasts, NMC publication, JACI dry-run evidence, safe preparation-only preflight, and a persisted campaign audit. A real JACI campaign and BFLOW compatibility probe remain pending.
 
 ## Purpose
 
 The NMC campaign prepares f024/f048 forecast pairs for static B-matrix production. For the MPAS global initialization configuration used here, WPS `ungrib` creates the `FILE:YYYY-MM-DD_HH` intermediate product consumed directly by `init_atmosphere`.
 
 ## Scientific Context
-
-The forcing path is:
 
 ```text
 explicit GFS or reanalysis GRIB
@@ -22,7 +20,7 @@ explicit GFS or reanalysis GRIB
   → bflow-manifest.tsv
 ```
 
-`metgrid` is intentionally not included in this V1 path because the accepted MPAS initialization configuration uses `config_met_prefix = 'FILE'` and consumes the WPS intermediate directly. `geogrid` is not re-run per cycle; static geography remains an explicit external MPAS initialization input.
+`metgrid` is intentionally absent because the accepted MPAS initialization configuration uses `config_met_prefix = 'FILE'` and consumes the WPS intermediate directly. `geogrid` is not re-run per cycle; static geography remains an explicit external MPAS initialization input.
 
 ## When to Use the Workflow
 
@@ -57,7 +55,7 @@ artifacts/bmatrix/nmc_pairs/validation-report.json
 
 `model.wps.ungrib.grib_inputs` declares every GRIB input and its conventional `GRIBFILE.*` staging target. `ungrib` must publish its `FILE:` product directly in the declared product directory. The NMC planner adds one explicit link from that product to the matching initialization run directory using `model.mpas.initialization.wps_input.target`, which must begin with `FILE:`.
 
-The WPS-to-init dependency is part of the scheduler-neutral DAG; an init cannot consume a `FILE:` artifact without its matching WPS producer having validated it.
+The WPS-to-init dependency is part of the scheduler-neutral DAG; an init cannot consume a `FILE:` artifact without its matching WPS producer having validated it during real execution.
 
 ## YAML Configuration
 
@@ -101,7 +99,7 @@ Scientific YAML declares stage resources only. Queue routing, MPI launcher synta
 
 ## CLI Usage
 
-JACI dry-run:
+JACI dry-run renders resolved PBS plans but does not stage files:
 
 ```bash
 monan-jedi-workflow-v2 nmc-campaign \
@@ -112,7 +110,19 @@ monan-jedi-workflow-v2 nmc-campaign \
   --dry-run
 ```
 
-The dry-run writes plan JSON and PBS evidence for all WPS, initialization, and forecast stages. It does not submit jobs.
+Safe preparation-only preflight validates static sources, stages links, and renders templates without invoking `qsub`, MPI, WPS, or MPAS:
+
+```bash
+monan-jedi-workflow-v2 nmc-campaign \
+  --config /path/to/case.yaml \
+  --config /path/to/jaci.yaml \
+  --config /path/to/science.yaml \
+  --workspace /path/to/nmc-campaign \
+  --backend jaci-pbs \
+  --prepare-only
+```
+
+Only declared upstream products may be represented as dangling links during this preflight. It does not create WPS intermediates, MPAS states, forecasts, manifests, or a run-state file.
 
 After completion, audit existing artifacts:
 
@@ -137,7 +147,7 @@ ecFlow and Cylc must retain the same edge: `wps_ungrib(cycle) → mpas_init(cycl
 
 ## Validation and Restart Behavior
 
-WPS validates the published `FILE:` product and optional log markers. MPAS initialization validates its state and optional NetCDF contract. The local runner revalidates outputs before reuse and reruns downstream stages after an upstream artifact is regenerated.
+WPS validates the published `FILE:` product and optional log markers. MPAS initialization validates its state and optional NetCDF contract. The preparation-only preflight validates static inputs and visible configuration but deliberately does not claim output validity. The local runner revalidates outputs before reuse and reruns downstream stages after an upstream artifact is regenerated.
 
 ## Limitations
 
