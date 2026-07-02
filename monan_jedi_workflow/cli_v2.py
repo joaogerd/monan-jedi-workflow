@@ -28,7 +28,14 @@ def _case_name(config: dict[str, object]) -> str:
     return case["name"]
 
 
-def _context(config_paths: Sequence[Path], workspace: Path, *, dry_run: bool, argv: Sequence[str]) -> RunContext:
+def _context(
+    config_paths: Sequence[Path],
+    workspace: Path,
+    *,
+    dry_run: bool,
+    prepare_only: bool,
+    argv: Sequence[str],
+) -> RunContext:
     """Resolve configuration and persist run plus command-level provenance."""
     config = resolve_configuration(list(config_paths))
     case = _case_name(config)
@@ -46,7 +53,7 @@ def _context(config_paths: Sequence[Path], workspace: Path, *, dry_run: bool, ar
     write_provenance(metadata / "provenance.json", provenance)
     digest = hashlib.sha256("\0".join(argv).encode("utf-8")).hexdigest()[:16]
     write_provenance(metadata / "provenance" / f"command-{digest}.json", provenance)
-    return RunContext("bmatrix", case, workspace, config=config, dry_run=dry_run)
+    return RunContext("bmatrix", case, workspace, config=config, dry_run=dry_run, prepare_only=prepare_only)
 
 
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
@@ -100,17 +107,10 @@ def _render_simpleworkflow(path: Path, plan: NmcCampaignPlan, context: RunContex
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run or render a V2 workflow and execute isolated V2 stages.
+    """Run, plan, prepare, or render a V2 workflow.
 
-    Parameters
-    ----------
-    argv : Sequence[str] | None, default=None
-        Command arguments excluding the executable name.
-
-    Returns
-    -------
-    int
-        Process exit status.
+    ``nmc-campaign --prepare-only`` validates static inputs and materializes
+    links/templates without calling a model executable or scheduler command.
     """
     values = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(prog="monan-jedi-workflow-v2")
@@ -121,11 +121,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     campaign = commands.add_parser(
         "nmc-campaign",
-        help="Run, plan, or render MPAS initialization, forecasts, and NMC publication.",
+        help="Run, plan, prepare, or render MPAS initialization, forecasts, and NMC publication.",
     )
     _add_common_arguments(campaign)
     campaign.add_argument("--backend", choices=("local", "jaci-pbs"), default="local")
-    campaign.add_argument(
+    modes = campaign.add_mutually_exclusive_group()
+    modes.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Validate static inputs and render links/templates without qsub or model execution.",
+    )
+    modes.add_argument(
         "--render-simpleworkflow",
         type=Path,
         help="Write simpleWorkflow YAML instead of executing the campaign.",
@@ -139,7 +145,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     stage_run.add_argument("--backend", choices=("local", "jaci-pbs"), default="local")
 
     args = parser.parse_args(values)
-    context = _context(args.config, args.workspace, dry_run=args.dry_run, argv=("monan-jedi-workflow-v2", *values))
+    prepare_only = bool(getattr(args, "prepare_only", False))
+    if prepare_only and args.dry_run:
+        parser.error("--prepare-only and --dry-run are mutually exclusive.")
+    context = _context(
+        args.config,
+        args.workspace,
+        dry_run=args.dry_run,
+        prepare_only=prepare_only,
+        argv=("monan-jedi-workflow-v2", *values),
+    )
 
     if args.command == "nmc-pairs":
         selected = NmcPairsStage.from_context(context)
