@@ -138,11 +138,9 @@ It validates all forecast task artifacts before publishing the manifest.
 
 An ecFlow or Cylc NMC task must invoke `stage run --stage nmc_pairs` with the resolved configuration and workspace. Scheduler dependencies establish order; NMC independently validates the products before consuming them.
 
-## Validation
+## Validation and Restart Behavior
 
 The stage validates pair count, ordering, shared valid time, restart/state availability, optional NetCDF format/schema/mesh/time checks, manifest identity, and manifest references.
-
-## Restart and Idempotency Behavior
 
 A successful state is reused only when all planned restart/state products, NetCDF contracts, the manifest contract, manifest state references, and the JSON report still validate.
 
