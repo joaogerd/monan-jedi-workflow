@@ -2,11 +2,11 @@
 
 ## Status
 
-Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local execution, JACI PBS rendering/submission/wait, and artifact validation are implemented and covered by local tests. Real JACI execution and scientific validation remain pending.
+Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local execution, JACI PBS rendering/submission/wait, artifact validation, and NMC campaign planning are implemented and covered by local tests. Real JACI execution and scientific validation remain pending.
 
 ## Purpose
 
-`mpas-initialization` creates and validates one initial MPAS state at a specified cycle time. It is the producer of initial conditions for the forecast stages used by the data-assimilation cycle and NMC B-matrix campaigns.
+`mpas-initialization` creates and validates one initial MPAS state at a specified cycle time. It is the producer of initial conditions for forecast stages used by data-assimilation and NMC B-matrix campaigns.
 
 ## Scientific Context
 
@@ -14,7 +14,7 @@ An MPAS forecast must start from a state consistent with the selected mesh, stat
 
 ## When to Use the Tool
 
-Use this component before any V2 MPAS forecast that depends on an initial state produced by the same workflow. Do not use it to convert observations or to run JEDI assimilation.
+Use this component before any V2 MPAS forecast that depends on an initial state produced by the same workflow. Do not use it to convert observations or run JEDI assimilation.
 
 ## Inputs
 
@@ -24,7 +24,7 @@ Use this component before any V2 MPAS forecast that depends on an initial state 
 
 ## Outputs
 
-The stage publishes one initial MPAS state file. Its path is defined by `state_template` and becomes an input to forecast staging.
+The stage publishes one initial MPAS state file. Its path is defined by `state_template` and becomes the explicit `{initial_state}` input of forecast staging.
 
 ## Artifact Contract
 
@@ -38,7 +38,7 @@ NetCDF semantic checks for variables, mesh identity, and cycle time remain pendi
 
 ## YAML Configuration
 
-A complete example is available at `examples/v2/model/mpas_initialization.yaml.example`.
+A complete component example is at `examples/v2/model/mpas_initialization.yaml.example`; the full workflow example is at `examples/v2/bmatrix/nmc_campaign.yaml.example`.
 
 Supported template tokens are `workspace`, `cycle_time`, `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `lead_hours`, `lead_hours_03d`, `state`, and `run_dir`.
 
@@ -62,11 +62,20 @@ Supported template tokens are `workspace`, `cycle_time`, `init_time`, `init_yyyy
 
 ## CLI Usage
 
-No public MPAS initialization V2 CLI exists yet. The current interface is the Python stage/compiler contract while the workflow-level CLI is assembled.
+The public workflow command is:
+
+```bash
+monan-jedi-workflow-v2 nmc-campaign \
+  --config examples/v2/bmatrix/nmc_campaign.yaml.example \
+  --workspace /path/to/workspace \
+  --dry-run
+```
+
+A standalone initialization CLI is not exposed yet; the campaign command invokes the same initialization stage contract.
 
 ## simpleWorkflow Usage
 
-The future simpleWorkflow task will call the public V2 CLI with a resolved case configuration and workspace. It must not embed initialization logic or scheduler commands in the workflow YAML.
+The future adapter will call the public V2 workflow CLI with resolved configuration and workspace. It must not embed initialization logic or scheduler commands in workflow YAML.
 
 ## ecFlow and Cylc Integration Contract
 
@@ -84,18 +93,18 @@ Matching symbolic links are reused. Regular run-directory targets are not overwr
 
 - No real JACI initialization evidence yet.
 - No NetCDF semantic validation yet.
-- No public V2 CLI yet.
+- No standalone public V2 CLI yet.
 - No scientific comparison against an accepted MPAS initialization baseline yet.
 
 ## FAQ
 
 ### Why is initialization separate from forecast?
 
-The two stages publish different scientific products, have different validation contracts, and may have different upstream data dependencies. Keeping them separate makes the DAG explicit and allows controlled retries.
+The stages publish different scientific products, have different validation contracts, and may have different upstream dependencies. Keeping them separate makes the DAG explicit and allows controlled retries.
 
 ### Does a successful initialization guarantee a valid forecast?
 
-No. The forecast stage still validates its own restart/state outputs and is responsible for its distinct runtime contract.
+No. The forecast stage still validates its own restart/state outputs and has its own runtime contract.
 
 ## References
 
