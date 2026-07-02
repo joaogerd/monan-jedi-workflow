@@ -44,17 +44,30 @@ def test_nmc_campaign_jaci_dry_run_writes_resolved_pbs_evidence(tmp_path: Path) 
     campaign = Path("examples/v2/bmatrix/nmc_campaign.yaml.example")
     site = Path("examples/v2/platforms/jaci.yaml.example")
     workspace = tmp_path / "jaci-campaign"
+    override = tmp_path / "wps-root.yaml"
+    override.write_text(
+        f"""model:
+  wps:
+    ungrib_products:
+      root: {tmp_path / 'wps-products'}
+    ungrib:
+      run_dir: {tmp_path / 'wps-products'}/{{init_yyyymmddhh}}
+""",
+        encoding="utf-8",
+    )
     assert main([
         "nmc-campaign",
         "--config", str(campaign),
         "--config", str(site),
+        "--config", str(override),
         "--workspace", str(workspace),
         "--backend", "jaci-pbs",
         "--dry-run",
     ]) == 0
     record = workspace / ".monan-jedi-workflow/dry-run/mpas_init_2026062000.json"
     script = workspace / "runs/mpas/init/2026062000/.monan-jedi-workflow/pbs/mpas_init_2026062000.pbs"
-    assert record.is_file() and script.is_file()
+    wps_record = workspace / ".monan-jedi-workflow/dry-run/wps_ungrib_2026062000.json"
+    assert record.is_file() and script.is_file() and wps_record.is_file()
     text = script.read_text(encoding="utf-8")
     assert "#PBS -q pesqmini" in text
     assert "#PBS -l select=1:ncpus=128:mpiprocs=128" in text
