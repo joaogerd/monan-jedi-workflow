@@ -117,7 +117,7 @@ monan-jedi-workflow-v2 nmc-pairs \
   --workspace /path/to/nmc-workspace
 ```
 
-Use `--dry-run` to inspect the planned stage without checking products or writing outputs. Use `--force` to rerun after a successful state record.
+Use `--dry-run` to inspect the planned stage without checking forecast products or publishing NMC artifacts. The resolved configuration is still written under `.monan-jedi-workflow/`. Use `--force` to rerun after a successful state record.
 
 ## simpleWorkflow Usage
 
@@ -142,7 +142,7 @@ An ecFlow or Cylc task must invoke the same CLI command and declare the MPAS sta
 
 ## Validation and Restart Behavior
 
-The stage validates every pair before publication. A successful state is reused only when the manifest and all referenced state files still validate. Removing or truncating an input state file therefore invalidates reuse and causes a new validation attempt.
+The stage validates every pair before publication. A successful state is reused only when all planned restart and state files, the manifest contract, all manifest state references, and the JSON validation report still validate. Removing or truncating an input product therefore invalidates reuse and causes a new validation attempt.
 
 ## Limitations
 
