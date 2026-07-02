@@ -116,7 +116,9 @@ class MpasForecastProductLayout:
         return cls(Path(root), restart, state)
 
     def __post_init__(self) -> None:
-        """Reject unsupported placeholders before running a forecast."""
+        """Reject implicit roots and unsupported path placeholders."""
+        if not self.root.is_absolute():
+            raise MpasProductLayoutError("MPAS forecast_products.root must be an absolute path.")
         allowed = set(mpas_time_context("2000-01-01_00:00:00", 1))
         for template in (self.restart_template, self.state_template):
             names = {name for _, name, _, _ in Formatter().parse(template) if name}
