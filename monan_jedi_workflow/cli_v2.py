@@ -13,6 +13,7 @@ from .core.provenance import RunProvenance, default_environment_facts, write_pro
 from .core.stage import RunContext
 from .core.workflow_spec import WorkflowSpec
 from .orchestration.local import LocalWorkflowRunner
+from .platforms.jaci_config import jaci_backend_factory
 from .platforms.local import LocalProcessBackend
 from .workflows.nmc_campaign import build_nmc_campaign
 
@@ -74,9 +75,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     _add_common_arguments(nmc)
     campaign = commands.add_parser(
         "nmc-campaign",
-        help="Run or plan MPAS initialization, forecasts, and NMC manifest publication locally.",
+        help="Run or plan MPAS initialization, forecasts, and NMC manifest publication.",
     )
     _add_common_arguments(campaign)
+    campaign.add_argument("--backend", choices=("local", "jaci-pbs"), default="local")
     args = parser.parse_args(values)
     context = _context(args.config, args.workspace, dry_run=args.dry_run, argv=("monan-jedi-workflow-v2", *values))
 
@@ -85,7 +87,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         specification = WorkflowSpec.from_stages("bmatrix", [stage.spec])
         runner = LocalWorkflowRunner(specification, {stage.spec.name: stage})
     elif args.command == "nmc-campaign":
-        plan = build_nmc_campaign(context, backend=LocalProcessBackend())
+        if args.backend == "local":
+            plan = build_nmc_campaign(context, backend=LocalProcessBackend())
+        else:
+            plan = build_nmc_campaign(
+                context,
+                initialization_backend_factory=jaci_backend_factory(context.config, stage_kind="initialization"),
+                forecast_backend_factory=jaci_backend_factory(context.config, stage_kind="forecast"),
+            )
         runner = LocalWorkflowRunner(plan.specification, plan.stages)
     else:
         raise AssertionError(f"Unhandled V2 command: {args.command}")
