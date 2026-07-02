@@ -41,7 +41,7 @@ class LocalWorkflowRunner:
         results: list[StageResult] = []
         for name in self.specification.topological_order():
             stage = self.stages[name]
-            stage.validate_inputs(context).require_valid()
+            stage.validate_preparation_inputs(context).require_valid()
             results.append(stage.prepare(context))
         return tuple(results)
 
