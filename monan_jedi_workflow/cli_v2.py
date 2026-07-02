@@ -33,8 +33,8 @@ def _context(
     workspace: Path,
     *,
     dry_run: bool,
-    prepare_only: bool,
     argv: Sequence[str],
+    prepare_only: bool = False,
 ) -> RunContext:
     """Resolve configuration and persist run plus command-level provenance."""
     config = resolve_configuration(list(config_paths))
