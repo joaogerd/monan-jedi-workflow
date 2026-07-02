@@ -111,7 +111,7 @@ class MpasInitializationStage(MpasExecutionStage):
         templates: tuple[TemplateSpec, ...] = (),
     ) -> None:
         self.product = product
-        token = product.cycle_time.replace("-", "").replace("_", "").replace(":", "")
+        token = mpas_initialization_context(product.cycle_time)["init_yyyymmddhh"]
         spec = StageSpec(
             name=f"mpas_init_{token}",
             command="model.mpas.initialize",
