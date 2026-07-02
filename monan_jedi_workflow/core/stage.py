@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
@@ -26,7 +26,11 @@ class RunContext:
     config : Mapping[str, object]
         Fully resolved configuration mapping.
     dry_run : bool, default=False
-        Whether execution must plan without launching scientific software.
+        Whether execution must plan without modifying stage run directories.
+    prepare_only : bool, default=False
+        Whether the workflow must validate static inputs, stage links, and render
+        templates without submitting or running scientific software. Declared
+        upstream artifacts may be represented by dangling links in this mode.
     """
 
     workflow: str
@@ -34,6 +38,12 @@ class RunContext:
     workspace: Path
     config: Mapping[str, object]
     dry_run: bool = False
+    prepare_only: bool = False
+
+    def __post_init__(self) -> None:
+        """Reject mutually exclusive pre-execution modes."""
+        if self.dry_run and self.prepare_only:
+            raise ValueError("RunContext dry_run and prepare_only are mutually exclusive.")
 
     @property
     def state_path(self) -> Path:
