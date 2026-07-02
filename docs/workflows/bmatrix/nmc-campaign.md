@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft V2 workflow. The planner, local execution path, JACI PBS backend, artifact wiring, and dry-run CLI are implemented. A real JACI campaign, NetCDF semantic checks, and a BFLOW run using the V2 manifest remain pending.
+Draft V2 workflow. The planner, local execution path, JACI PBS backend, artifact wiring, dry-run CLI, isolated stage execution, and simpleWorkflow rendering are implemented. A real JACI campaign, NetCDF semantic checks, and a BFLOW run using the V2 manifest remain pending.
 
 ## Purpose
 
@@ -96,11 +96,27 @@ Remove `--dry-run` only after adapting paths, executable commands, validation ma
 
 ## simpleWorkflow Usage
 
-The adapter must render one task for every V2 stage in the neutral DAG. The task commands must invoke the public V2 CLI/stage contract rather than duplicate MPAS commands inside simpleWorkflow YAML.
+Render the neutral DAG as a simpleWorkflow definition:
+
+```bash
+monan-jedi-workflow-v2 nmc-campaign \
+  --config examples/v2/bmatrix/nmc_campaign.yaml.example \
+  --workspace /path/to/nmc-campaign \
+  --backend local \
+  --render-simpleworkflow /path/to/nmc-campaign/nmc.simpleworkflow.yaml
+```
+
+For JACI, add the JACI site profile and use `--backend jaci-pbs`. The generated YAML contains one task per stage and each task invokes:
+
+```text
+monan-jedi-workflow-v2 stage run --stage <stage-name> ...
+```
+
+Every isolated task validates the artifact outputs of its declared dependencies before consuming them.
 
 ## ecFlow and Cylc Integration Contract
 
-The same graph can be rendered as ecFlow triggers or Cylc dependencies. Each forecast task depends on its matching initialization task; the NMC task depends on all forecast tasks.
+The same graph can be rendered as ecFlow triggers or Cylc dependencies. Each forecast task depends on its matching initialization task; the NMC task depends on all forecast tasks. Each task must invoke `stage run` with the resolved configuration and workspace rather than duplicate model commands.
 
 ## Validation
 
@@ -108,7 +124,7 @@ The workflow validates stage products, not only scheduler status. NMC publicatio
 
 ## Restart and Idempotency Behavior
 
-The local runner revalidates prior successful outputs before skipping a stage. Missing initialization, forecast, or manifest products invalidate reuse.
+The local runner and isolated task runner revalidate prior successful outputs before skipping a stage. Missing initialization, forecast, or manifest products invalidate reuse.
 
 ## Limitations
 
