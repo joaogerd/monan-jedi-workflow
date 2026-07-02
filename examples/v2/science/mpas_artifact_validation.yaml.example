@@ -1,0 +1,47 @@
+# Advanced MPAS NetCDF artifact-validation profile.
+# Compose this file after the case and site profiles when structural checks are
+# required before JEDI, NMC, or BFLOW consumption.
+model:
+  mpas:
+    artifact_validation:
+      initialization_state:
+        consumer: model.mpas.forecast
+        accepted_formats:
+          - cdf5
+        required_variables:
+          - xtime
+        required_dimensions:
+          Time: 1
+          nCells: 10242
+        required_global_attributes:
+          mesh_id: x1.10242
+        time_variable: xtime
+        require_expected_time: true
+
+      forecast_restart:
+        consumer: bmatrix.nmc_pairs
+        accepted_formats:
+          - cdf5
+        required_variables:
+          - xtime
+        required_dimensions:
+          Time: 1
+          nCells: 10242
+        required_global_attributes:
+          mesh_id: x1.10242
+        time_variable: xtime
+        require_expected_time: true
+
+      forecast_state:
+        consumer: bmatrix.bflow
+        accepted_formats:
+          - cdf5
+        required_variables:
+          - xtime
+        required_dimensions:
+          Time: 1
+          nCells: 10242
+        required_global_attributes:
+          mesh_id: x1.10242
+        time_variable: xtime
+        require_expected_time: true
