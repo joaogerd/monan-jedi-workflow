@@ -137,8 +137,8 @@ class MpasInitializationStage(MpasExecutionStage):
         stream.set("input_interval", "initial_only")
         tree.write(streams, encoding="unicode")
 
-    def _patch_wps_namelist(self, forcing: str) -> None:
-        """Render cycle, WPS, and partition settings into the init namelist."""
+    def _patch_wps_namelist(self) -> None:
+        """Render cycle, WPS, and partition settings into a declared init namelist."""
         prefix = self.values.get("decomposition_prefix")
         if not isinstance(prefix, str) or not prefix.endswith(".graph.info.part."):
             raise RuntimeError("MPAS initialization requires a declared graph decomposition prefix for WPS forcing.")
@@ -172,5 +172,6 @@ class MpasInitializationStage(MpasExecutionStage):
         if not isinstance(forcing, str) or not forcing.startswith("FILE:"):
             raise RuntimeError("MPAS initialization met_input_filename must use the WPS FILE: prefix.")
         self._patch_wps_stream(forcing)
-        self._patch_wps_namelist(forcing)
+        if (self.run_dir / "namelist.init_atmosphere").is_file():
+            self._patch_wps_namelist()
         return result
