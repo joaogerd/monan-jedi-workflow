@@ -13,5 +13,5 @@ def test_compiler_resolves_product_and_run_paths(tmp_path: Path) -> None:
         "forecast": {"run_dir": "runs/{init_yyyymmddhh}", "argv": ["/bin/true"]},
     }}}
     stage = compile_mpas_forecast(config, workspace=tmp_path, init_time="2026-06-20T00:00:00Z", lead_hours=48, backend=LocalProcessBackend())
-    assert stage.run_dir == tmp_path / "runs/20260620"
+    assert stage.run_dir == tmp_path / "runs/2026062000"
     assert stage.product.valid_time == "2026-06-22_00:00:00"
