@@ -11,11 +11,11 @@ from .components.bmatrix.nmc_pairs.stage import NmcPairsStage
 from .core.config import ConfigurationError, resolve_configuration, write_resolved_configuration
 from .core.provenance import RunProvenance, default_environment_facts, write_provenance
 from .core.stage import RunContext
-from .core.workflow_spec import WorkflowSpec
-from .orchestration.local import LocalWorkflowRunner
+from .core.workflow_spec import WorkflowSpec, WorkflowSpecificationError
+from .orchestration.local import LocalWorkflowRunner, StageTaskRunner
 from .platforms.jaci_config import jaci_backend_factory
 from .platforms.local import LocalProcessBackend
-from .workflows.nmc_campaign import build_nmc_campaign
+from .workflows.nmc_campaign import NmcCampaignPlan, build_nmc_campaign
 
 
 def _case_name(config: dict[str, object]) -> str:
@@ -55,8 +55,21 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--force", action="store_true")
 
 
+def _campaign_plan(context: RunContext, backend_name: str) -> NmcCampaignPlan:
+    """Build one NMC campaign with local or JACI execution backends."""
+    if backend_name == "local":
+        return build_nmc_campaign(context, backend=LocalProcessBackend())
+    if backend_name == "jaci-pbs":
+        return build_nmc_campaign(
+            context,
+            initialization_backend_factory=jaci_backend_factory(context.config, stage_kind="initialization"),
+            forecast_backend_factory=jaci_backend_factory(context.config, stage_kind="forecast"),
+        )
+    raise ValueError(f"Unsupported V2 backend: {backend_name}")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run a V2 workflow command.
+    """Run a V2 workflow or an isolated V2 stage.
 
     Parameters
     ----------
@@ -71,34 +84,47 @@ def main(argv: Sequence[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(prog="monan-jedi-workflow-v2")
     commands = parser.add_subparsers(dest="command", required=True)
+
     nmc = commands.add_parser("nmc-pairs", help="Validate NMC pairs and write a BFLOW manifest.")
     _add_common_arguments(nmc)
+
     campaign = commands.add_parser(
         "nmc-campaign",
         help="Run or plan MPAS initialization, forecasts, and NMC manifest publication.",
     )
     _add_common_arguments(campaign)
     campaign.add_argument("--backend", choices=("local", "jaci-pbs"), default="local")
+
+    stage = commands.add_parser("stage", help="Run one declared V2 workflow stage.")
+    stage_commands = stage.add_subparsers(dest="stage_command", required=True)
+    stage_run = stage_commands.add_parser("run", help="Run one stage after validating dependency artifacts.")
+    _add_common_arguments(stage_run)
+    stage_run.add_argument("--stage", required=True, help="Stage name from the configured workflow specification.")
+    stage_run.add_argument("--backend", choices=("local", "jaci-pbs"), default="local")
+
     args = parser.parse_args(values)
     context = _context(args.config, args.workspace, dry_run=args.dry_run, argv=("monan-jedi-workflow-v2", *values))
 
     if args.command == "nmc-pairs":
-        stage = NmcPairsStage.from_context(context)
-        specification = WorkflowSpec.from_stages("bmatrix", [stage.spec])
-        runner = LocalWorkflowRunner(specification, {stage.spec.name: stage})
+        selected = NmcPairsStage.from_context(context)
+        runner = LocalWorkflowRunner(
+            WorkflowSpec.from_stages("bmatrix", [selected.spec]),
+            {selected.spec.name: selected},
+        )
+        results = runner.run(context, force=args.force)
     elif args.command == "nmc-campaign":
-        if args.backend == "local":
-            plan = build_nmc_campaign(context, backend=LocalProcessBackend())
-        else:
-            plan = build_nmc_campaign(
-                context,
-                initialization_backend_factory=jaci_backend_factory(context.config, stage_kind="initialization"),
-                forecast_backend_factory=jaci_backend_factory(context.config, stage_kind="forecast"),
-            )
-        runner = LocalWorkflowRunner(plan.specification, plan.stages)
+        plan = _campaign_plan(context, args.backend)
+        results = LocalWorkflowRunner(plan.specification, plan.stages).run(context, force=args.force)
+    elif args.command == "stage" and args.stage_command == "run":
+        plan = _campaign_plan(context, args.backend)
+        try:
+            result = StageTaskRunner(plan.specification, plan.stages).run(context, args.stage, force=args.force)
+        except WorkflowSpecificationError as exc:
+            parser.error(str(exc))
+        results = () if result is None else (result,)
     else:
         raise AssertionError(f"Unhandled V2 command: {args.command}")
 
-    for result in runner.run(context, force=args.force):
+    for result in results:
         print(result.message)
     return 0
