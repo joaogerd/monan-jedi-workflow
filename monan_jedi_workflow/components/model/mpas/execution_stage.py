@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
 from ....core.stage import RunContext, Stage, StageResult
 from ....core.validation import ValidationReport
@@ -51,12 +50,7 @@ class MpasExecutionStage(Stage):
         return self._spec
 
     def plan(self, context: RunContext) -> StageResult:
-        """Plan work without launching scientific software.
-
-        A platform backend may persist a resolved scheduler plan during dry-run.
-        Such plan artifacts are intentionally metadata, not staged scientific
-        inputs or generated scientific outputs.
-        """
+        """Plan work without launching scientific software."""
         if self.request is None or self.backend is None:
             return super().plan(context)
         resolver = getattr(self.backend, "resolve", None)
@@ -70,16 +64,21 @@ class MpasExecutionStage(Stage):
         record.parent.mkdir(parents=True, exist_ok=True)
         record.write_text(json.dumps(payload(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
         script = getattr(resolved, "script", None)
-        plan_artifacts = (*self.artifacts, record)
+        artifacts = (*self.artifacts, record)
         if isinstance(script, Path):
-            plan_artifacts = (*plan_artifacts, script)
-        return StageResult(message=f"Resolved platform plan for {self.spec.name}.", artifacts=plan_artifacts)
+            artifacts = (*artifacts, script)
+        return StageResult(message=f"Resolved platform plan for {self.spec.name}.", artifacts=artifacts)
 
     def validate_inputs(self, context: RunContext) -> ValidationReport:
-        """Validate declared link and template sources."""
+        """Validate static inputs while deferring declared upstream products.
+
+        Upstream artifacts are verified by their dependency stage during normal
+        execution. Preparation-only preflight intentionally permits their output
+        paths to be absent while it materializes a visible dangling link.
+        """
         report = ValidationReport(subject=f"stage:{self.spec.name}:inputs")
         for item in self.links:
-            if not item.source.exists():
+            if not item.source.exists() and not (context.prepare_only and item.upstream_artifact):
                 report.add("mpas.link_source", f"MPAS link source is missing: {item.source}", path=str(item.source))
         for item in self.templates:
             if not item.source.is_file():
@@ -87,11 +86,15 @@ class MpasExecutionStage(Stage):
         return report
 
     def prepare(self, context: RunContext) -> StageResult:
-        """Create the run directory and stage declared inputs."""
+        """Create the run directory, links, and rendered templates.
+
+        In preparation-only mode, only links marked as declared upstream
+        artifacts may be dangling; all static sources remain mandatory.
+        """
         self.run_dir.mkdir(parents=True, exist_ok=True)
         values = {"workspace": str(context.workspace), "run_dir": str(self.run_dir), **self.values}
         for item in self.links:
-            stage_link(item)
+            stage_link(item, allow_missing_source=context.prepare_only and item.upstream_artifact)
         for item in self.templates:
             render_template(item, values)
         return StageResult(message=f"Prepared MPAS stage: {self.spec.name}.")
