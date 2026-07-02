@@ -74,7 +74,12 @@ class MpasForecastStage(MpasExecutionStage):
         super().__init__(
             spec,
             run_dir,
-            MpasOutputContract(files, contract.log_path, contract.required_log_markers),
+            MpasOutputContract(
+                required_files=files,
+                log_path=contract.log_path,
+                required_log_markers=contract.required_log_markers,
+                netcdf_checks=contract.netcdf_checks,
+            ),
             request=request,
             backend=backend,
             links=links,
