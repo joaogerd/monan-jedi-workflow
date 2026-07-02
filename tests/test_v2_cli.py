@@ -39,8 +39,8 @@ def test_nmc_campaign_dry_run_builds_full_dag(tmp_path: Path) -> None:
     assert (workspace / ".monan-jedi-workflow/provenance.json").is_file()
 
 
-def test_nmc_campaign_jaci_dry_run_uses_site_profile_without_qsub(tmp_path: Path) -> None:
-    """JACI planning must compile resource profiles without submitting jobs."""
+def test_nmc_campaign_jaci_dry_run_writes_resolved_pbs_evidence(tmp_path: Path) -> None:
+    """JACI dry-run must expose launcher, resources, command, and plan JSON."""
     campaign = Path("examples/v2/bmatrix/nmc_campaign.yaml.example")
     site = Path("examples/v2/platforms/jaci.yaml.example")
     workspace = tmp_path / "jaci-campaign"
@@ -52,7 +52,14 @@ def test_nmc_campaign_jaci_dry_run_uses_site_profile_without_qsub(tmp_path: Path
         "--backend", "jaci-pbs",
         "--dry-run",
     ]) == 0
-    assert (workspace / ".monan-jedi-workflow/resolved-config.yaml").is_file()
+    record = workspace / ".monan-jedi-workflow/dry-run/mpas_init_2026062000.json"
+    script = workspace / "runs/mpas/init/2026062000/.monan-jedi-workflow/pbs/mpas_init_2026062000.pbs"
+    assert record.is_file() and script.is_file()
+    text = script.read_text(encoding="utf-8")
+    assert "#PBS -q pesqmini" in text
+    assert "#PBS -l select=1:ncpus=128:mpiprocs=128" in text
+    assert "/opt/cray/pals/1.6/bin/mpiexec -n 128 /path/to/mpas_init_atmosphere" in text
+    assert "export OMP_NUM_THREADS=1" in text
 
 
 def test_stage_run_dry_run_plans_one_declared_campaign_stage(tmp_path: Path) -> None:
