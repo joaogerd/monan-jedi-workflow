@@ -3,6 +3,34 @@ case:
   name: nmc_x1_10242_jun2026
 
 model:
+  wps:
+    # This MPAS global initialization consumes WPS ungrib FILE products directly.
+    # metgrid is intentionally not part of this producer path.
+    ungrib_products:
+      root: /path/to/wps-products
+      intermediate_template: "{init_yyyymmddhh}/FILE:{wps_time}"
+
+    ungrib:
+      run_dir: "/path/to/wps-products/{init_yyyymmddhh}"
+      argv:
+        - /path/to/ungrib.exe
+      resources:
+        mpi_ranks: 1
+        threads_per_rank: 1
+        walltime: "00:10:00"
+      grib_inputs:
+        - source: "/path/to/gfs/{init_yyyymmddhh}/gfs.pgrb2.0p25.f000"
+          target: GRIBFILE.AAA
+      links:
+        - source: /path/to/Vtable.GFS
+          target: Vtable
+      templates:
+        - source: /path/to/namelist.wps.in
+          target: namelist.wps
+      validation:
+        log: stdout.log
+        required_outputs: []
+
   mpas:
     initialization_products:
       root: /path/to/initial-states
@@ -16,6 +44,9 @@ model:
         mpi_ranks: 128
         threads_per_rank: 1
         walltime: "00:30:00"
+      # The planner stages the matching upstream WPS product at this filename.
+      wps_input:
+        target: "FILE:{wps_time}"
       validation:
         log: stdout.log
         required_log_markers:
