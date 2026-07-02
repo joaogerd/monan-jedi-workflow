@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from ....platforms.base import ExecutionBackend, ExecutionRequest
+from ....platforms.base import ExecutionBackend, ExecutionRequest, ExecutionResources
 from .output_validation import MpasOutputContract
 from .staging import LinkSpec, TemplateSpec
 
@@ -24,7 +24,7 @@ class CompiledMpasRuntime:
     run_dir : Path
         Rendered run directory.
     request : ExecutionRequest
-        Explicit executable request.
+        Explicit executable and abstract resource request.
     contract : MpasOutputContract
         Additional output and log validation contract.
     links : tuple[LinkSpec, ...]
@@ -56,6 +56,33 @@ def _render(value: str, values: Mapping[str, object], label: str) -> str:
         return value.format_map(values)
     except KeyError as exc:
         raise MpasRuntimeConfigurationError(f"{label} uses unknown placeholder: {exc.args[0]}") from exc
+
+
+def _compile_resources(raw: object, label: str) -> ExecutionResources:
+    """Compile scheduler-neutral resource requirements from one YAML mapping."""
+    if raw is None:
+        return ExecutionResources()
+    values = require_mapping(raw, f"{label}.resources")
+    allowed = {"mpi_ranks", "threads_per_rank", "walltime", "memory_mb"}
+    unknown = set(values).difference(allowed)
+    if unknown:
+        raise MpasRuntimeConfigurationError(
+            f"{label}.resources contains unsupported key(s): {', '.join(sorted(str(item) for item in unknown))}."
+        )
+    mpi_ranks = values.get("mpi_ranks", 1)
+    threads = values.get("threads_per_rank", 1)
+    walltime = values.get("walltime")
+    memory = values.get("memory_mb")
+    if not isinstance(mpi_ranks, int) or not isinstance(threads, int):
+        raise MpasRuntimeConfigurationError(f"{label}.resources mpi_ranks and threads_per_rank must be integers.")
+    if walltime is not None and not isinstance(walltime, str):
+        raise MpasRuntimeConfigurationError(f"{label}.resources.walltime must be a string when set.")
+    if memory is not None and not isinstance(memory, int):
+        raise MpasRuntimeConfigurationError(f"{label}.resources.memory_mb must be an integer when set.")
+    try:
+        return ExecutionResources(mpi_ranks, threads, walltime, memory)
+    except ValueError as exc:
+        raise MpasRuntimeConfigurationError(f"{label}.resources: {exc}") from exc
 
 
 def _compile_staging(
@@ -91,26 +118,10 @@ def compile_runtime(
     values: Mapping[str, object],
     backend: ExecutionBackend,
 ) -> CompiledMpasRuntime:
-    """Compile common MPAS runtime settings into explicit execution contracts.
+    """Compile MPAS runtime settings into explicit execution contracts.
 
-    Parameters
-    ----------
-    section : Mapping[str, object]
-        Runtime configuration containing `run_dir`, `argv`, optional environment,
-        staging, and validation settings.
-    label : str
-        Configuration path used in validation errors.
-    workspace : Path
-        Explicit workflow workspace.
-    values : Mapping[str, object]
-        Product-specific template context.
-    backend : ExecutionBackend
-        Selected execution backend.
-
-    Returns
-    -------
-    CompiledMpasRuntime
-        Rendered runtime request and staging contract.
+    The section may declare only abstract `resources`; queue, scheduler syntax,
+    site environment, and MPI launcher remain the responsibility of `backend`.
     """
     run_template, argv = section.get("run_dir"), section.get("argv")
     if not isinstance(run_template, str) or not run_template:
@@ -139,7 +150,14 @@ def compile_runtime(
 
     links = _compile_staging(section.get("links"), f"{label}.links", rendered, workspace, run_dir, LinkSpec)
     templates = _compile_staging(section.get("templates"), f"{label}.templates", rendered, workspace, run_dir, TemplateSpec)
-    request = ExecutionRequest(command, run_dir, rendered_environment, run_dir / "stdout.log", run_dir / "stderr.log")
+    request = ExecutionRequest(
+        command,
+        run_dir,
+        rendered_environment,
+        run_dir / "stdout.log",
+        run_dir / "stderr.log",
+        _compile_resources(section.get("resources"), label),
+    )
     contract = MpasOutputContract(
         tuple(Path(_render(item, rendered, f"{label}.validation.required_outputs")) for item in outputs),
         Path(_render(log, rendered, f"{label}.validation.log")) if log else None,
