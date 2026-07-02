@@ -34,7 +34,8 @@ For the four-pair f048/f024 example, the planner creates five initialization sta
 
 - `model.mpas.initialization_products` and `model.mpas.initialization`;
 - `model.mpas.forecast_products` and `model.mpas.forecast`;
-- `bmatrix.nmc_pairs` time window and lead-time relationship.
+- `bmatrix.nmc_pairs` time window and lead-time relationship;
+- `platform.jaci.pbs` when using `--backend jaci-pbs`.
 
 ## Outputs
 
@@ -52,7 +53,7 @@ The planner supplies the initialization product to each forecast using `{initial
 
 ## YAML Configuration
 
-Use `examples/v2/bmatrix/nmc_campaign.yaml.example` as the complete starting point.
+Use `examples/v2/bmatrix/nmc_campaign.yaml.example` as the campaign starting point. For JACI, compose it with `examples/v2/platforms/jaci.yaml.example`.
 
 ## Parameters
 
@@ -71,6 +72,8 @@ The workflow combines the parameters documented in:
 
 ## CLI Usage
 
+Local dry-run:
+
 ```bash
 monan-jedi-workflow-v2 nmc-campaign \
   --config examples/v2/bmatrix/nmc_campaign.yaml.example \
@@ -78,7 +81,18 @@ monan-jedi-workflow-v2 nmc-campaign \
   --dry-run
 ```
 
-Remove `--dry-run` only after adapting paths, executable commands, and validation markers to the selected site.
+JACI dry-run:
+
+```bash
+monan-jedi-workflow-v2 nmc-campaign \
+  --config examples/v2/bmatrix/nmc_campaign.yaml.example \
+  --config examples/v2/platforms/jaci.yaml.example \
+  --workspace /path/to/nmc-campaign \
+  --backend jaci-pbs \
+  --dry-run
+```
+
+Remove `--dry-run` only after adapting paths, executable commands, validation markers, and site settings.
 
 ## simpleWorkflow Usage
 
@@ -101,7 +115,7 @@ The local runner revalidates prior successful outputs before skipping a stage. M
 - No real JACI execution evidence yet.
 - No MPAS NetCDF semantic/mesh/time validation yet.
 - No V2 BFLOW consumption test yet.
-- The public campaign CLI currently uses the local backend; JACI backend selection through case configuration is pending.
+- The sequential local runner is a development executor; it does not exploit scheduler-level forecast parallelism.
 
 ## FAQ
 
