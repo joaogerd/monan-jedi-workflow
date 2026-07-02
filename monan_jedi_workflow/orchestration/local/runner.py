@@ -28,6 +28,23 @@ class LocalWorkflowRunner:
         """Plan all stages without modifying persistent state."""
         return tuple(self.stages[name].plan(context) for name in self.specification.topological_order())
 
+    def prepare_only(self, context: RunContext) -> tuple[StageResult, ...]:
+        """Validate static inputs and materialize safe run-directory preflight.
+
+        The method never calls ``submit``, ``run``, ``wait``, ``finalize``, or
+        output validation. It is intended for review of rendered namelists,
+        streams, links, and site paths before a scheduler submission. A stage may
+        create a dangling link only for an explicit upstream artifact.
+        """
+        if not context.prepare_only:
+            raise ValueError("LocalWorkflowRunner.prepare_only requires RunContext.prepare_only=True.")
+        results: list[StageResult] = []
+        for name in self.specification.topological_order():
+            stage = self.stages[name]
+            stage.validate_inputs(context).require_valid()
+            results.append(stage.prepare(context))
+        return tuple(results)
+
     def _dependencies_valid(self, context: RunContext, name: str) -> None:
         """Validate every declared upstream artifact contract."""
         for dependency in self.specification.stage(name).needs:
@@ -52,6 +69,8 @@ class LocalWorkflowRunner:
         """Run stages and invalidate downstream reuse after upstream regeneration."""
         if context.dry_run:
             return self.plan(context)
+        if context.prepare_only:
+            return self.prepare_only(context)
         state = RunState.load(context.state_path, workflow=context.workflow, case=context.case)
         results: list[StageResult] = []
         regenerated: set[str] = set()
