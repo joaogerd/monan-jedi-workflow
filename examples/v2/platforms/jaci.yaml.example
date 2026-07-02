@@ -1,20 +1,34 @@
 # JACI site profile for V2 MPAS NMC campaigns.
+# Queue routing and launcher syntax are site policy. Scientific cases declare
+# only mpi_ranks, threads_per_rank, walltime, and optional memory_mb.
 platform:
   jaci:
-    pbs:
+    scheduler:
       common:
         poll_seconds: 30
-        prelude:
-          - "module load jedi-mpas-env/1.0.0"
       initialization:
         queue: pesqmini
-        walltime: "00:30:00"
-        select: 1
-        ncpus: 128
-        mpiprocs: 128
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 128
       forecast:
         queue: pesqmidi
-        walltime: "01:00:00"
-        select: 1
-        ncpus: 128
-        mpiprocs: 128
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 128
+
+    mpi_launcher:
+      argv:
+        - /opt/cray/pals/1.6/bin/mpiexec
+        - -n
+        - "{mpi_ranks}"
+
+    environment:
+      prelude:
+        - "module load jedi-mpas-env/1.0.0"
+      variables:
+        FI_CXI_RX_MATCH_MODE: hybrid
+
+    filesystem:
+      # Optionally restrict real workspaces, for example:
+      # allowed_workspace_roots:
+      #   - /p/projetos/monan_das/USER/work
+      allowed_workspace_roots: []
