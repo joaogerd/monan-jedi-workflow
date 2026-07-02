@@ -87,36 +87,18 @@ def build_nmc_campaign(
     context: RunContext,
     *,
     backend: ExecutionBackend | None = None,
+    wps_backend_factory: ExecutionBackendFactory | None = None,
     initialization_backend_factory: ExecutionBackendFactory | None = None,
     forecast_backend_factory: ExecutionBackendFactory | None = None,
 ) -> NmcCampaignPlan:
     """Compile the configured NMC campaign into executable stages.
 
-    Parameters
-    ----------
-    context : RunContext
-        Resolved B-matrix run context.
-    backend : ExecutionBackend | None, default=None
-        Shared backend for all MPAS stages. Convenient for local execution.
-    initialization_backend_factory : ExecutionBackendFactory | None, default=None
-        Factory creating a backend for each initialization stage.
-    forecast_backend_factory : ExecutionBackendFactory | None, default=None
-        Factory creating a backend for each forecast stage.
-
-    Returns
-    -------
-    NmcCampaignPlan
-        Stage registry and scheduler-neutral dependency graph.
-
-    Notes
-    -----
-    Each forecast receives the initial state produced for its exact `init_time`
-    through the explicit ``initial_state`` template value. Backend factories make
-    it possible to assign different JACI resources to initialization and
-    forecast work without leaking scheduler details into MPAS components.
+    WPS, initialization, and forecast backends are independently configurable so
+    serial `ungrib` does not inherit the MPI allocation of MPAS initialization.
     """
     init_factory = _factory(backend, initialization_backend_factory, "initialization")
     forecast_factory = _factory(backend, forecast_backend_factory, "forecast")
+    wps_factory = _factory(backend, wps_backend_factory, "wps") if wps_backend_factory else init_factory
     nmc_pairs = NmcPairsStage.from_context(context)
     pairs = nmc_pairs.pairs()
     init_times = tuple(sorted({member.init_time for pair in pairs for member in (pair.older, pair.newer)}))
@@ -125,7 +107,7 @@ def build_nmc_campaign(
             context.config,
             workspace=context.workspace,
             init_time=cycle_time,
-            backend=init_factory(f"wps_ungrib_{mpas_initialization_context(cycle_time)['init_yyyymmddhh']}"),
+            backend=wps_factory(f"wps_ungrib_{mpas_initialization_context(cycle_time)['init_yyyymmddhh']}"),
         )
         for cycle_time in init_times
     ) if _has_wps(context.config) else ()
