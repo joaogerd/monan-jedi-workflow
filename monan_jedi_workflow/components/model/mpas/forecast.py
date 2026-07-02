@@ -1,5 +1,6 @@
 """MPAS forecast specialization of the reusable execution stage."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from ....core.workflow_spec import StageSpec
@@ -29,6 +30,9 @@ class MpasForecastStage(MpasExecutionStage):
         Links staged before the forecast.
     templates : tuple[TemplateSpec, ...], default=()
         Templates rendered before the forecast.
+    extra_values : Mapping[str, object] | None, default=None
+        Explicit upstream artifact values such as ``initial_state``. Core
+        product tokens cannot be overridden.
     """
 
     def __init__(
@@ -41,6 +45,7 @@ class MpasForecastStage(MpasExecutionStage):
         backend: ExecutionBackend | None = None,
         links: tuple[LinkSpec, ...] = (),
         templates: tuple[TemplateSpec, ...] = (),
+        extra_values: Mapping[str, object] | None = None,
     ) -> None:
         self.product = product
         token = product.init_time.replace("-", "").replace("_", "").replace(":", "")
@@ -50,7 +55,7 @@ class MpasForecastStage(MpasExecutionStage):
             description="Execute one MPAS forecast and validate restart/state products.",
         )
         files = (product.restart, product.state, *contract.required_files)
-        values = {
+        values: dict[str, object] = {
             "init_time": product.init_time,
             "valid_time": product.valid_time,
             "init_yyyymmddhh": product.init_time.replace("-", "").replace("_", "")[:10],
@@ -61,6 +66,11 @@ class MpasForecastStage(MpasExecutionStage):
             "restart": str(product.restart),
             "state": str(product.state),
         }
+        upstream = dict(extra_values or {})
+        collision = set(values).intersection(upstream)
+        if collision:
+            raise ValueError(f"MPAS forecast extra values cannot override product tokens: {', '.join(sorted(collision))}.")
+        values.update(upstream)
         super().__init__(
             spec,
             run_dir,
