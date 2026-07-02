@@ -12,6 +12,7 @@ from .netcdf_contracts import MpasNetcdfContractError, mpas_artifact_check
 from .output_validation import MpasOutputContract
 from .products import MPAS_TIME_FORMAT, MpasForecastProductLayout, MpasProductLayoutError
 from .runtime_config import MpasRuntimeConfigurationError, compile_runtime, require_mapping
+from .staging import LinkSpec
 
 
 class MpasForecastConfigurationError(MpasRuntimeConfigurationError):
@@ -86,6 +87,11 @@ def compile_mpas_forecast(
             values=values,
             backend=backend,
         )
+        initial_state = upstream.get("initial_state")
+        links = tuple(
+            LinkSpec(item.source, item.target, upstream_artifact=isinstance(initial_state, str) and item.source == Path(initial_state))
+            for item in runtime.links
+        )
         checks = tuple(
             check
             for check in (
@@ -120,7 +126,7 @@ def compile_mpas_forecast(
         contract,
         request=runtime.request,
         backend=backend,
-        links=runtime.links,
+        links=links,
         templates=runtime.templates,
         extra_values=upstream,
     )
