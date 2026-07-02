@@ -5,10 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
-
-_TIME_FORMAT = "%Y-%m-%d_%H:%M:%S"
+from ...model.mpas.products import (
+    MPAS_TIME_FORMAT,
+    MpasForecastProduct,
+    MpasProductLayoutError,
+    normalize_mpas_time,
+)
 
 
 class NmcPairError(ValueError):
@@ -16,13 +19,12 @@ class NmcPairError(ValueError):
 
 
 def normalize_time(value: str) -> str:
-    """Normalize an ISO-8601 or MPAS timestamp to the canonical NMC form.
+    """Normalize an NMC timestamp through the MPAS product time contract.
 
     Parameters
     ----------
     value : str
-        Timestamp using either ``YYYY-MM-DD_HH:MM:SS`` or timezone-aware
-        ISO-8601 syntax.
+        MPAS or timezone-aware ISO-8601 timestamp.
 
     Returns
     -------
@@ -32,82 +34,41 @@ def normalize_time(value: str) -> str:
     Raises
     ------
     NmcPairError
-        Raised when the timestamp cannot be parsed or lacks timezone information
-        in ISO-8601 form.
+        Raised when the shared MPAS time parser rejects the value.
     """
     try:
-        return datetime.strptime(value, _TIME_FORMAT).replace(tzinfo=timezone.utc).strftime(_TIME_FORMAT)
-    except ValueError:
-        pass
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise NmcPairError(f"Invalid NMC timestamp: {value}") from exc
-    if parsed.tzinfo is None:
-        raise NmcPairError(f"ISO-8601 NMC timestamp must include a timezone: {value}")
-    return parsed.astimezone(timezone.utc).strftime(_TIME_FORMAT)
+        return normalize_mpas_time(value)
+    except MpasProductLayoutError as exc:
+        raise NmcPairError(str(exc)) from exc
 
 
 def _as_datetime(value: str) -> datetime:
-    return datetime.strptime(normalize_time(value), _TIME_FORMAT).replace(tzinfo=timezone.utc)
+    """Parse one canonical NMC timestamp as a UTC datetime."""
+    return datetime.strptime(normalize_time(value), MPAS_TIME_FORMAT).replace(tzinfo=timezone.utc)
 
 
-@dataclass(frozen=True)
-class NmcForecast:
-    """Describe forecast products from one MPAS initialization and lead time.
-
-    Parameters
-    ----------
-    init_time : str
-        Initialization timestamp.
-    lead_hours : int
-        Forecast lead time in hours.
-    restart : Path
-        Required restart product used to validate forecast completion.
-    state : Path
-        MPAS state product consumed by BFLOW.
-    """
-
-    init_time: str
-    lead_hours: int
-    restart: Path
-    state: Path
-
-    def __post_init__(self) -> None:
-        """Normalize the initialization time and validate the positive lead."""
-        if self.lead_hours <= 0:
-            raise NmcPairError("Forecast lead_hours must be positive.")
-        object.__setattr__(self, "init_time", normalize_time(self.init_time))
-
-    @property
-    def valid_time(self) -> str:
-        """Return the forecast valid time derived from initialization and lead."""
-        return (_as_datetime(self.init_time) + timedelta(hours=self.lead_hours)).strftime(_TIME_FORMAT)
+# Compatibility alias retained for callers that still import NmcForecast. Product
+# identity belongs to the MPAS component; NMC adds only pair geometry semantics.
+NmcForecast = MpasForecastProduct
 
 
 @dataclass(frozen=True)
 class NmcPair:
-    """Describe one older/newer NMC forecast pair with a common valid time.
+    """Describe one older/newer MPAS forecast pair with a common valid time.
 
     Parameters
     ----------
     valid_time : str
         Common valid time of both forecasts.
-    older : NmcForecast
-        Forecast initialized earlier with the longer lead time.
-    newer : NmcForecast
-        Forecast initialized later with the shorter lead time.
-
-    Raises
-    ------
-    NmcPairError
-        Raised when forecast valid times differ or the older forecast does not
-        have a longer lead time.
+    older : MpasForecastProduct
+        Earlier initialization with the longer lead time.
+    newer : MpasForecastProduct
+        Later initialization with the shorter lead time.
     """
 
     valid_time: str
-    older: NmcForecast
-    newer: NmcForecast
+    older: MpasForecastProduct
+    newer: MpasForecastProduct
 
     def __post_init__(self) -> None:
         """Validate the shared valid-time and ordering invariants."""
@@ -124,35 +85,17 @@ class NmcPair:
             raise NmcPairError("The older NMC forecast must have an earlier initialization time.")
 
 
-ForecastResolver = Callable[[str, int], NmcForecast]
+ForecastResolver = Callable[[str, int], MpasForecastProduct]
 
 
 def _require_forecast_identity(
-    forecast: NmcForecast,
+    forecast: MpasForecastProduct,
     *,
     requested_init_time: str,
     requested_lead_hours: int,
     label: str,
 ) -> None:
-    """Reject a resolver product that does not match the requested forecast.
-
-    Parameters
-    ----------
-    forecast : NmcForecast
-        Product returned by the resolver.
-    requested_init_time : str
-        Initialization time requested from the resolver.
-    requested_lead_hours : int
-        Lead time requested from the resolver.
-    label : str
-        Human-readable member label used in errors.
-
-    Raises
-    ------
-    NmcPairError
-        Raised when returned forecast metadata differs from the requested
-        initialization or lead time.
-    """
+    """Reject a resolver product that differs from the requested identity."""
     if forecast.init_time != requested_init_time or forecast.lead_hours != requested_lead_hours:
         raise NmcPairError(
             f"Resolver returned inconsistent {label} forecast: expected "
@@ -168,7 +111,7 @@ def plan_pairs(
     newer_lead_hours: int,
     resolve_forecast: ForecastResolver,
 ) -> tuple[NmcPair, ...]:
-    """Plan NMC pairs for requested valid times.
+    """Plan NMC pairs for requested common valid times.
 
     Parameters
     ----------
@@ -179,19 +122,12 @@ def plan_pairs(
     newer_lead_hours : int
         Shorter lead time assigned to the later initialization.
     resolve_forecast : ForecastResolver
-        Callback resolving one initialization/lead combination to expected MPAS
-        restart and state products.
+        Callback resolving one MPAS product identity to its artifact paths.
 
     Returns
     -------
     tuple[NmcPair, ...]
         Validated forecast-pair plan sorted by valid time.
-
-    Raises
-    ------
-    NmcPairError
-        Raised when leads are invalid, valid times are duplicated, or a resolver
-        returns products inconsistent with the requested time geometry.
     """
     if older_lead_hours <= newer_lead_hours:
         raise NmcPairError("older_lead_hours must be greater than newer_lead_hours.")
@@ -202,21 +138,11 @@ def plan_pairs(
     pairs: list[NmcPair] = []
     for valid_time in normalized:
         valid = _as_datetime(valid_time)
-        older_init = (valid - timedelta(hours=older_lead_hours)).strftime(_TIME_FORMAT)
-        newer_init = (valid - timedelta(hours=newer_lead_hours)).strftime(_TIME_FORMAT)
+        older_init = (valid - timedelta(hours=older_lead_hours)).strftime(MPAS_TIME_FORMAT)
+        newer_init = (valid - timedelta(hours=newer_lead_hours)).strftime(MPAS_TIME_FORMAT)
         older = resolve_forecast(older_init, older_lead_hours)
         newer = resolve_forecast(newer_init, newer_lead_hours)
-        _require_forecast_identity(
-            older,
-            requested_init_time=older_init,
-            requested_lead_hours=older_lead_hours,
-            label="older",
-        )
-        _require_forecast_identity(
-            newer,
-            requested_init_time=newer_init,
-            requested_lead_hours=newer_lead_hours,
-            label="newer",
-        )
+        _require_forecast_identity(older, requested_init_time=older_init, requested_lead_hours=older_lead_hours, label="older")
+        _require_forecast_identity(newer, requested_init_time=newer_init, requested_lead_hours=newer_lead_hours, label="newer")
         pairs.append(NmcPair(valid_time, older, newer))
     return tuple(pairs)
