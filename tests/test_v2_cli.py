@@ -36,3 +36,19 @@ def test_nmc_campaign_dry_run_builds_full_dag(tmp_path: Path) -> None:
     assert main(["nmc-campaign", "--config", str(config), "--workspace", str(workspace), "--dry-run"]) == 0
     assert (workspace / ".monan-jedi-workflow/resolved-config.yaml").is_file()
     assert (workspace / ".monan-jedi-workflow/provenance.json").is_file()
+
+
+def test_nmc_campaign_jaci_dry_run_uses_site_profile_without_qsub(tmp_path: Path) -> None:
+    """JACI planning must compile resource profiles without submitting jobs."""
+    campaign = Path("examples/v2/bmatrix/nmc_campaign.yaml.example")
+    site = Path("examples/v2/platforms/jaci.yaml.example")
+    workspace = tmp_path / "jaci-campaign"
+    assert main([
+        "nmc-campaign",
+        "--config", str(campaign),
+        "--config", str(site),
+        "--workspace", str(workspace),
+        "--backend", "jaci-pbs",
+        "--dry-run",
+    ]) == 0
+    assert (workspace / ".monan-jedi-workflow/resolved-config.yaml").is_file()
