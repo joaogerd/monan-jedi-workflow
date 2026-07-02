@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
+from ....core.netcdf_validation import validate_netcdf_structure
 from ....core.stage import RunContext, Stage, StageResult
 from ....core.validation import ValidationReport
 from ....core.workflow_spec import StageSpec
+from ...model.mpas.netcdf_contracts import mpas_artifact_check
 from ...model.mpas.products import MpasForecastProductLayout
 from .config import NmcPairsSettings, mpas_product_settings
 from .manifest import BflowManifest, BflowManifestEntry, read_bflow_manifest, write_bflow_manifest
@@ -21,22 +23,26 @@ class NmcPairsStage(Stage):
 
     _SPEC = StageSpec("nmc_pairs", "bmatrix.nmc_pairs", description="Validate MPAS NMC pairs and publish the BFLOW manifest.")
 
-    def __init__(self, settings: NmcPairsSettings, layout: MpasForecastProductLayout) -> None:
+    def __init__(
+        self,
+        settings: NmcPairsSettings,
+        layout: MpasForecastProductLayout,
+        config: Mapping[str, object],
+    ) -> None:
         self.settings = settings
         self.layout = layout
+        self.config = config
         self.workspace: Path | None = None
 
     @classmethod
     def from_context(cls, context: RunContext) -> "NmcPairsStage":
-        """Create the stage from resolved configuration.
-
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-        """
+        """Create the stage from resolved configuration."""
         config: Mapping[str, object] = context.config
-        return cls(NmcPairsSettings.from_config(config), MpasForecastProductLayout.from_mapping(mpas_product_settings(config)))
+        return cls(
+            NmcPairsSettings.from_config(config),
+            MpasForecastProductLayout.from_mapping(mpas_product_settings(config)),
+            config,
+        )
 
     @property
     def spec(self) -> StageSpec:
@@ -48,20 +54,42 @@ class NmcPairsStage(Stage):
         self.workspace = context.workspace
 
     def _output(self, relative: Path) -> Path:
-        """Resolve a configured relative output path.
-
-        Raises
-        ------
-        RuntimeError
-            Raised before a workspace has been bound.
-        """
+        """Resolve a configured relative output path."""
         if self.workspace is None:
             raise RuntimeError("NMC pairs stage has no bound workspace.")
         return self.workspace / relative
 
     def pairs(self) -> tuple[NmcPair, ...]:
         """Resolve all configured pair identities."""
-        return plan_pairs(self.settings.valid_times(), older_lead_hours=self.settings.older_lead_hours, newer_lead_hours=self.settings.newer_lead_hours, resolve_forecast=self.layout.forecast)
+        return plan_pairs(
+            self.settings.valid_times(),
+            older_lead_hours=self.settings.older_lead_hours,
+            newer_lead_hours=self.settings.newer_lead_hours,
+            resolve_forecast=self.layout.forecast,
+        )
+
+    def _validate_netcdf(self, pairs: tuple[NmcPair, ...]) -> ValidationReport:
+        """Validate optional restart/state structural contracts for every pair."""
+        report = ValidationReport(subject="nmc_pairs:netcdf")
+        for pair in pairs:
+            for member in (pair.older, pair.newer):
+                for name, path in (("forecast_restart", member.restart), ("forecast_state", member.state)):
+                    check = mpas_artifact_check(
+                        self.config,
+                        name=name,
+                        path=path,
+                        default_consumer="bmatrix.bflow",
+                        expected_time=pair.valid_time,
+                    )
+                    if check is not None:
+                        report.issues.extend(validate_netcdf_structure(path, check.contract).issues)
+        return report
+
+    def _validate_inputs(self, pairs: tuple[NmcPair, ...]) -> ValidationReport:
+        """Validate pair geometry, required products, and optional NetCDF contracts."""
+        report = validate_pairs(pairs, minimum_pairs=self.settings.minimum_pairs, require_products=True)
+        report.issues.extend(self._validate_netcdf(pairs).issues)
+        return report
 
     def _manifest(self, pairs: tuple[NmcPair, ...]) -> BflowManifest:
         """Translate pair state files into the stable hand-off manifest."""
@@ -73,9 +101,9 @@ class NmcPairsStage(Stage):
         return StageResult("Plan NMC pairs.", (self._output(self.settings.manifest_relative_path), self._output(self.settings.report_relative_path)))
 
     def validate_inputs(self, context: RunContext) -> ValidationReport:
-        """Validate all restart and MPAS state products."""
+        """Validate all restart and MPAS state products before publication."""
         self._bind(context)
-        return validate_pairs(self.pairs(), minimum_pairs=self.settings.minimum_pairs, require_products=True)
+        return self._validate_inputs(self.pairs())
 
     def prepare(self, context: RunContext) -> StageResult:
         """Create output directories."""
@@ -88,18 +116,21 @@ class NmcPairsStage(Stage):
         """Publish a manifest after complete input validation."""
         self._bind(context)
         pairs = self.pairs()
-        report = validate_pairs(pairs, minimum_pairs=self.settings.minimum_pairs, require_products=True)
+        report = self._validate_inputs(pairs)
         report.require_valid()
         manifest = write_bflow_manifest(self._output(self.settings.manifest_relative_path), self._manifest(pairs))
         report_path = self._output(self.settings.report_relative_path)
-        report_path.write_text(json.dumps({"stage": self.spec.name, "manifest": str(manifest), "validation": report.to_dict()}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        report_path.write_text(
+            json.dumps({"stage": self.spec.name, "manifest": str(manifest), "validation": report.to_dict()}, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         return StageResult(f"Published BFLOW manifest with {len(pairs)} NMC pair(s).", (manifest, report_path))
 
     def validate_outputs(self, context: RunContext) -> ValidationReport:
         """Validate the full reusable NMC hand-off contract."""
         self._bind(context)
         pairs = self.pairs()
-        report = validate_pairs(pairs, minimum_pairs=self.settings.minimum_pairs, require_products=True)
+        report = self._validate_inputs(pairs)
         manifest_path = self._output(self.settings.manifest_relative_path)
         report_path = self._output(self.settings.report_relative_path)
         if not manifest_path.is_file():
