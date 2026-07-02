@@ -45,15 +45,7 @@ def mpas_initialization_context(cycle_time: str) -> dict[str, str | int]:
 
 @dataclass(frozen=True)
 class MpasInitializationProduct:
-    """Describe the state created for one MPAS initialization time.
-
-    Parameters
-    ----------
-    cycle_time : str
-        Analysis or initialization time.
-    state : Path
-        Initial MPAS state artifact.
-    """
+    """Describe the state created for one MPAS initialization time."""
 
     cycle_time: str
     state: Path
@@ -68,15 +60,7 @@ class MpasInitializationProduct:
 
 @dataclass(frozen=True)
 class MpasInitializationProductLayout:
-    """Resolve initial MPAS state files from an explicit path template.
-
-    Parameters
-    ----------
-    root : Path
-        Root directory used for relative state templates.
-    state_template : str
-        State path template using initialization-time tokens.
-    """
+    """Resolve initial MPAS state files from an explicit path template."""
 
     root: Path
     state_template: str
@@ -94,7 +78,9 @@ class MpasInitializationProductLayout:
         return cls(Path(root), state)
 
     def __post_init__(self) -> None:
-        """Reject undocumented placeholders in the state template."""
+        """Reject implicit roots and undocumented state-template placeholders."""
+        if not self.root.is_absolute():
+            raise MpasProductLayoutError("MPAS initialization_products.root must be an absolute path.")
         allowed = set(mpas_initialization_context("2000-01-01_00:00:00"))
         names = {name for _, name, _, _ in Formatter().parse(self.state_template) if name}
         unknown = names.difference(allowed)
