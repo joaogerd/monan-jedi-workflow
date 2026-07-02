@@ -1,0 +1,1 @@
+"""WPS intermediate artifact contracts."""
