@@ -10,8 +10,10 @@ model:
       run_dir: "runs/mpas/init/{init_yyyymmddhh}"
       argv:
         - /path/to/mpas_init_atmosphere
-      environment:
-        OMP_NUM_THREADS: "1"
+      resources:
+        mpi_ranks: 128
+        threads_per_rank: 1
+        walltime: "00:30:00"
       links:
         - source: "inputs/x1.10242.static.nc"
           target: "x1.10242.static.nc"
