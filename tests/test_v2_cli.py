@@ -27,3 +27,12 @@ bmatrix:
     workspace = tmp_path / "workspace"
     assert main(["nmc-pairs", "--config", str(config), "--workspace", str(workspace), "--dry-run"]) == 0
     assert (workspace / ".monan-jedi-workflow/resolved-config.yaml").is_file()
+
+
+def test_nmc_campaign_dry_run_builds_full_dag(tmp_path: Path) -> None:
+    """The full NMC campaign command plans init, forecasts, and hand-off."""
+    config = Path("examples/v2/bmatrix/nmc_campaign.yaml.example")
+    workspace = tmp_path / "campaign"
+    assert main(["nmc-campaign", "--config", str(config), "--workspace", str(workspace), "--dry-run"]) == 0
+    assert (workspace / ".monan-jedi-workflow/resolved-config.yaml").is_file()
+    assert (workspace / ".monan-jedi-workflow/provenance.json").is_file()
