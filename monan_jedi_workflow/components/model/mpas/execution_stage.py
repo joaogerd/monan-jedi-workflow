@@ -1,7 +1,11 @@
 """Reusable MPAS execution stage base."""
 
+from __future__ import annotations
+
+import json
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from ....core.stage import RunContext, Stage, StageResult
 from ....core.validation import ValidationReport
@@ -12,29 +16,7 @@ from .staging import LinkSpec, TemplateSpec, render_template, stage_link
 
 
 class MpasExecutionStage(Stage):
-    """Base class for MPAS commands with explicit staging and execution contracts.
-
-    Parameters
-    ----------
-    spec : StageSpec
-        Unique scheduler-neutral stage declaration.
-    run_dir : Path
-        Command working directory.
-    contract : MpasOutputContract
-        Required outputs and optional log markers.
-    request : ExecutionRequest | None, default=None
-        Explicit command request.
-    backend : ExecutionBackend | None, default=None
-        Selected local or platform execution backend.
-    links : tuple[LinkSpec, ...], default=()
-        Idempotent symbolic links staged before execution.
-    templates : tuple[TemplateSpec, ...], default=()
-        Templates rendered before execution.
-    values : Mapping[str, object] | None, default=None
-        Explicit template context excluding workspace and run directory.
-    artifacts : tuple[Path, ...], default=()
-        Published artifacts after output validation.
-    """
+    """Base class for MPAS commands with explicit staging and execution contracts."""
 
     def __init__(
         self,
@@ -67,6 +49,31 @@ class MpasExecutionStage(Stage):
     def spec(self) -> StageSpec:
         """Return the scheduler-neutral stage declaration."""
         return self._spec
+
+    def plan(self, context: RunContext) -> StageResult:
+        """Plan work without launching scientific software.
+
+        A platform backend may persist a resolved scheduler plan during dry-run.
+        Such plan artifacts are intentionally metadata, not staged scientific
+        inputs or generated scientific outputs.
+        """
+        if self.request is None or self.backend is None:
+            return super().plan(context)
+        resolver = getattr(self.backend, "resolve", None)
+        if not callable(resolver):
+            return StageResult(message=f"Plan {self.spec.name}.", artifacts=self.artifacts)
+        resolved = resolver(self.request)
+        payload = getattr(resolved, "to_dict", None)
+        if not callable(payload):
+            return StageResult(message=f"Plan {self.spec.name}.", artifacts=self.artifacts)
+        record = context.workspace / ".monan-jedi-workflow" / "dry-run" / f"{self.spec.name}.json"
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(json.dumps(payload(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        script = getattr(resolved, "script", None)
+        plan_artifacts = (*self.artifacts, record)
+        if isinstance(script, Path):
+            plan_artifacts = (*plan_artifacts, script)
+        return StageResult(message=f"Resolved platform plan for {self.spec.name}.", artifacts=plan_artifacts)
 
     def validate_inputs(self, context: RunContext) -> ValidationReport:
         """Validate declared link and template sources."""
