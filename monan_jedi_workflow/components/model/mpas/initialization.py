@@ -19,15 +19,8 @@ from .staging import LinkSpec, TemplateSpec
 def mpas_initialization_context(cycle_time: str) -> dict[str, str | int]:
     """Build canonical template values for one MPAS initialization.
 
-    Parameters
-    ----------
-    cycle_time : str
-        Initialization time in MPAS or timezone-aware ISO-8601 form.
-
-    Returns
-    -------
-    dict[str, str | int]
-        Time and zero-lead values shared by initialization templates.
+    The ``wps_time`` token follows the real WPS `FILE:YYYY-MM-DD_HH`
+    convention consumed by the MPAS global initialization configuration.
     """
     normalized = normalize_mpas_time(cycle_time)
     cycle = datetime.strptime(normalized, MPAS_TIME_FORMAT)
@@ -38,6 +31,7 @@ def mpas_initialization_context(cycle_time: str) -> dict[str, str | int]:
         "init_yyyymmddhh": cycle.strftime("%Y%m%d%H"),
         "valid_yyyymmddhh": cycle.strftime("%Y%m%d%H"),
         "mpas_valid_file_time": cycle.strftime("%Y-%m-%d_%H.%M.%S"),
+        "wps_time": cycle.strftime("%Y-%m-%d_%H"),
         "lead_hours": 0,
         "lead_hours_03d": "000",
     }
@@ -99,35 +93,16 @@ class MpasInitializationProductLayout:
 class MpasInitializationStage(MpasExecutionStage):
     """Execute MPAS initialization and publish one initial state artifact."""
 
-    def __init__(
-        self,
-        product: MpasInitializationProduct,
-        run_dir: Path,
-        contract: MpasOutputContract,
-        *,
-        request: ExecutionRequest | None = None,
-        backend: ExecutionBackend | None = None,
-        links: tuple[LinkSpec, ...] = (),
-        templates: tuple[TemplateSpec, ...] = (),
-    ) -> None:
+    def __init__(self, product: MpasInitializationProduct, run_dir: Path, contract: MpasOutputContract, *, request: ExecutionRequest | None = None, backend: ExecutionBackend | None = None, links: tuple[LinkSpec, ...] = (), templates: tuple[TemplateSpec, ...] = ()) -> None:
         self.product = product
         token = mpas_initialization_context(product.cycle_time)["init_yyyymmddhh"]
-        spec = StageSpec(
-            name=f"mpas_init_{token}",
-            command="model.mpas.initialize",
-            description="Execute MPAS initialization and validate the initial state.",
-        )
+        spec = StageSpec(f"mpas_init_{token}", "model.mpas.initialize", description="Execute MPAS initialization and validate the initial state.")
         files = (product.state, *contract.required_files)
         values = {**mpas_initialization_context(product.cycle_time), "state": str(product.state)}
         super().__init__(
             spec,
             run_dir,
-            MpasOutputContract(
-                required_files=files,
-                log_path=contract.log_path,
-                required_log_markers=contract.required_log_markers,
-                netcdf_checks=contract.netcdf_checks,
-            ),
+            MpasOutputContract(files, contract.log_path, contract.required_log_markers, contract.netcdf_checks),
             request=request,
             backend=backend,
             links=links,
