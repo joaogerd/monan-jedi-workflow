@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft V2 component. Product paths, staging, output validation, local execution, JACI PBS rendering, submission, scheduler wait, YAML-to-stage compilation, and upstream initialization wiring are implemented and covered by local tests. Real JACI validation and scientific validation remain pending.
+Draft V2 component. Product paths, staging, output validation, local execution, JACI PBS rendering/submission/wait, YAML-to-stage compilation, upstream initialization wiring, and optional structural NetCDF contracts are implemented and covered by local tests. Real JACI validation and scientific baseline comparison remain pending.
 
 ## Purpose
 
@@ -28,19 +28,21 @@ A successful forecast publishes restart and MPAS state products.
 
 | Artifact | Consumer | Current validation |
 | --- | --- | --- |
-| Initial MPAS state | MPAS forecast | Declared link source exists |
-| Restart | NMC pairs | Exists and is non-empty |
-| MPAS state | JEDI, NMC pairs | Exists and is non-empty |
+| Initial MPAS state | MPAS forecast | Declared link source exists; optional NetCDF contract |
+| Restart | NMC pairs | Exists/non-empty; optional NetCDF contract |
+| MPAS state | JEDI, NMC pairs, BFLOW | Exists/non-empty; optional NetCDF contract |
 | Model log | Validation/orchestration | Optional markers |
 | PBS script | PBS | Explicit argv/resources |
 
-NetCDF semantic and format validation is pending.
+A structural contract can require accepted container formats, variables, dimensions, global mesh metadata, and the expected valid time before a downstream stage consumes the artifact.
 
 ## YAML Configuration
 
-The compiler reads `model.mpas.forecast_products` and `model.mpas.forecast`. A complete component example is available at `examples/v2/model/mpas_forecast.yaml.example`; a full initialization-to-NMC example is available at `examples/v2/bmatrix/nmc_campaign.yaml.example`.
+The compiler reads `model.mpas.forecast_products` and `model.mpas.forecast`. Product roots must be absolute paths; `run_dir` may be relative to the explicit workflow workspace. A component example is available at `examples/v2/model/mpas_forecast.yaml.example`; a full campaign example is available at `examples/v2/bmatrix/nmc_campaign.yaml.example`.
 
 Supported path tokens are `workspace`, `run_dir`, `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `lead_hours`, `lead_hours_03d`, `restart`, `state`, and `initial_state` when supplied by a workflow planner.
+
+Optional advanced checks live under `model.mpas.artifact_validation.forecast_restart` and `model.mpas.artifact_validation.forecast_state`. See `examples/v2/science/mpas_artifact_validation.yaml.example`.
 
 ## Parameters
 
@@ -52,10 +54,11 @@ Supported path tokens are `workspace`, `run_dir`, `init_time`, `init_yyyymmddhh`
 | `state_template` | Expected state path. |
 | `argv` | Exact executable arguments. |
 | `links` | Idempotent staged inputs, including optional initial state. |
+| `artifact_validation` | Optional NetCDF format, schema, metadata, and time checks. |
 
 ## Dependencies
 
-Python 3.10+, MPAS runtime inputs, and PBS commands on JACI.
+Python 3.10+, netCDF4 Python bindings, MPAS runtime inputs, and PBS commands on JACI.
 
 ## CLI Usage
 
@@ -72,15 +75,15 @@ A standalone `mpas-forecast` V2 CLI is not exposed yet; the workflow command com
 
 ## simpleWorkflow Usage
 
-The future adapter will invoke the public workflow CLI with explicit configuration and workspace. It must not reimplement model staging in workflow YAML.
+Render the campaign with `nmc-campaign --render-simpleworkflow`; each generated forecast task calls `stage run` with the resolved configuration and workspace.
 
 ## ecFlow and Cylc Integration Contract
 
-Tasks use the same explicit request; platform resources remain outside the component.
+Tasks use the same explicit request and `stage run` contract; platform resources remain outside the component.
 
 ## Validation
 
-Checks staged sources, restart/state existence and size, and optional log markers. Backend completion alone is never scientific success.
+Checks staged sources, restart/state existence and size, optional log markers, and configured NetCDF format/schema/metadata/time requirements. Backend completion alone is never scientific success.
 
 ## Restart and Idempotency Behavior
 
@@ -88,7 +91,7 @@ Matching links are reused; regular targets are never overwritten; successful sta
 
 ## Limitations
 
-No real JACI execution evidence, NetCDF semantic validation, or scientific baseline comparison yet.
+The exact production variable, dimension, mesh-attribute, and time contracts must be confirmed against the selected MPAS baseline. Real JACI execution evidence and scientific baseline comparison are still pending.
 
 ## FAQ
 
@@ -99,6 +102,10 @@ PBS is a site deployment detail, while MPAS is a scientific capability.
 ### Why require restart and state?
 
 State is consumed downstream; restart independently confirms forecast completion.
+
+### Why validate the format before BFLOW?
+
+A consumer can reject an otherwise valid NetCDF file when its build lacks support for a container format such as NetCDF-4/HDF5. Declaring CDF5 early prevents a late MPI I/O failure.
 
 ## References
 
