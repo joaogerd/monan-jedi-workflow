@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from string import Formatter
-from typing import Mapping
 
 from ...bmatrix.nmc_pairs.model import NmcForecast, normalize_time
 
@@ -54,6 +54,14 @@ def _fields(template: str) -> set[str]:
     return {field_name for _, field_name, _, _ in Formatter().parse(template) if field_name}
 
 
+def _required_string(mapping: Mapping[str, object], key: str, label: str) -> str:
+    """Return one required non-empty configuration string."""
+    value = mapping.get(key)
+    if not isinstance(value, str) or not value:
+        raise MpasProductLayoutError(f"{label}.{key} must be a non-empty string.")
+    return value
+
+
 @dataclass(frozen=True)
 class MpasForecastProductLayout:
     """Resolve restart and state products for one MPAS forecast.
@@ -77,6 +85,26 @@ class MpasForecastProductLayout:
     root: Path
     restart_template: str
     state_template: str
+
+    @classmethod
+    def from_mapping(cls, mapping: Mapping[str, object]) -> "MpasForecastProductLayout":
+        """Build a product layout from `model.mpas.forecast_products` settings.
+
+        Parameters
+        ----------
+        mapping : Mapping[str, object]
+            Mapping with `root`, `restart_template`, and `state_template` keys.
+
+        Returns
+        -------
+        MpasForecastProductLayout
+            Validated product-layout declaration.
+        """
+        return cls(
+            root=Path(_required_string(mapping, "root", "model.mpas.forecast_products")),
+            restart_template=_required_string(mapping, "restart_template", "model.mpas.forecast_products"),
+            state_template=_required_string(mapping, "state_template", "model.mpas.forecast_products"),
+        )
 
     def __post_init__(self) -> None:
         """Validate templates before a campaign attempts to resolve products."""
