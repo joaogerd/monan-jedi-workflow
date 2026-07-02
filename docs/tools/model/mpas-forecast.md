@@ -2,122 +2,92 @@
 
 ## Status
 
-Draft V2 component. Product-location, staging, output validation, and JACI PBS rendering are implemented and locally tested. A full JACI submission backend, YAML compiler, real MPAS execution, and scientific validation remain pending.
+Draft V2 component. Product paths, staging, output validation, local execution, JACI PBS rendering, submit, and scheduler wait are implemented and covered by local tests. YAML compilation, real JACI validation, MPAS initialization, and scientific validation remain pending.
 
 ## Purpose
 
-The MPAS forecast component defines one forecast as an explicit contract:
+Defines one MPAS forecast through explicit time, artifact, runtime, and validation contracts.
 
-- initialization time and lead time;
-- expected restart and MPAS state artifacts;
-- deterministic run directory;
-- staged links and rendered templates;
-- explicit program argument vector;
-- declared output and log markers.
+## Scientific Context
 
-The component never infers paths from the current directory and does not contain PBS queue logic.
+Forecast states provide backgrounds for JEDI and f024/f048 samples for NMC B-matrix production. Scheduler completion is not scientific success.
+
+## When to Use the Tool
+
+Use for a reproducible MPAS forecast after an upstream initialization stage has produced initial conditions.
 
 ## Inputs
 
-- an initialization time;
-- a positive lead time;
-- MPAS restart/state path templates;
-- declared link and template inputs;
-- an explicit executable argument vector.
+Initialization time, positive lead, restart/state templates, staged inputs, and an explicit executable argument vector.
 
 ## Outputs
 
-A successful forecast must publish at least:
-
-```text
-restart.<valid-time>.nc
-mpasout.<valid-time>.nc
-```
-
-The exact paths are defined by `model.mpas.forecast_products` and become inputs to downstream JEDI or NMC-pair stages.
+A successful forecast publishes restart and MPAS state products.
 
 ## Artifact Contract
 
-| Artifact | Producer | Consumer | Current validation |
-| --- | --- | --- | --- |
-| Restart | MPAS forecast | NMC pairs | Exists and is non-empty |
-| MPAS state | MPAS forecast | NMC pairs, JEDI | Exists and is non-empty |
-| Model log | MPAS forecast | validation/orchestration | Optional declared markers |
-| PBS script | JACI platform adapter | PBS | Explicit argv and resources |
+| Artifact | Consumer | Current validation |
+| --- | --- | --- |
+| Restart | NMC pairs | Exists and is non-empty |
+| MPAS state | JEDI, NMC pairs | Exists and is non-empty |
+| Model log | validation | Optional markers |
+| PBS script | PBS | Explicit argv/resources |
 
-NetCDF variables, dimensions, mesh identity, time coordinate, and container-format checks are not implemented yet.
+NetCDF semantic and format validation is pending.
 
-## Configuration
+## YAML Configuration
 
-The current V2 public contract accepts documented path-template tokens:
-
-```text
-init_time
-init_yyyymmddhh
-valid_time
-valid_yyyymmddhh
-mpas_valid_file_time
-lead_hours
-lead_hours_03d
-```
-
-Unknown tokens fail at configuration construction.
+A public compiler is pending. Supported path tokens are `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `lead_hours`, and `lead_hours_03d`.
 
 ## Parameters
 
-| Parameter | Type | Effect |
-| --- | --- | --- |
-| `init_time` | UTC time | Forecast initialization. |
-| `lead_hours` | positive integer | Forecast lead and valid time. |
-| `restart_template` | path template | Expected restart location. |
-| `state_template` | path template | Expected MPAS state location. |
-| `argv` | list of strings | Exact executable arguments. |
-| `required_log_markers` | list of strings | Completion markers checked in a declared log. |
+| Parameter | Effect |
+| --- | --- |
+| `init_time` | Forecast initialization. |
+| `lead_hours` | Forecast lead and valid time. |
+| `restart_template` | Expected restart path. |
+| `state_template` | Expected state path. |
+| `argv` | Exact executable arguments. |
 
 ## Dependencies
 
-- Python 3.10 or newer;
-- MPAS executable and runtime inputs supplied by the site;
-- JACI PBS only when using the JACI adapter.
+Python 3.10+, MPAS runtime inputs, and PBS commands on JACI.
 
 ## CLI Usage
 
-There is no public MPAS V2 CLI yet. The component is intentionally available through the stage and platform contracts while the YAML compiler and workflow builder are completed.
+No public MPAS V2 CLI exists yet.
 
 ## simpleWorkflow Usage
 
-The future simpleWorkflow task must invoke the public MPAS V2 CLI with an explicit configuration and workspace. It must not embed MPAS run logic in the workflow YAML.
+The future adapter will invoke the public MPAS CLI with explicit configuration and workspace.
 
 ## ecFlow and Cylc Integration Contract
 
-ecFlow and Cylc tasks will render or invoke the same explicit request. Queue resources, module prelude, and launcher remain platform configuration; artifact contracts remain component configuration.
+Tasks use the same explicit request; platform resources remain outside the component.
 
 ## Validation
 
-The current component validates staged source existence, restart/state file presence, file size, and optional log markers. A scheduler completion state alone is never scientific success.
+Checks staged sources, restart/state existence and size, and optional log markers. Backend completion alone is never scientific success.
 
 ## Restart and Idempotency Behavior
 
-Matching symbolic links are reused. A regular target is never silently overwritten. Templates are rendered deterministically from an explicit context. Output validation must pass before a workflow runner can reuse a prior successful state.
+Matching links are reused; regular targets are never overwritten; successful state reuse requires output validation.
 
 ## Limitations
 
-- No V2 JACI submission/wait backend yet.
-- No V2 MPAS initialization stage yet.
-- No public YAML compiler or CLI for the forecast stage.
-- No JACI or scientific baseline validation yet.
+No V2 MPAS initialization stage, public YAML compiler, real JACI execution evidence, or scientific baseline comparison yet.
 
 ## FAQ
 
-### Why is PBS not inside the MPAS component?
+### Why is PBS outside the component?
 
-MPAS is scientific capability; PBS is a JACI deployment detail. Keeping them separate allows a local runner, simpleWorkflow, ecFlow, Cylc, or another scheduler to use the same forecast contract.
+PBS is a site deployment detail, while MPAS is a scientific capability.
 
-### Why require both restart and state products?
+### Why require restart and state?
 
-The state is the downstream analysis or BFLOW input. The restart is an independent completion artifact that helps detect partial or incorrectly staged forecasts.
+State is consumed downstream; restart independently confirms forecast completion.
 
 ## References
 
 - MPAS-Atmosphere documentation.
-- Project V2 architecture and migration plan: `docs/developers/v2-architecture-and-migration-plan.md`.
+- `docs/developers/v2-architecture-and-migration-plan.md`.
