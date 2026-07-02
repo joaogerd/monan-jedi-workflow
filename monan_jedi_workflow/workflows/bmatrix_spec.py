@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from ..components.bmatrix.nmc_pairs.stage import NmcPairsStage
 from ..components.model.mpas.forecast import MpasForecastStage
 from ..components.model.mpas.initialization import MpasInitializationStage
+from ..components.model.wps import WpsUngribStage
 from ..core.workflow_spec import StageSpec, WorkflowSpec, WorkflowSpecificationError
 
 
@@ -43,32 +44,16 @@ def nmc_campaign_workflow(
     initializations: Iterable[MpasInitializationStage],
     forecasts: Iterable[MpasForecastStage],
     nmc_pairs: NmcPairsStage,
+    wps_stages: Iterable[WpsUngribStage] = (),
 ) -> WorkflowSpec:
     """Build an initialization-to-forecast-to-NMC workflow graph.
 
-    Parameters
-    ----------
-    initializations : Iterable[MpasInitializationStage]
-        Initialization stages that create the initial states for all forecasts.
-    forecasts : Iterable[MpasForecastStage]
-        Forecast stages required by the configured NMC pair plan.
-    nmc_pairs : NmcPairsStage
-        Manifest publication stage.
-
-    Returns
-    -------
-    WorkflowSpec
-        Scheduler-neutral graph with `init -> forecast -> nmc_pairs` edges.
-
-    Raises
-    ------
-    WorkflowSpecificationError
-        Raised when forecast coverage is incomplete, initializations are
-        duplicated, or a forecast has no initialization stage.
+    WPS stages are optional for generic unit fixtures, but when supplied they
+    must cover every initialization time and become direct init dependencies.
     """
     init_members = tuple(initializations)
     forecast_members = tuple(forecasts)
-    forecast_spec = nmc_pairs_workflow(forecast_members, nmc_pairs)
+    wps_members = tuple(wps_stages)
     by_time = {stage.product.cycle_time: stage for stage in init_members}
     if len(by_time) != len(init_members):
         raise WorkflowSpecificationError("MPAS initialization stages must have unique cycle times.")
@@ -80,15 +65,23 @@ def nmc_campaign_workflow(
             f"MPAS initialization coverage mismatch: missing={sorted(required_times - available_times)}, "
             f"extra={sorted(available_times - required_times)}."
         )
+    wps_by_time = {stage.product.init_time: stage for stage in wps_members}
+    if wps_members and set(wps_by_time) != available_times:
+        raise WorkflowSpecificationError("WPS stages must cover exactly the MPAS initialization times.")
 
-    init_specs = tuple(stage.spec for stage in init_members)
+    init_specs = tuple(
+        _spec_with_needs(stage.spec, (wps_by_time[stage.product.cycle_time].spec.name,))
+        if wps_members else stage.spec
+        for stage in init_members
+    )
+    init_spec_by_name = {item.name: item for item in init_specs}
     updated_forecasts = tuple(
-        _spec_with_needs(stage.spec, (by_time[stage.product.init_time].spec.name,))
+        _spec_with_needs(stage.spec, (init_spec_by_name[by_time[stage.product.init_time].spec.name].name,))
         for stage in forecast_members
     )
     handoff = _spec_with_needs(nmc_pairs.spec, tuple(stage.name for stage in updated_forecasts))
     return WorkflowSpec.from_stages(
         "bmatrix",
-        (*init_specs, *updated_forecasts, handoff),
-        description="MPAS initialization, forecasts, and NMC BFLOW hand-off.",
+        (*(stage.spec for stage in wps_members), *init_specs, *updated_forecasts, handoff),
+        description="WPS, MPAS initialization, forecasts, and NMC BFLOW hand-off.",
     )
