@@ -23,6 +23,7 @@ def compile_mpas_forecast(
     init_time: str,
     lead_hours: int,
     backend: ExecutionBackend,
+    extra_values: Mapping[str, object] | None = None,
 ) -> MpasForecastStage:
     """Compile one configured MPAS forecast into an executable stage.
 
@@ -38,6 +39,9 @@ def compile_mpas_forecast(
         Positive forecast lead time.
     backend : ExecutionBackend
         Local or platform-specific execution backend.
+    extra_values : Mapping[str, object] | None, default=None
+        Explicit upstream artifact values available to path, command, and
+        template rendering. Core product tokens cannot be overridden.
 
     Returns
     -------
@@ -54,7 +58,7 @@ def compile_mpas_forecast(
         product = layout.forecast(init_time, lead_hours)
         init = datetime.strptime(product.init_time, MPAS_TIME_FORMAT)
         valid = datetime.strptime(product.valid_time, MPAS_TIME_FORMAT)
-        values = {
+        values: dict[str, object] = {
             "workspace": str(workspace),
             "init_time": product.init_time,
             "valid_time": product.valid_time,
@@ -66,6 +70,13 @@ def compile_mpas_forecast(
             "restart": str(product.restart),
             "state": str(product.state),
         }
+        upstream = dict(extra_values or {})
+        collision = set(values).intersection(upstream)
+        if collision:
+            raise MpasForecastConfigurationError(
+                f"MPAS forecast extra values cannot override product tokens: {', '.join(sorted(collision))}."
+            )
+        values.update(upstream)
         runtime = compile_runtime(
             section,
             label="model.mpas.forecast",
@@ -83,4 +94,5 @@ def compile_mpas_forecast(
         backend=backend,
         links=runtime.links,
         templates=runtime.templates,
+        extra_values=upstream,
     )
