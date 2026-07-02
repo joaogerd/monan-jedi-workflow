@@ -11,6 +11,8 @@ from .initialization import (
     MpasInitializationStage,
     mpas_initialization_context,
 )
+from .netcdf_contracts import MpasNetcdfContractError, mpas_artifact_check
+from .output_validation import MpasOutputContract
 from .products import MpasProductLayoutError
 from .runtime_config import MpasRuntimeConfigurationError, compile_runtime, require_mapping
 
@@ -42,7 +44,7 @@ def compile_mpas_initialization(
     Returns
     -------
     MpasInitializationStage
-        Stage with explicit runtime, staging, and output contracts.
+        Stage with explicit runtime, staging, output, and NetCDF contracts.
     """
     try:
         model = require_mapping(config.get("model"), "model")
@@ -64,12 +66,25 @@ def compile_mpas_initialization(
             values=values,
             backend=backend,
         )
-    except (MpasRuntimeConfigurationError, MpasProductLayoutError) as exc:
+        check = mpas_artifact_check(
+            config,
+            name="initialization_state",
+            path=product.state,
+            default_consumer="model.mpas.forecast",
+            expected_time=product.cycle_time,
+        )
+    except (MpasRuntimeConfigurationError, MpasProductLayoutError, MpasNetcdfContractError) as exc:
         raise MpasInitializationConfigurationError(str(exc)) from exc
+    contract = MpasOutputContract(
+        required_files=runtime.contract.required_files,
+        log_path=runtime.contract.log_path,
+        required_log_markers=runtime.contract.required_log_markers,
+        netcdf_checks=(*runtime.contract.netcdf_checks, *((check,) if check is not None else ())),
+    )
     return MpasInitializationStage(
         product,
         runtime.run_dir,
-        runtime.contract,
+        contract,
         request=runtime.request,
         backend=backend,
         links=runtime.links,
