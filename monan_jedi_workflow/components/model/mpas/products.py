@@ -108,7 +108,7 @@ class MpasForecastProductLayout:
             names = {name for _, name, _, _ in Formatter().parse(template) if name}
             unknown = names.difference(allowed)
             if unknown:
-                raise MpasProductLayoutError(f"Unsupported MPAS path field(s): {', '.join(sorted(unknown))}.")
+                raise MpasProductLayoutError(f"unsupported field(s) in MPAS path template: {', '.join(sorted(unknown))}.")
 
     def forecast(self, init_time: str, lead_hours: int) -> MpasForecastProduct:
         """Resolve the expected restart and state path for one forecast."""
