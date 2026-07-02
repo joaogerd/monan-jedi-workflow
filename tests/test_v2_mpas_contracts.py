@@ -2,10 +2,14 @@
 
 from pathlib import Path
 
+import pytest
+
 from monan_jedi_workflow.components.model.mpas import (
     LinkSpec,
     MpasForecastProductLayout,
+    MpasInitializationProductLayout,
     MpasOutputContract,
+    MpasProductLayoutError,
     TemplateSpec,
     render_template,
     stage_link,
@@ -25,6 +29,14 @@ def test_mpas_product_layout_resolves_without_bmatrix_dependency(tmp_path: Path)
     product = layout.forecast("2026-06-20T00:00:00Z", 48)
     assert product.valid_time == "2026-06-22_00:00:00"
     assert product.state.name == "mpasout.2026-06-22_00.00.00.nc"
+
+
+def test_mpas_product_roots_must_be_absolute() -> None:
+    """Product locations cannot silently depend on the current directory."""
+    with pytest.raises(MpasProductLayoutError, match="absolute path"):
+        MpasForecastProductLayout(Path("relative"), "restart.nc", "state.nc")
+    with pytest.raises(MpasProductLayoutError, match="absolute path"):
+        MpasInitializationProductLayout(Path("relative"), "init.nc")
 
 
 def test_staging_and_output_contract_are_idempotent(tmp_path: Path) -> None:
