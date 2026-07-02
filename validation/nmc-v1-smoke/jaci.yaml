@@ -1,0 +1,36 @@
+platform:
+  jaci:
+    scheduler:
+      common:
+        poll_seconds: 30
+      wps:
+        queue: pesqmini
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 1
+      initialization:
+        queue: pesqmini
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 128
+      forecast:
+        queue: pesqmidi
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 128
+
+    mpi_launcher:
+      argv:
+        - /opt/cray/pals/1.6/bin/mpiexec
+        - -n
+        - "{mpi_ranks}"
+
+    environment:
+      prelude:
+        - "source /p/projetos/monan_das/joao.gerd/projects/mpas-bmatrix-global/scripts/load_jaci_env.sh"
+      variables:
+        OMP_NUM_THREADS: "{threads_per_rank}"
+        FI_CXI_RX_MATCH_MODE: hybrid
+        GFORTRAN_CONVERT_UNIT: big_endian:101-200
+        F_UFMTENDIAN: big
+
+    filesystem:
+      allowed_workspace_roots:
+        - /p/projetos/monan_das/joao.gerd/projects/tmp/monan-jedi-workflow
