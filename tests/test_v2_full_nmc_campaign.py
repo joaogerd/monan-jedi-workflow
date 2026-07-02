@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from monan_jedi_workflow.core.stage import RunContext
 from monan_jedi_workflow.orchestration.local import LocalWorkflowRunner
 from monan_jedi_workflow.platforms.local import LocalProcessBackend
 from monan_jedi_workflow.workflows.nmc_campaign import build_nmc_campaign
+from monan_jedi_workflow.workflows.nmc_validation import validate_nmc_campaign, write_nmc_campaign_validation
 
 
 def _write_programs(workspace: Path) -> None:
@@ -50,7 +52,7 @@ print('Forecast complete')
 
 
 def test_full_nmc_campaign_runs_locally_with_structural_netcdf_validation(tmp_path: Path) -> None:
-    """The complete V2 chain publishes a valid BFLOW manifest and is restart-safe."""
+    """The complete V2 chain publishes valid products, audit, and manifest."""
     workspace = tmp_path / "workspace"
     _write_programs(workspace)
     config = {
@@ -122,3 +124,8 @@ def test_full_nmc_campaign_runs_locally_with_structural_netcdf_validation(tmp_pa
     assert manifest.is_file()
     assert len(manifest.read_text(encoding="utf-8").splitlines()) == 5
     assert runner.run(context) == ()
+
+    audit = validate_nmc_campaign(plan, context)
+    path = write_nmc_campaign_validation(workspace / ".monan-jedi-workflow/validation/nmc-campaign.json", audit)
+    assert audit.is_valid
+    assert json.loads(path.read_text(encoding="utf-8"))["is_valid"] is True
