@@ -105,6 +105,11 @@ class NmcPairsStage(Stage):
         self._bind(context)
         return self._validate_inputs(self.pairs())
 
+    def validate_preparation_inputs(self, context: RunContext) -> ValidationReport:
+        """Validate only NMC pair geometry before forecast products are produced."""
+        self._bind(context)
+        return validate_pairs(self.pairs(), minimum_pairs=self.settings.minimum_pairs, require_products=False)
+
     def prepare(self, context: RunContext) -> StageResult:
         """Create output directories."""
         self._bind(context)
