@@ -1,1 +1,0 @@
-"""NMC reuse regression tests."""
