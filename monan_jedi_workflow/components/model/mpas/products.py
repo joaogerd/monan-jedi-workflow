@@ -41,6 +41,37 @@ def normalize_mpas_time(value: str) -> str:
     return parsed.astimezone(timezone.utc).strftime(MPAS_TIME_FORMAT)
 
 
+def mpas_time_context(init_time: str, lead_hours: int) -> dict[str, str | int]:
+    """Build the canonical MPAS path-template context for one forecast.
+
+    Parameters
+    ----------
+    init_time : str
+        Forecast initialization time.
+    lead_hours : int
+        Positive forecast lead time.
+
+    Returns
+    -------
+    dict[str, str | int]
+        Initialization, valid-time, and lead-time template values.
+    """
+    normalized = normalize_mpas_time(init_time)
+    if lead_hours <= 0:
+        raise MpasProductLayoutError("MPAS forecast lead_hours must be positive.")
+    init = datetime.strptime(normalized, MPAS_TIME_FORMAT).replace(tzinfo=timezone.utc)
+    valid = init + timedelta(hours=lead_hours)
+    return {
+        "init_time": normalized,
+        "init_yyyymmddhh": init.strftime("%Y%m%d%H"),
+        "valid_time": valid.strftime(MPAS_TIME_FORMAT),
+        "valid_yyyymmddhh": valid.strftime("%Y%m%d%H"),
+        "mpas_valid_file_time": valid.strftime("%Y-%m-%d_%H.%M.%S"),
+        "lead_hours": lead_hours,
+        "lead_hours_03d": f"{lead_hours:03d}",
+    }
+
+
 @dataclass(frozen=True)
 class MpasForecastProduct:
     """Restart and state artifacts produced by one MPAS forecast."""
@@ -61,23 +92,6 @@ class MpasForecastProduct:
         """Return valid time derived from initialization and lead time."""
         init = datetime.strptime(self.init_time, MPAS_TIME_FORMAT).replace(tzinfo=timezone.utc)
         return (init + timedelta(hours=self.lead_hours)).strftime(MPAS_TIME_FORMAT)
-
-
-def _context(init_time: str, lead_hours: int) -> dict[str, str | int]:
-    normalized = normalize_mpas_time(init_time)
-    if lead_hours <= 0:
-        raise MpasProductLayoutError("MPAS forecast lead_hours must be positive.")
-    init = datetime.strptime(normalized, MPAS_TIME_FORMAT).replace(tzinfo=timezone.utc)
-    valid = init + timedelta(hours=lead_hours)
-    return {
-        "init_time": normalized,
-        "init_yyyymmddhh": init.strftime("%Y%m%d%H"),
-        "valid_time": valid.strftime(MPAS_TIME_FORMAT),
-        "valid_yyyymmddhh": valid.strftime("%Y%m%d%H"),
-        "mpas_valid_file_time": valid.strftime("%Y-%m-%d_%H.%M.%S"),
-        "lead_hours": lead_hours,
-        "lead_hours_03d": f"{lead_hours:03d}",
-    }
 
 
 @dataclass(frozen=True)
@@ -103,7 +117,7 @@ class MpasForecastProductLayout:
 
     def __post_init__(self) -> None:
         """Reject unsupported placeholders before running a forecast."""
-        allowed = set(_context("2000-01-01_00:00:00", 1))
+        allowed = set(mpas_time_context("2000-01-01_00:00:00", 1))
         for template in (self.restart_template, self.state_template):
             names = {name for _, name, _, _ in Formatter().parse(template) if name}
             unknown = names.difference(allowed)
@@ -112,8 +126,10 @@ class MpasForecastProductLayout:
 
     def forecast(self, init_time: str, lead_hours: int) -> MpasForecastProduct:
         """Resolve the expected restart and state path for one forecast."""
-        context = _context(init_time, lead_hours)
+        context = mpas_time_context(init_time, lead_hours)
+
         def path(template: str) -> Path:
             rendered = Path(template.format_map(context))
             return rendered if rendered.is_absolute() else self.root / rendered
+
         return MpasForecastProduct(str(context["init_time"]), lead_hours, path(self.restart_template), path(self.state_template))
