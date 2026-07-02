@@ -25,7 +25,9 @@ _ALLOWED_TRANSITIONS: dict[StageStatus, frozenset[StageStatus]] = {
     StageStatus.PLANNED: frozenset({StageStatus.PREPARED, StageStatus.SKIPPED, StageStatus.FAILED}),
     StageStatus.PREPARED: frozenset({StageStatus.RUNNING, StageStatus.SKIPPED, StageStatus.FAILED}),
     StageStatus.RUNNING: frozenset({StageStatus.SUCCEEDED, StageStatus.FAILED}),
-    StageStatus.SUCCEEDED: frozenset(),
+    # A successful stage may be explicitly invalidated when its declared output
+    # disappears or no longer satisfies the current artifact contract.
+    StageStatus.SUCCEEDED: frozenset({StageStatus.PLANNED}),
     StageStatus.FAILED: frozenset({StageStatus.PLANNED, StageStatus.PREPARED}),
     StageStatus.SKIPPED: frozenset({StageStatus.PLANNED, StageStatus.PREPARED}),
 }
