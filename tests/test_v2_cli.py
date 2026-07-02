@@ -52,3 +52,18 @@ def test_nmc_campaign_jaci_dry_run_uses_site_profile_without_qsub(tmp_path: Path
         "--dry-run",
     ]) == 0
     assert (workspace / ".monan-jedi-workflow/resolved-config.yaml").is_file()
+
+
+def test_stage_run_dry_run_plans_one_declared_campaign_stage(tmp_path: Path) -> None:
+    """External orchestration tasks can plan one named V2 stage."""
+    campaign = Path("examples/v2/bmatrix/nmc_campaign.yaml.example")
+    workspace = tmp_path / "stage"
+    assert main([
+        "stage",
+        "run",
+        "--stage", "mpas_init_2026062000",
+        "--config", str(campaign),
+        "--workspace", str(workspace),
+        "--dry-run",
+    ]) == 0
+    assert (workspace / ".monan-jedi-workflow/provenance.json").is_file()
