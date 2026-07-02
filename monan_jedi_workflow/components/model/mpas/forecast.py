@@ -33,27 +33,24 @@ class MpasForecastStage(Stage):
         """Validate declared staging sources."""
         report = ValidationReport(subject=f"stage:{self.spec.name}:inputs")
         for item in self.links:
-            if not item.source.exists():
-                report.add("mpas.link_source", f"MPAS link source is missing: {item.source}")
+            if not item.source.exists(): report.add("mpas.link_source", f"MPAS link source is missing: {item.source}")
         for item in self.templates:
-            if not item.source.is_file():
-                report.add("mpas.template_source", f"MPAS template is missing: {item.source}")
+            if not item.source.is_file(): report.add("mpas.template_source", f"MPAS template is missing: {item.source}")
         return report
 
     def prepare(self, context: RunContext) -> StageResult:
         """Create the run directory and stage declared inputs."""
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        values = {"workspace": str(context.workspace), "run_dir": str(self.run_dir), "init_time": self.product.init_time, "valid_time": self.product.valid_time, "lead_hours": self.product.lead_hours, "restart": str(self.product.restart), "state": str(self.product.state)}
-        for item in self.links:
-            stage_link(item)
-        for item in self.templates:
-            render_template(item, values)
+        init_id = self.product.init_time.replace("-", "").replace("_", "")[:10]
+        valid_id = self.product.valid_time.replace("-", "").replace("_", "")[:10]
+        values = {"workspace": str(context.workspace), "run_dir": str(self.run_dir), "init_time": self.product.init_time, "valid_time": self.product.valid_time, "init_yyyymmddhh": init_id, "valid_yyyymmddhh": valid_id, "mpas_valid_file_time": self.product.valid_time.replace(":", "."), "lead_hours": self.product.lead_hours, "lead_hours_03d": f"{self.product.lead_hours:03d}", "restart": str(self.product.restart), "state": str(self.product.state)}
+        for item in self.links: stage_link(item)
+        for item in self.templates: render_template(item, values)
         return StageResult(f"Prepared MPAS forecast: {self.run_dir}.")
 
     def run(self, context: RunContext) -> StageResult:
         """Submit and wait for the selected backend request."""
-        if self.request is None or self.backend is None:
-            raise RuntimeError("MPAS forecast execution requires an explicit request and backend.")
+        if self.request is None or self.backend is None: raise RuntimeError("MPAS forecast execution requires an explicit request and backend.")
         handle = self.backend.submit(self.request)
         self.backend.wait(handle)
         return StageResult(f"MPAS execution completed: {handle.identifier}.")
