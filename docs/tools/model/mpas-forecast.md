@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft V2 component. Product paths, staging, output validation, local execution, JACI PBS rendering, submit, and scheduler wait are implemented and covered by local tests. YAML compilation, real JACI validation, MPAS initialization, and scientific validation remain pending.
+Draft V2 component. Product paths, staging, output validation, local execution, JACI PBS rendering, submit, scheduler wait, and YAML-to-stage compilation are implemented and covered by local tests. Real JACI validation, MPAS initialization, and scientific validation remain pending.
 
 ## Purpose
 
@@ -37,7 +37,9 @@ NetCDF semantic and format validation is pending.
 
 ## YAML Configuration
 
-A public compiler is pending. Supported path tokens are `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `lead_hours`, and `lead_hours_03d`.
+The compiler reads `model.mpas.forecast_products` and `model.mpas.forecast`. A complete example is available at `examples/v2/model/mpas_forecast.yaml.example`.
+
+Supported path tokens are `workspace`, `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `lead_hours`, `lead_hours_03d`, `restart`, and `state`.
 
 ## Parameters
 
@@ -75,7 +77,7 @@ Matching links are reused; regular targets are never overwritten; successful sta
 
 ## Limitations
 
-No V2 MPAS initialization stage, public YAML compiler, real JACI execution evidence, or scientific baseline comparison yet.
+No V2 MPAS initialization stage, public CLI, real JACI execution evidence, or scientific baseline comparison yet.
 
 ## FAQ
 
