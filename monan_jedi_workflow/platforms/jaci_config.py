@@ -1,12 +1,16 @@
-"""Build JACI PBS backends from resolved site configuration."""
+"""Build JACI platform backends from resolved site configuration."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from pathlib import Path
 
 from .base import ExecutionBackend
-from .jaci_backend import JaciPbsBackend
-from .jaci_pbs import JaciPbsResources
+from .jaci.backend import JaciPlatformBackend
+from .jaci.environment import JaciEnvironment
+from .jaci.filesystem import JaciFilesystemPolicy
+from .jaci.launcher import JaciMpiLauncher
+from .jaci.scheduler import JaciSchedulerProfile
 
 
 class JaciConfigurationError(ValueError):
@@ -37,7 +41,7 @@ def _integer(values: Mapping[str, object], key: str, label: str, default: int | 
 
 
 def _lines(value: object, label: str) -> tuple[str, ...]:
-    """Validate shell prelude lines as explicit English-free configuration text."""
+    """Read an optional list of explicit non-empty shell lines or argv items."""
     if value is None:
         return ()
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
@@ -45,55 +49,69 @@ def _lines(value: object, label: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _variables(value: object, label: str) -> dict[str, str]:
+    """Read optional platform environment variables."""
+    if value is None:
+        return {}
+    values = _mapping(value, label)
+    if not all(isinstance(name, str) and name and isinstance(item, str) for name, item in values.items()):
+        raise JaciConfigurationError(f"{label} must map non-empty strings to strings.")
+    return dict(values)
+
+
+def _roots(value: object, label: str) -> tuple[Path, ...]:
+    """Read optional absolute workspace roots enforced by the site policy."""
+    return tuple(Path(item) for item in _lines(value, label))
+
+
 def jaci_backend_factory(
     config: Mapping[str, object],
     *,
     stage_kind: str,
 ) -> Callable[[str], ExecutionBackend]:
-    """Create a backend factory for one configured JACI stage kind.
+    """Create one JACI backend factory for a scientific stage category.
 
-    Parameters
-    ----------
-    config : Mapping[str, object]
-        Fully resolved case and site configuration.
-    stage_kind : str
-        JACI PBS profile key, such as ``initialization`` or ``forecast``.
-
-    Returns
-    -------
-    Callable[[str], ExecutionBackend]
-        Factory receiving a unique stage name and returning a configured PBS
-        backend for that stage.
-
-    Notes
-    -----
-    The factory creates a distinct backend per stage so the scheduler-visible
-    job name and rendered PBS script remain deterministic and collision-free.
+    The stage supplies abstract resources in its own YAML. The site profile owns
+    queue routing, node capacity, launcher syntax, environment, and filesystem
+    policy. No MPAS configuration needs to name a scheduler command.
     """
     platform = _mapping(config.get("platform"), "platform")
     jaci = _mapping(platform.get("jaci"), "platform.jaci")
-    pbs = _mapping(jaci.get("pbs"), "platform.jaci.pbs")
-    common = _mapping(pbs.get("common", {}), "platform.jaci.pbs.common")
-    profile = _mapping(pbs.get(stage_kind), f"platform.jaci.pbs.{stage_kind}")
-    label = f"platform.jaci.pbs.{stage_kind}"
-    queue = _string(profile, "queue", label)
-    walltime = _string(profile, "walltime", label)
-    select = _integer(profile, "select", label, default=1)
-    ncpus = _integer(profile, "ncpus", label)
-    mpiprocs = _integer(profile, "mpiprocs", label)
-    prelude = (*_lines(common.get("prelude"), "platform.jaci.pbs.common.prelude"), *_lines(profile.get("prelude"), f"{label}.prelude"))
-    qsub = _string(common, "qsub", "platform.jaci.pbs.common", default="qsub")
-    qstat = _string(common, "qstat", "platform.jaci.pbs.common", default="qstat")
-    poll_seconds = _integer(common, "poll_seconds", "platform.jaci.pbs.common", default=30)
+    scheduler = _mapping(jaci.get("scheduler"), "platform.jaci.scheduler")
+    common = _mapping(scheduler.get("common", {}), "platform.jaci.scheduler.common")
+    profile = _mapping(scheduler.get(stage_kind), f"platform.jaci.scheduler.{stage_kind}")
+    profile_label = f"platform.jaci.scheduler.{stage_kind}"
+    scheduler_profile = JaciSchedulerProfile(
+        queue=_string(profile, "queue", profile_label),
+        cores_per_node=_integer(profile, "cores_per_node", profile_label),
+        max_mpi_ranks_per_node=_integer(profile, "max_mpi_ranks_per_node", profile_label),
+    )
+
+    launcher_values = _mapping(jaci.get("mpi_launcher"), "platform.jaci.mpi_launcher")
+    launcher = JaciMpiLauncher(_lines(launcher_values.get("argv"), "platform.jaci.mpi_launcher.argv"))
+    environment_values = _mapping(jaci.get("environment", {}), "platform.jaci.environment")
+    environment = JaciEnvironment(
+        prelude=_lines(environment_values.get("prelude"), "platform.jaci.environment.prelude"),
+        variables=_variables(environment_values.get("variables"), "platform.jaci.environment.variables"),
+    )
+    filesystem_values = _mapping(jaci.get("filesystem", {}), "platform.jaci.filesystem")
+    filesystem = JaciFilesystemPolicy(_roots(filesystem_values.get("allowed_workspace_roots"), "platform.jaci.filesystem.allowed_workspace_roots"))
+
+    qsub = _string(common, "qsub", "platform.jaci.scheduler.common", default="qsub")
+    qstat = _string(common, "qstat", "platform.jaci.scheduler.common", default="qstat")
+    poll_seconds = _integer(common, "poll_seconds", "platform.jaci.scheduler.common", default=30)
     timeout = common.get("timeout_seconds")
     if timeout is not None and (not isinstance(timeout, int) or timeout < 1):
-        raise JaciConfigurationError("platform.jaci.pbs.common.timeout_seconds must be a positive integer when set.")
+        raise JaciConfigurationError("platform.jaci.scheduler.common.timeout_seconds must be a positive integer when set.")
 
     def create(stage_name: str) -> ExecutionBackend:
-        """Create one backend using the stage name as the PBS job name."""
-        return JaciPbsBackend(
-            JaciPbsResources(queue, walltime, select, ncpus, mpiprocs, stage_name),
-            prelude=prelude,
+        """Create a collision-free backend using the declared stage name."""
+        return JaciPlatformBackend(
+            scheduler=scheduler_profile,
+            launcher=launcher,
+            environment=environment,
+            filesystem=filesystem,
+            job_name=stage_name,
             qsub=qsub,
             qstat=qstat,
             poll_seconds=poll_seconds,
