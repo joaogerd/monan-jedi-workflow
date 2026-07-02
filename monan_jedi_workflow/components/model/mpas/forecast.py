@@ -7,7 +7,7 @@ from ....core.workflow_spec import StageSpec
 from ....platforms.base import ExecutionBackend, ExecutionRequest
 from .execution_stage import MpasExecutionStage
 from .output_validation import MpasOutputContract
-from .products import MpasForecastProduct
+from .products import MpasForecastProduct, mpas_time_context
 from .staging import LinkSpec, TemplateSpec
 
 
@@ -48,7 +48,7 @@ class MpasForecastStage(MpasExecutionStage):
         extra_values: Mapping[str, object] | None = None,
     ) -> None:
         self.product = product
-        token = product.init_time.replace("-", "").replace("_", "").replace(":", "")
+        token = mpas_time_context(product.init_time, product.lead_hours)["init_yyyymmddhh"]
         spec = StageSpec(
             name=f"mpas_forecast_{token}_f{product.lead_hours:03d}",
             command="model.mpas.forecast",
