@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -13,6 +14,7 @@ from .core.provenance import RunProvenance, default_environment_facts, write_pro
 from .core.stage import RunContext
 from .core.workflow_spec import WorkflowSpec, WorkflowSpecificationError
 from .orchestration.local import LocalWorkflowRunner, StageTaskRunner
+from .orchestration.simpleworkflow.adapter import write_workflow
 from .platforms.jaci_config import jaci_backend_factory
 from .platforms.local import LocalProcessBackend
 from .workflows.nmc_campaign import NmcCampaignPlan, build_nmc_campaign
@@ -27,23 +29,23 @@ def _case_name(config: dict[str, object]) -> str:
 
 
 def _context(config_paths: Sequence[Path], workspace: Path, *, dry_run: bool, argv: Sequence[str]) -> RunContext:
-    """Resolve configuration and persist reproducibility metadata for one run."""
+    """Resolve configuration and persist run plus command-level provenance."""
     config = resolve_configuration(list(config_paths))
     case = _case_name(config)
     workspace = workspace.resolve()
     metadata = workspace / ".monan-jedi-workflow"
     resolved = write_resolved_configuration(metadata / "resolved-config.yaml", config)
-    write_provenance(
-        metadata / "provenance.json",
-        RunProvenance(
-            workflow="bmatrix",
-            case=case,
-            command=tuple(argv),
-            code_revision=None,
-            resolved_config=resolved,
-            environment=default_environment_facts(),
-        ),
+    provenance = RunProvenance(
+        workflow="bmatrix",
+        case=case,
+        command=tuple(argv),
+        code_revision=None,
+        resolved_config=resolved,
+        environment=default_environment_facts(),
     )
+    write_provenance(metadata / "provenance.json", provenance)
+    digest = hashlib.sha256("\0".join(argv).encode("utf-8")).hexdigest()[:16]
+    write_provenance(metadata / "provenance" / f"command-{digest}.json", provenance)
     return RunContext("bmatrix", case, workspace, config=config, dry_run=dry_run)
 
 
@@ -68,8 +70,36 @@ def _campaign_plan(context: RunContext, backend_name: str) -> NmcCampaignPlan:
     raise ValueError(f"Unsupported V2 backend: {backend_name}")
 
 
+def _render_simpleworkflow(path: Path, plan: NmcCampaignPlan, context: RunContext, backend: str) -> Path:
+    """Render one NMC campaign as simpleWorkflow tasks calling `stage run`."""
+    output = path if path.is_absolute() else context.workspace / path
+    resolved = context.workspace / ".monan-jedi-workflow" / "resolved-config.yaml"
+    return write_workflow(
+        output,
+        plan.specification,
+        context={
+            "resolved_config": str(resolved),
+            "workflow_workspace": str(context.workspace),
+            "backend": backend,
+        },
+        argv_for_stage=lambda stage: (
+            "monan-jedi-workflow-v2",
+            "stage",
+            "run",
+            "--stage",
+            stage.name,
+            "--config",
+            "{resolved_config}",
+            "--workspace",
+            "{workflow_workspace}",
+            "--backend",
+            "{backend}",
+        ),
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run a V2 workflow or an isolated V2 stage.
+    """Run or render a V2 workflow and execute isolated V2 stages.
 
     Parameters
     ----------
@@ -90,10 +120,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     campaign = commands.add_parser(
         "nmc-campaign",
-        help="Run or plan MPAS initialization, forecasts, and NMC manifest publication.",
+        help="Run, plan, or render MPAS initialization, forecasts, and NMC publication.",
     )
     _add_common_arguments(campaign)
     campaign.add_argument("--backend", choices=("local", "jaci-pbs"), default="local")
+    campaign.add_argument(
+        "--render-simpleworkflow",
+        type=Path,
+        help="Write simpleWorkflow YAML instead of executing the campaign.",
+    )
 
     stage = commands.add_parser("stage", help="Run one declared V2 workflow stage.")
     stage_commands = stage.add_subparsers(dest="stage_command", required=True)
@@ -114,6 +149,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         results = runner.run(context, force=args.force)
     elif args.command == "nmc-campaign":
         plan = _campaign_plan(context, args.backend)
+        if args.render_simpleworkflow:
+            rendered = _render_simpleworkflow(args.render_simpleworkflow, plan, context, args.backend)
+            print(rendered)
+            return 0
         results = LocalWorkflowRunner(plan.specification, plan.stages).run(context, force=args.force)
     elif args.command == "stage" and args.stage_command == "run":
         plan = _campaign_plan(context, args.backend)
