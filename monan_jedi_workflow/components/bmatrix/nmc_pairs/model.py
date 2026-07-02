@@ -127,6 +127,40 @@ class NmcPair:
 ForecastResolver = Callable[[str, int], NmcForecast]
 
 
+def _require_forecast_identity(
+    forecast: NmcForecast,
+    *,
+    requested_init_time: str,
+    requested_lead_hours: int,
+    label: str,
+) -> None:
+    """Reject a resolver product that does not match the requested forecast.
+
+    Parameters
+    ----------
+    forecast : NmcForecast
+        Product returned by the resolver.
+    requested_init_time : str
+        Initialization time requested from the resolver.
+    requested_lead_hours : int
+        Lead time requested from the resolver.
+    label : str
+        Human-readable member label used in errors.
+
+    Raises
+    ------
+    NmcPairError
+        Raised when returned forecast metadata differs from the requested
+        initialization or lead time.
+    """
+    if forecast.init_time != requested_init_time or forecast.lead_hours != requested_lead_hours:
+        raise NmcPairError(
+            f"Resolver returned inconsistent {label} forecast: expected "
+            f"init={requested_init_time}, lead={requested_lead_hours}; received "
+            f"init={forecast.init_time}, lead={forecast.lead_hours}."
+        )
+
+
 def plan_pairs(
     valid_times: Iterable[str],
     *,
@@ -172,5 +206,17 @@ def plan_pairs(
         newer_init = (valid - timedelta(hours=newer_lead_hours)).strftime(_TIME_FORMAT)
         older = resolve_forecast(older_init, older_lead_hours)
         newer = resolve_forecast(newer_init, newer_lead_hours)
+        _require_forecast_identity(
+            older,
+            requested_init_time=older_init,
+            requested_lead_hours=older_lead_hours,
+            label="older",
+        )
+        _require_forecast_identity(
+            newer,
+            requested_init_time=newer_init,
+            requested_lead_hours=newer_lead_hours,
+            label="newer",
+        )
         pairs.append(NmcPair(valid_time, older, newer))
     return tuple(pairs)
