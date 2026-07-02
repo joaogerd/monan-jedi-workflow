@@ -8,6 +8,8 @@ from pathlib import Path
 
 from ....platforms.base import ExecutionBackend
 from .forecast import MpasForecastStage
+from .netcdf_contracts import MpasNetcdfContractError, mpas_artifact_check
+from .output_validation import MpasOutputContract
 from .products import MPAS_TIME_FORMAT, MpasForecastProductLayout, MpasProductLayoutError
 from .runtime_config import MpasRuntimeConfigurationError, compile_runtime, require_mapping
 
@@ -46,7 +48,7 @@ def compile_mpas_forecast(
     Returns
     -------
     MpasForecastStage
-        Stage with explicit runtime, staging, and output contracts.
+        Stage with explicit runtime, staging, output, and NetCDF contracts.
     """
     try:
         model = require_mapping(config.get("model"), "model")
@@ -84,12 +86,38 @@ def compile_mpas_forecast(
             values=values,
             backend=backend,
         )
-    except (MpasRuntimeConfigurationError, MpasProductLayoutError) as exc:
+        checks = tuple(
+            check
+            for check in (
+                mpas_artifact_check(
+                    config,
+                    name="forecast_restart",
+                    path=product.restart,
+                    default_consumer="bmatrix.nmc_pairs",
+                    expected_time=product.valid_time,
+                ),
+                mpas_artifact_check(
+                    config,
+                    name="forecast_state",
+                    path=product.state,
+                    default_consumer="bmatrix.nmc_pairs",
+                    expected_time=product.valid_time,
+                ),
+            )
+            if check is not None
+        )
+    except (MpasRuntimeConfigurationError, MpasProductLayoutError, MpasNetcdfContractError) as exc:
         raise MpasForecastConfigurationError(str(exc)) from exc
+    contract = MpasOutputContract(
+        required_files=runtime.contract.required_files,
+        log_path=runtime.contract.log_path,
+        required_log_markers=runtime.contract.required_log_markers,
+        netcdf_checks=(*runtime.contract.netcdf_checks, *checks),
+    )
     return MpasForecastStage(
         product,
         runtime.run_dir,
-        runtime.contract,
+        contract,
         request=runtime.request,
         backend=backend,
         links=runtime.links,
