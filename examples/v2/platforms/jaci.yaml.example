@@ -6,6 +6,11 @@ platform:
     scheduler:
       common:
         poll_seconds: 30
+      wps:
+        # ungrib is a serial preprocessing task; it must not inherit MPAS MPI ranks.
+        queue: pesqmini
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 1
       initialization:
         queue: pesqmini
         cores_per_node: 128
