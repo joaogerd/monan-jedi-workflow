@@ -13,10 +13,23 @@ class MpasStagingError(RuntimeError):
 
 @dataclass(frozen=True)
 class LinkSpec:
-    """Declare one source file and its run-directory target."""
+    """Declare one source file and its run-directory target.
+
+    Parameters
+    ----------
+    source : Path
+        Input artifact path.
+    target : Path
+        Link path created under the run directory.
+    upstream_artifact : bool, default=False
+        Whether ``source`` is produced by a declared upstream workflow stage.
+        Preparation-only preflight may create a dangling link for this explicit
+        dependency; normal execution still requires the source to exist.
+    """
 
     source: Path
     target: Path
+    upstream_artifact: bool = False
 
 
 @dataclass(frozen=True)
@@ -27,17 +40,19 @@ class TemplateSpec:
     target: Path
 
 
-def stage_link(spec: LinkSpec) -> Path:
+def stage_link(spec: LinkSpec, *, allow_missing_source: bool = False) -> Path:
     """Create an idempotent symbolic link.
 
     Existing matching links are reused. A regular file is never overwritten
-    because it may be a scientific artifact from a previous run.
+    because it may be a scientific artifact from a previous run. Missing source
+    files are accepted only for an explicitly declared upstream artifact during
+    a preparation-only preflight.
     """
-    if not spec.source.exists():
+    if not spec.source.exists() and not (allow_missing_source and spec.upstream_artifact):
         raise MpasStagingError(f"MPAS staging source is missing: {spec.source}")
     spec.target.parent.mkdir(parents=True, exist_ok=True)
     if spec.target.is_symlink():
-        if spec.target.resolve() == spec.source.resolve():
+        if spec.target.resolve(strict=False) == spec.source.resolve(strict=False):
             return spec.target
         spec.target.unlink()
     elif spec.target.exists():
