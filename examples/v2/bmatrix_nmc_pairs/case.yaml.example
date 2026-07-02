@@ -1,1 +1,23 @@
-case: {}
+# This standalone example validates existing MPAS forecast products and writes
+# a BFLOW hand-off manifest. It does not run MPAS itself.
+case:
+  name: nmc_x1_10242_jun2026
+
+model:
+  mpas:
+    forecast_products:
+      # Directory containing forecast run directories. This may be absolute.
+      root: /path/to/mpas/forecasts
+      restart_template: "{init_yyyymmddhh}/f{lead_hours_03d}/restart.{mpas_valid_file_time}.nc"
+      state_template: "{init_yyyymmddhh}/f{lead_hours_03d}/mpasout.{mpas_valid_file_time}.nc"
+
+bmatrix:
+  nmc_pairs:
+    start_valid_time: "2026-06-22T00:00:00Z"
+    end_valid_time: "2026-06-25T00:00:00Z"
+    interval_hours: 24
+    older_lead_hours: 48
+    newer_lead_hours: 24
+    minimum_pairs: 4
+    manifest_path: artifacts/bmatrix/nmc_pairs/bflow-manifest.tsv
+    report_path: artifacts/bmatrix/nmc_pairs/validation-report.json
