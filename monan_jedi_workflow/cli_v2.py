@@ -64,6 +64,7 @@ def _campaign_plan(context: RunContext, backend_name: str) -> NmcCampaignPlan:
     if backend_name == "jaci-pbs":
         return build_nmc_campaign(
             context,
+            wps_backend_factory=jaci_backend_factory(context.config, stage_kind="wps"),
             initialization_backend_factory=jaci_backend_factory(context.config, stage_kind="initialization"),
             forecast_backend_factory=jaci_backend_factory(context.config, stage_kind="forecast"),
         )
