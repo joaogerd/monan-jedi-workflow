@@ -9,6 +9,7 @@ import pytest
 from monan_jedi_workflow.components.bmatrix.nmc_pairs.stage import NmcPairsStage
 from monan_jedi_workflow.components.model.mpas.products import MpasForecastProductLayout, MpasProductLayoutError
 from monan_jedi_workflow.core.stage import RunContext
+from monan_jedi_workflow.core.validation import ValidationError
 from monan_jedi_workflow.core.workflow_spec import WorkflowSpec
 from monan_jedi_workflow.orchestration.local import LocalWorkflowRunner
 
@@ -69,6 +70,10 @@ def test_nmc_pairs_stage_publishes_reusable_bflow_manifest(tmp_path: Path) -> No
     assert manifest.read_text(encoding="utf-8").splitlines()[0] == "valid_time\tf048\tf024"
     assert len(manifest.read_text(encoding="utf-8").splitlines()) == 5
     assert runner.run(context) == ()
+
+    stage.pairs()[0].older.restart.unlink()
+    with pytest.raises(ValidationError, match="Missing or empty f048 restart"):
+        runner.run(context)
 
 
 def test_mpas_product_layout_rejects_unknown_template_fields(tmp_path: Path) -> None:
