@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from string import Formatter
 from typing import Mapping
 
 from ..base import ExecutionRequest
 
 
-@dataclass(frozen=True)\class JaciEnvironment:
+@dataclass(frozen=True)
+class JaciEnvironment:
     """Declare site prelude lines and environment values for JACI execution."""
 
     prelude: tuple[str, ...] = ()
-    variables: Mapping[str, str] = None  # type: ignore[assignment]
+    variables: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate platform environment keys and template fields."""
-        values = {} if self.variables is None else dict(self.variables)
+        values = dict(self.variables)
         if any(not isinstance(name, str) or not name or not isinstance(value, str) for name, value in values.items()):
             raise ValueError("JACI environment variables must map non-empty strings to strings.")
         allowed = {"mpi_ranks", "threads_per_rank"}
