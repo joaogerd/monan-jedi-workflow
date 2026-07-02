@@ -8,6 +8,7 @@ from ..components.model.mpas.initialization import MpasInitializationStage
 from ..core.workflow_spec import StageSpec, WorkflowSpec, WorkflowSpecificationError
 
 
+# WPS producer dependencies are introduced by the V2 NMC planner.
 def _spec_with_needs(spec: StageSpec, needs: tuple[str, ...]) -> StageSpec:
     """Copy one stage declaration with explicit dependency names."""
     return StageSpec(spec.name, spec.command, needs=needs, description=spec.description)
