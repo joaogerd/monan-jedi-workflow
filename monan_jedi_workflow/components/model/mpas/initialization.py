@@ -7,7 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from string import Formatter
 from typing import Mapping
+from xml.etree import ElementTree
 
+from ....core.stage import RunContext, StageResult
 from ....core.workflow_spec import StageSpec
 from ....platforms.base import ExecutionBackend, ExecutionRequest
 from .execution_stage import MpasExecutionStage
@@ -110,3 +112,29 @@ class MpasInitializationStage(MpasExecutionStage):
             values=values,
             artifacts=(product.state,),
         )
+
+    def prepare(self, context: RunContext) -> StageResult:
+        """Stage inputs and bind the rendered WPS FILE stream when configured.
+
+        The historical template uses the generic MPAS grid input stream. For the
+        WPS-forced global initialization path, that stream must instead name the
+        exact `FILE:YYYY-MM-DD_HH` artifact declared by the upstream stage.
+        """
+        result = super().prepare(context)
+        forcing = self.values.get("met_input_filename")
+        if forcing is None:
+            return result
+        if not isinstance(forcing, str) or not forcing.startswith("FILE:"):
+            raise RuntimeError("MPAS initialization met_input_filename must use the WPS FILE: prefix.")
+        streams = self.run_dir / "streams.init_atmosphere"
+        if not streams.is_file():
+            raise RuntimeError(f"MPAS initialization WPS stream patch requires: {streams}")
+        tree = ElementTree.parse(streams)
+        root = tree.getroot()
+        stream = next((item for item in root if item.tag == "immutable_stream" and item.get("name") == "input"), None)
+        if stream is None:
+            stream = ElementTree.SubElement(root, "immutable_stream", {"name": "input", "type": "input"})
+        stream.set("filename_template", forcing)
+        stream.set("input_interval", "initial_only")
+        tree.write(streams, encoding="unicode")
+        return result
