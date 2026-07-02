@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local execution, JACI PBS rendering/submission/wait, artifact validation, optional structural NetCDF contracts, and NMC campaign planning are implemented and covered by local tests. Real JACI execution and scientific baseline validation remain pending.
+Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local execution, JACI PBS rendering/submission/wait, artifact validation, optional structural NetCDF contracts, and NMC campaign planning are implemented and covered by local tests. When a campaign declares `model.wps`, the planner provides one explicit WPS `FILE:` forcing artifact per initialization. Real JACI execution and scientific baseline validation remain pending.
 
 ## Purpose
 
@@ -10,7 +10,7 @@ Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local e
 
 ## Scientific Context
 
-An MPAS forecast must start from a state consistent with the selected mesh, static fields, and cycle time. This component produces that initial state; it does not run the subsequent forecast or assess forecast skill.
+An MPAS forecast must start from a state consistent with the selected mesh, static fields, forcing, and cycle time. In the global configuration used by the NMC campaign, `init_atmosphere` consumes the WPS `FILE:YYYY-MM-DD_HH` intermediate directly through `config_met_prefix = 'FILE'`.
 
 ## When to Use the Tool
 
@@ -20,6 +20,8 @@ Use this component before any V2 MPAS forecast that depends on an initial state 
 
 - a cycle time;
 - `model.mpas.initialization_products` with an absolute initial-state root and path template;
+- static geography and other model inputs declared as explicit links or templates;
+- an upstream WPS `FILE:` artifact when the NMC campaign declares `model.wps`;
 - `model.mpas.initialization` with an explicit command, run directory, optional environment, links, templates, and validation rules.
 
 ## Outputs
@@ -30,15 +32,26 @@ The stage publishes one initial MPAS state file. Its path is defined by `state_t
 
 | Artifact | Producer | Consumer | Current validation |
 | --- | --- | --- | --- |
+| WPS `FILE:` forcing | WPS ungrib | MPAS initialization | Declared producer, explicit link, existence/non-empty |
 | Initial MPAS state | MPAS initialization | MPAS forecast | Exists/non-empty; optional NetCDF format/schema/mesh/time contract |
 | Initialization log | MPAS initialization | Validation/orchestration | Optional markers |
 | PBS script | JACI platform adapter | PBS | Explicit argv/resources |
 
 ## YAML Configuration
 
-A complete component example is at `examples/v2/model/mpas_initialization.yaml.example`; the full workflow example is at `examples/v2/bmatrix/nmc_campaign.yaml.example`.
+A complete component example is at `examples/v2/model/mpas_initialization.yaml.example`; the full WPS-to-NMC workflow example is at `examples/v2/bmatrix/nmc_campaign.yaml.example`.
 
-Supported template tokens are `workspace`, `cycle_time`, `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `lead_hours`, `lead_hours_03d`, `state`, and `run_dir`.
+Supported template tokens are `workspace`, `cycle_time`, `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `wps_time`, `lead_hours`, `lead_hours_03d`, `state`, and `run_dir`.
+
+The campaign binds WPS forcing through:
+
+```yaml
+model:
+  mpas:
+    initialization:
+      wps_input:
+        target: "FILE:{wps_time}"
+```
 
 Optional structural checks live under `model.mpas.artifact_validation.initialization_state`; see `examples/v2/science/mpas_artifact_validation.yaml.example`.
 
@@ -52,6 +65,7 @@ Optional structural checks live under `model.mpas.artifact_validation.initializa
 | `argv` | Exact executable arguments. |
 | `links` | Inputs staged as idempotent symbolic links. |
 | `templates` | Input files rendered from explicit context. |
+| `wps_input.target` | Target filename for the upstream WPS artifact; it must begin with `FILE:`. |
 | `required_log_markers` | Completion markers checked in the selected log. |
 | `artifact_validation` | Optional NetCDF format, schema, metadata, and time checks. |
 
@@ -60,6 +74,7 @@ Optional structural checks live under `model.mpas.artifact_validation.initializa
 - Python 3.10 or newer;
 - netCDF4 Python bindings;
 - MPAS initialization executable and input data;
+- WPS `ungrib` and forcing files when `model.wps` is enabled;
 - PBS commands when running through the JACI backend.
 
 ## CLI Usage
@@ -77,11 +92,11 @@ A standalone initialization CLI is not exposed yet; the campaign command invokes
 
 ## simpleWorkflow Usage
 
-Render the campaign with `nmc-campaign --render-simpleworkflow`; each initialization task calls `stage run` with the resolved configuration and workspace.
+Render the campaign with `nmc-campaign --render-simpleworkflow`; each initialization task depends on its matching WPS task when WPS is configured.
 
 ## ecFlow and Cylc Integration Contract
 
-The orchestration task invokes the same explicit request. Queue, module prelude, launcher, and resource settings remain platform configuration.
+The orchestration task invokes the same explicit request. Queue, module prelude, launcher, and resource settings remain platform configuration. The WPS dependency must remain explicit: `wps_ungrib(cycle) -> mpas_init(cycle)`.
 
 ## Validation
 
@@ -94,7 +109,7 @@ Matching symbolic links are reused. Regular run-directory targets are not overwr
 ## Limitations
 
 - No real JACI initialization evidence yet.
-- The exact production baseline variables, mesh metadata, and time conventions still need confirmation.
+- The exact production baseline variables, mesh metadata, static geography, forcing coverage, and time conventions still need confirmation.
 - No standalone public V2 CLI yet.
 - No scientific comparison against an accepted MPAS initialization baseline yet.
 
@@ -104,6 +119,10 @@ Matching symbolic links are reused. Regular run-directory targets are not overwr
 
 The stages publish different scientific products, have different validation contracts, and may have different upstream dependencies. Keeping them separate makes the DAG explicit and allows controlled retries.
 
+### Why does initialization receive a WPS FILE artifact rather than metgrid output?
+
+The selected MPAS global initialization configuration reads the WPS intermediate directly. The workflow should model the artifact actually consumed instead of creating an unused metgrid stage.
+
 ### Does a successful initialization guarantee a valid forecast?
 
 No. The forecast stage still validates its own restart/state outputs and has its own runtime contract.
@@ -111,4 +130,5 @@ No. The forecast stage still validates its own restart/state outputs and has its
 ## References
 
 - MPAS-Atmosphere documentation.
+- WPS User's Guide.
 - `docs/developers/v2-architecture-and-migration-plan.md`.
