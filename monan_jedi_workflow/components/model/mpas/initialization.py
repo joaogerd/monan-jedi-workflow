@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -92,6 +93,15 @@ class MpasInitializationProductLayout:
         return MpasInitializationProduct(str(values["cycle_time"]), path if path.is_absolute() else self.root / path)
 
 
+def _replace_namelist_assignment(text: str, name: str, value: str) -> str:
+    """Replace one required Fortran namelist assignment without reformatting it."""
+    pattern = re.compile(rf"^(?P<prefix>\s*{re.escape(name)}\s*=\s*)(?P<old>[^!\n]*?)(?P<suffix>\s*(?:!.*)?$)", re.MULTILINE)
+    updated, count = pattern.subn(lambda match: f"{match.group('prefix')}{value}{match.group('suffix')}", text, count=1)
+    if count != 1:
+        raise RuntimeError(f"MPAS initialization namelist is missing required assignment: {name}")
+    return updated
+
+
 class MpasInitializationStage(MpasExecutionStage):
     """Execute MPAS initialization and publish one initial state artifact."""
 
@@ -113,19 +123,8 @@ class MpasInitializationStage(MpasExecutionStage):
             artifacts=(product.state,),
         )
 
-    def prepare(self, context: RunContext) -> StageResult:
-        """Stage inputs and bind the rendered WPS FILE stream when configured.
-
-        The historical template uses the generic MPAS grid input stream. For the
-        WPS-forced global initialization path, that stream must instead name the
-        exact `FILE:YYYY-MM-DD_HH` artifact declared by the upstream stage.
-        """
-        result = super().prepare(context)
-        forcing = self.values.get("met_input_filename")
-        if forcing is None:
-            return result
-        if not isinstance(forcing, str) or not forcing.startswith("FILE:"):
-            raise RuntimeError("MPAS initialization met_input_filename must use the WPS FILE: prefix.")
+    def _patch_wps_stream(self, forcing: str) -> None:
+        """Bind the initialized MPAS input stream to the exact WPS FILE artifact."""
         streams = self.run_dir / "streams.init_atmosphere"
         if not streams.is_file():
             raise RuntimeError(f"MPAS initialization WPS stream patch requires: {streams}")
@@ -137,4 +136,41 @@ class MpasInitializationStage(MpasExecutionStage):
         stream.set("filename_template", forcing)
         stream.set("input_interval", "initial_only")
         tree.write(streams, encoding="unicode")
+
+    def _patch_wps_namelist(self, forcing: str) -> None:
+        """Render cycle, WPS, and partition settings into the init namelist."""
+        prefix = self.values.get("decomposition_prefix")
+        if not isinstance(prefix, str) or not prefix.endswith(".graph.info.part."):
+            raise RuntimeError("MPAS initialization requires a declared graph decomposition prefix for WPS forcing.")
+        namelist = self.run_dir / "namelist.init_atmosphere"
+        if not namelist.is_file():
+            raise RuntimeError(f"MPAS initialization WPS namelist patch requires: {namelist}")
+        values = {
+            "config_init_case": "7",
+            "config_start_time": f"'{self.product.cycle_time}'",
+            "config_stop_time": f"'{self.product.cycle_time}'",
+            "config_met_prefix": "'FILE'",
+            "config_fg_interval": "86400",
+            "config_block_decomp_file_prefix": f"'{prefix}'",
+        }
+        rendered = namelist.read_text(encoding="utf-8")
+        for name, value in values.items():
+            rendered = _replace_namelist_assignment(rendered, name, value)
+        namelist.write_text(rendered, encoding="utf-8")
+
+    def prepare(self, context: RunContext) -> StageResult:
+        """Stage inputs and render WPS FILE plus mesh-specific init settings.
+
+        The WPS path requires the selected `FILE:` input stream and the actual
+        graph decomposition prefix. Both are derived from declared artifacts,
+        preventing stale x1.40962 settings from leaking into x1.10242 runs.
+        """
+        result = super().prepare(context)
+        forcing = self.values.get("met_input_filename")
+        if forcing is None:
+            return result
+        if not isinstance(forcing, str) or not forcing.startswith("FILE:"):
+            raise RuntimeError("MPAS initialization met_input_filename must use the WPS FILE: prefix.")
+        self._patch_wps_stream(forcing)
+        self._patch_wps_namelist(forcing)
         return result
