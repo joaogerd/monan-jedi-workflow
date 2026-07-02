@@ -27,6 +27,8 @@ class JaciPbsResources:
         MPI ranks per selected chunk.
     job_name : str
         Scheduler-visible job name.
+    memory_mb : int | None, default=None
+        Optional memory request per selected chunk in MiB.
     """
 
     queue: str
@@ -35,6 +37,7 @@ class JaciPbsResources:
     ncpus: int
     mpiprocs: int
     job_name: str
+    memory_mb: int | None = None
 
     def __post_init__(self) -> None:
         """Reject invalid resource values before script rendering."""
@@ -42,6 +45,8 @@ class JaciPbsResources:
             raise ValueError("JACI PBS queue, walltime, and job_name must be non-empty.")
         if min(self.select, self.ncpus, self.mpiprocs) < 1:
             raise ValueError("JACI PBS select, ncpus, and mpiprocs must be positive.")
+        if self.memory_mb is not None and self.memory_mb < 1:
+            raise ValueError("JACI PBS memory_mb must be positive when set.")
 
 
 def render_pbs(
@@ -75,12 +80,14 @@ def render_pbs(
     stdout = request.stdout or request.cwd / "stdout.log"
     stderr = request.stderr or request.cwd / "stderr.log"
     command = shlex.join(request.argv)
+    memory = (f"#PBS -l mem={resources.memory_mb}mb",) if resources.memory_mb is not None else ()
     lines = (
         "#!/usr/bin/env bash",
         f"#PBS -N {resources.job_name}",
         f"#PBS -q {resources.queue}",
         f"#PBS -l select={resources.select}:ncpus={resources.ncpus}:mpiprocs={resources.mpiprocs}",
         f"#PBS -l walltime={resources.walltime}",
+        *memory,
         "#PBS -j oe",
         "",
         "set -euo pipefail",
