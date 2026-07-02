@@ -25,8 +25,9 @@ def test_campaign_render_simpleworkflow_uses_isolated_stage_contract(tmp_path: P
 
     payload = yaml.safe_load(output.read_text(encoding="utf-8"))
     tasks = {task["name"]: task for task in payload["tasks"]}
-    assert len(tasks) == 14
+    assert len(tasks) == 19
     assert tasks["nmc_pairs"]["depends_on"]
+    assert tasks["mpas_init_2026062000"]["depends_on"] == ["wps_ungrib_2026062000"]
     argv = tasks["mpas_init_2026062000"]["argv"]
     assert argv[:3] == ["monan-jedi-workflow-v2", "stage", "run"]
     assert "{resolved_config}" in argv
