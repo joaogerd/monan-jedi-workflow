@@ -13,12 +13,25 @@ from .orchestration.local import LocalWorkflowRunner
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the V2 NMC pair command."""
+    """Run a V2 workflow command.
+
+    Parameters
+    ----------
+    argv : list[str] | None, default=None
+        Command arguments excluding the executable name.
+
+    Returns
+    -------
+    int
+        Process exit status.
+    """
     parser = argparse.ArgumentParser(prog="monan-jedi-workflow-v2")
-    parser.add_argument("--config", action="append", type=Path, required=True)
-    parser.add_argument("--workspace", type=Path, required=True)
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--force", action="store_true")
+    commands = parser.add_subparsers(dest="command", required=True)
+    nmc = commands.add_parser("nmc-pairs", help="Validate NMC pairs and write a BFLOW manifest.")
+    nmc.add_argument("--config", action="append", type=Path, required=True)
+    nmc.add_argument("--workspace", type=Path, required=True)
+    nmc.add_argument("--dry-run", action="store_true")
+    nmc.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
 
     config = resolve_configuration(args.config)
