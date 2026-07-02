@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 from ..components.bmatrix.nmc_pairs.stage import NmcPairsStage
 from ..components.model.mpas import (
@@ -18,23 +18,12 @@ from ..platforms.base import ExecutionBackend
 from .bmatrix_spec import nmc_campaign_workflow
 
 
+ExecutionBackendFactory = Callable[[str], ExecutionBackend]
+
+
 @dataclass(frozen=True)
 class NmcCampaignPlan:
-    """Compiled stages and neutral dependency graph for one NMC campaign.
-
-    Parameters
-    ----------
-    specification : WorkflowSpec
-        Complete initialization-to-forecast-to-manifest graph.
-    stages : Mapping[str, Stage]
-        Executable stages keyed by their declared names.
-    initializations : tuple[MpasInitializationStage, ...]
-        Initialization producers used by the campaign.
-    forecasts : tuple[MpasForecastStage, ...]
-        Forecast producers used by the NMC pair stage.
-    nmc_pairs : NmcPairsStage
-        NMC hand-off stage that publishes the BFLOW manifest.
-    """
+    """Compiled stages and neutral dependency graph for one NMC campaign."""
 
     specification: WorkflowSpec
     stages: Mapping[str, Stage]
@@ -43,15 +32,40 @@ class NmcCampaignPlan:
     nmc_pairs: NmcPairsStage
 
 
-def build_nmc_campaign(context: RunContext, *, backend: ExecutionBackend) -> NmcCampaignPlan:
+def _factory(
+    backend: ExecutionBackend | None,
+    specific: ExecutionBackendFactory | None,
+    label: str,
+) -> ExecutionBackendFactory:
+    """Resolve one backend factory while preserving the simple local API."""
+    if backend is not None and specific is not None:
+        raise ValueError(f"Specify either backend or {label}_backend_factory, not both.")
+    if specific is not None:
+        return specific
+    if backend is not None:
+        return lambda _stage_name: backend
+    raise ValueError(f"Provide backend or {label}_backend_factory.")
+
+
+def build_nmc_campaign(
+    context: RunContext,
+    *,
+    backend: ExecutionBackend | None = None,
+    initialization_backend_factory: ExecutionBackendFactory | None = None,
+    forecast_backend_factory: ExecutionBackendFactory | None = None,
+) -> NmcCampaignPlan:
     """Compile the configured NMC campaign into executable stages.
 
     Parameters
     ----------
     context : RunContext
         Resolved B-matrix run context.
-    backend : ExecutionBackend
-        Backend used by all MPAS initialization and forecast stages.
+    backend : ExecutionBackend | None, default=None
+        Shared backend for all MPAS stages. Convenient for local execution.
+    initialization_backend_factory : ExecutionBackendFactory | None, default=None
+        Factory creating a backend for each initialization stage.
+    forecast_backend_factory : ExecutionBackendFactory | None, default=None
+        Factory creating a backend for each forecast stage.
 
     Returns
     -------
@@ -60,10 +74,13 @@ def build_nmc_campaign(context: RunContext, *, backend: ExecutionBackend) -> Nmc
 
     Notes
     -----
-    Each forecast receives the path of the initial state produced for its exact
-    `init_time` through the explicit ``initial_state`` template value. The
-    scientific dependency and the artifact path are therefore both declared.
+    Each forecast receives the initial state produced for its exact `init_time`
+    through the explicit ``initial_state`` template value. Backend factories make
+    it possible to assign different JACI resources to initialization and
+    forecast work without leaking scheduler details into MPAS components.
     """
+    init_factory = _factory(backend, initialization_backend_factory, "initialization")
+    forecast_factory = _factory(backend, forecast_backend_factory, "forecast")
     nmc_pairs = NmcPairsStage.from_context(context)
     pairs = nmc_pairs.pairs()
     init_times = tuple(sorted({member.init_time for pair in pairs for member in (pair.older, pair.newer)}))
@@ -72,7 +89,7 @@ def build_nmc_campaign(context: RunContext, *, backend: ExecutionBackend) -> Nmc
             context.config,
             workspace=context.workspace,
             cycle_time=cycle_time,
-            backend=backend,
+            backend=init_factory(f"mpas_init_{cycle_time.replace('-', '').replace('_', '').replace(':', '')}"),
         )
         for cycle_time in init_times
     )
@@ -82,13 +99,14 @@ def build_nmc_campaign(context: RunContext, *, backend: ExecutionBackend) -> Nmc
     for pair in pairs:
         for member in (pair.older, pair.newer):
             initialization = initial_by_time[member.init_time]
+            label = f"mpas_forecast_{member.init_time.replace('-', '').replace('_', '').replace(':', '')}_f{member.lead_hours:03d}"
             forecasts.append(
                 compile_mpas_forecast(
                     context.config,
                     workspace=context.workspace,
                     init_time=member.init_time,
                     lead_hours=member.lead_hours,
-                    backend=backend,
+                    backend=forecast_factory(label),
                     extra_values={"initial_state": str(initialization.product.state)},
                 )
             )
