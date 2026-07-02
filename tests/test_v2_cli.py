@@ -75,6 +75,41 @@ def test_nmc_campaign_jaci_dry_run_writes_resolved_pbs_evidence(tmp_path: Path) 
     assert "export OMP_NUM_THREADS=1" in text
 
 
+def test_nmc_campaign_prepare_only_never_executes_declared_commands(tmp_path: Path) -> None:
+    """Preparation-only must succeed even when every executable is /bin/false."""
+    config = tmp_path / "case.yaml"
+    config.write_text(
+        f"""case:
+  name: prepare-only
+model:
+  mpas:
+    initialization_products:
+      root: {tmp_path / 'initial-products'}
+      state_template: '{{init_yyyymmddhh}}/init.nc'
+    initialization:
+      run_dir: runs/init/{{init_yyyymmddhh}}
+      argv: [/bin/false]
+    forecast_products:
+      root: {tmp_path / 'forecast-products'}
+      restart_template: '{{init_yyyymmddhh}}/f{{lead_hours_03d}}/restart.{{mpas_valid_file_time}}.nc'
+      state_template: '{{init_yyyymmddhh}}/f{{lead_hours_03d}}/state.{{mpas_valid_file_time}}.nc'
+    forecast:
+      run_dir: runs/forecast/{{init_yyyymmddhh}}/f{{lead_hours_03d}}
+      argv: [/bin/false]
+bmatrix:
+  nmc_pairs:
+    start_valid_time: '2026-06-22T00:00:00Z'
+    end_valid_time: '2026-06-25T00:00:00Z'
+""",
+        encoding="utf-8",
+    )
+    workspace = tmp_path / "workspace"
+    assert main([
+        "nmc-campaign", "--config", str(config), "--workspace", str(workspace), "--prepare-only",
+    ]) == 0
+    assert not (workspace / ".monan-jedi-workflow/run-state.json").exists()
+
+
 def test_stage_run_dry_run_plans_one_declared_campaign_stage(tmp_path: Path) -> None:
     """External orchestration tasks can plan one named V2 stage."""
     campaign = Path("examples/v2/bmatrix/nmc_campaign.yaml.example")
