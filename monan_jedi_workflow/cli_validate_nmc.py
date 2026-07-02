@@ -28,3 +28,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print(path)
     return 0 if validation.is_valid else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
