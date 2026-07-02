@@ -130,7 +130,7 @@ class MpasInitializationStage(MpasExecutionStage):
             raise RuntimeError(f"MPAS initialization WPS stream patch requires: {streams}")
         tree = ElementTree.parse(streams)
         root = tree.getroot()
-        stream = next((item for item in root if item.tag == "immutable_stream" and item.get("name") == "input"), None)
+        stream = next((item for item in root.iter("immutable_stream") if item.get("name") == "input"), None)
         if stream is None:
             stream = ElementTree.SubElement(root, "immutable_stream", {"name": "input", "type": "input"})
         stream.set("filename_template", forcing)
