@@ -1,22 +1,42 @@
 """MPAS components used by MONAN-JEDI workflows."""
 
 from .forecast import MpasForecastStage
-from .initialization import MpasInitializationProduct, MpasInitializationStage
+from .forecast_config import MpasForecastConfigurationError, compile_mpas_forecast
+from .initialization import (
+    MpasInitializationProduct,
+    MpasInitializationProductLayout,
+    MpasInitializationStage,
+    mpas_initialization_context,
+)
+from .initialization_config import MpasInitializationConfigurationError, compile_mpas_initialization
 from .output_validation import MpasOutputContract, validate_output_contract
-from .products import MpasForecastProduct, MpasForecastProductLayout, MpasProductLayoutError, normalize_mpas_time
+from .products import (
+    MpasForecastProduct,
+    MpasForecastProductLayout,
+    MpasProductLayoutError,
+    mpas_time_context,
+    normalize_mpas_time,
+)
 from .staging import LinkSpec, MpasStagingError, TemplateSpec, render_template, stage_link
 
 __all__ = [
     "LinkSpec",
+    "MpasForecastConfigurationError",
     "MpasForecastProduct",
     "MpasForecastProductLayout",
     "MpasForecastStage",
+    "MpasInitializationConfigurationError",
     "MpasInitializationProduct",
+    "MpasInitializationProductLayout",
     "MpasInitializationStage",
     "MpasOutputContract",
     "MpasProductLayoutError",
     "MpasStagingError",
     "TemplateSpec",
+    "compile_mpas_forecast",
+    "compile_mpas_initialization",
+    "mpas_initialization_context",
+    "mpas_time_context",
     "normalize_mpas_time",
     "render_template",
     "stage_link",
