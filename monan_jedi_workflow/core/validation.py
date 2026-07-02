@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class ValidationSeverity(str, Enum):
@@ -34,6 +35,15 @@ class ValidationIssue:
     message: str
     severity: ValidationSeverity = ValidationSeverity.ERROR
     path: str | None = None
+
+    def to_dict(self) -> dict[str, str | None]:
+        """Return a JSON-serializable representation of the finding."""
+        return {
+            "code": self.code,
+            "message": self.message,
+            "severity": self.severity.value,
+            "path": self.path,
+        }
 
 
 class ValidationError(RuntimeError):
@@ -82,6 +92,20 @@ class ValidationReport:
             Optional affected path.
         """
         self.issues.append(ValidationIssue(code, message, severity, path))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable representation of the report.
+
+        Returns
+        -------
+        dict[str, Any]
+            Subject, validity flag, and structured validation findings.
+        """
+        return {
+            "subject": self.subject,
+            "is_valid": self.is_valid,
+            "issues": [issue.to_dict() for issue in self.issues],
+        }
 
     def require_valid(self) -> None:
         """Raise when the report contains validation errors.
