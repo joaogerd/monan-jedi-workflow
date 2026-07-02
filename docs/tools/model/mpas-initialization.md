@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local execution, JACI PBS rendering/submission/wait, artifact validation, and NMC campaign planning are implemented and covered by local tests. Real JACI execution and scientific validation remain pending.
+Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local execution, JACI PBS rendering/submission/wait, artifact validation, optional structural NetCDF contracts, and NMC campaign planning are implemented and covered by local tests. Real JACI execution and scientific baseline validation remain pending.
 
 ## Purpose
 
@@ -19,7 +19,7 @@ Use this component before any V2 MPAS forecast that depends on an initial state 
 ## Inputs
 
 - a cycle time;
-- `model.mpas.initialization_products` with an initial-state path template;
+- `model.mpas.initialization_products` with an absolute initial-state root and path template;
 - `model.mpas.initialization` with an explicit command, run directory, optional environment, links, templates, and validation rules.
 
 ## Outputs
@@ -30,17 +30,17 @@ The stage publishes one initial MPAS state file. Its path is defined by `state_t
 
 | Artifact | Producer | Consumer | Current validation |
 | --- | --- | --- | --- |
-| Initial MPAS state | MPAS initialization | MPAS forecast | Exists and is non-empty |
+| Initial MPAS state | MPAS initialization | MPAS forecast | Exists/non-empty; optional NetCDF format/schema/mesh/time contract |
 | Initialization log | MPAS initialization | Validation/orchestration | Optional markers |
 | PBS script | JACI platform adapter | PBS | Explicit argv/resources |
-
-NetCDF semantic checks for variables, mesh identity, and cycle time remain pending.
 
 ## YAML Configuration
 
 A complete component example is at `examples/v2/model/mpas_initialization.yaml.example`; the full workflow example is at `examples/v2/bmatrix/nmc_campaign.yaml.example`.
 
 Supported template tokens are `workspace`, `cycle_time`, `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `lead_hours`, `lead_hours_03d`, `state`, and `run_dir`.
+
+Optional structural checks live under `model.mpas.artifact_validation.initialization_state`; see `examples/v2/science/mpas_artifact_validation.yaml.example`.
 
 ## Parameters
 
@@ -53,11 +53,13 @@ Supported template tokens are `workspace`, `cycle_time`, `init_time`, `init_yyyy
 | `links` | Inputs staged as idempotent symbolic links. |
 | `templates` | Input files rendered from explicit context. |
 | `required_log_markers` | Completion markers checked in the selected log. |
+| `artifact_validation` | Optional NetCDF format, schema, metadata, and time checks. |
 
 ## Dependencies
 
 - Python 3.10 or newer;
-- MPAS initialization executable and its input data;
+- netCDF4 Python bindings;
+- MPAS initialization executable and input data;
 - PBS commands when running through the JACI backend.
 
 ## CLI Usage
@@ -75,15 +77,15 @@ A standalone initialization CLI is not exposed yet; the campaign command invokes
 
 ## simpleWorkflow Usage
 
-The future adapter will call the public V2 workflow CLI with resolved configuration and workspace. It must not embed initialization logic or scheduler commands in workflow YAML.
+Render the campaign with `nmc-campaign --render-simpleworkflow`; each initialization task calls `stage run` with the resolved configuration and workspace.
 
 ## ecFlow and Cylc Integration Contract
 
-The orchestration task invokes the same explicit execution request. Queue, module prelude, launcher, and resource settings remain platform configuration.
+The orchestration task invokes the same explicit request. Queue, module prelude, launcher, and resource settings remain platform configuration.
 
 ## Validation
 
-The stage validates link/template sources before execution, then requires the initial-state file and optional log markers after backend completion. Scheduler completion alone is not scientific success.
+The stage validates link/template sources before execution, then requires the initial-state file, optional log markers, and configured NetCDF format/schema/metadata/time checks after backend completion. Scheduler completion alone is not scientific success.
 
 ## Restart and Idempotency Behavior
 
@@ -92,7 +94,7 @@ Matching symbolic links are reused. Regular run-directory targets are not overwr
 ## Limitations
 
 - No real JACI initialization evidence yet.
-- No NetCDF semantic validation yet.
+- The exact production baseline variables, mesh metadata, and time conventions still need confirmation.
 - No standalone public V2 CLI yet.
 - No scientific comparison against an accepted MPAS initialization baseline yet.
 
