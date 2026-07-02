@@ -16,11 +16,12 @@ class MpasForecastStage(Stage):
         self.product = product
         self.run_dir = run_dir
         self.contract = contract
-        self._spec = StageSpec("mpas_forecast", "model.mpas.forecast")
+        token = product.init_time.replace("-", "").replace("_", "").replace(":", "")
+        self._spec = StageSpec(f"mpas_forecast_{token}_f{product.lead_hours:03d}", "model.mpas.forecast")
 
     @property
     def spec(self) -> StageSpec:
-        """Return the stage declaration."""
+        """Return the unique scheduler-neutral stage declaration."""
         return self._spec
 
     def run(self, context: RunContext) -> StageResult:
