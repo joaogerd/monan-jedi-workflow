@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from xml.etree import ElementTree
 
 from monan_jedi_workflow.components.model.mpas import compile_mpas_initialization
 from monan_jedi_workflow.core.config import load_mapping
@@ -65,6 +66,44 @@ def test_initialization_stage_runs_and_publishes_state(tmp_path: Path) -> None:
     assert len(runner.run(context)) == 1
     assert stage.product.state.is_file()
     assert runner.run(context) == ()
+
+
+def test_initialization_preparation_binds_wps_file_to_input_stream(tmp_path: Path) -> None:
+    """WPS-enabled init preparation must not leave the generic grid input stream."""
+    streams = tmp_path / "streams.init.in"
+    streams.write_text(
+        '<streams><immutable_stream name="input" type="input" filename_template="x1.10242.grid.nc" input_interval="initial_only" /></streams>',
+        encoding="utf-8",
+    )
+    config = {
+        "model": {
+            "mpas": {
+                "initialization_products": {
+                    "root": str(tmp_path / "products"),
+                    "state_template": "{init_yyyymmddhh}/init.nc",
+                },
+                "initialization": {
+                    "run_dir": "runs/init/{init_yyyymmddhh}",
+                    "argv": ["/bin/true"],
+                    "templates": [{"source": str(streams), "target": "streams.init_atmosphere"}],
+                },
+            }
+        }
+    }
+    context = RunContext("bmatrix", "init-wps", tmp_path, config=config)
+    stage = compile_mpas_initialization(
+        config,
+        workspace=tmp_path,
+        cycle_time="2026-06-20T00:00:00Z",
+        backend=LocalProcessBackend(),
+    )
+    stage.values["met_input_filename"] = "FILE:2026-06-20_00"
+    stage.prepare(context)
+
+    root = ElementTree.parse(stage.run_dir / "streams.init_atmosphere").getroot()
+    stream = next(item for item in root if item.get("name") == "input")
+    assert stream.get("filename_template") == "FILE:2026-06-20_00"
+    assert stream.get("filename_template") != "x1.10242.grid.nc"
 
 
 def test_initialization_tool_page_has_required_sections() -> None:
