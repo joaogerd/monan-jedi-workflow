@@ -35,6 +35,7 @@ class NmcCampaignPlan:
     initializations: tuple[MpasInitializationStage, ...]
     forecasts: tuple[MpasForecastStage, ...]
     nmc_pairs: NmcPairsStage
+    wps_ungrib: tuple[WpsUngribStage, ...] = ()
 
 
 def _factory(
@@ -50,6 +51,35 @@ def _factory(
     if backend is not None:
         return lambda _stage_name: backend
     raise ValueError(f"Provide backend or {label}_backend_factory.")
+
+
+def _has_wps(config: Mapping[str, object]) -> bool:
+    """Return whether this case declares the WPS `ungrib` producer."""
+    model = config.get("model")
+    return isinstance(model, Mapping) and isinstance(model.get("wps"), Mapping)
+
+
+def _attach_wps_file(config: Mapping[str, object], initialization: MpasInitializationStage, forcing: WpsUngribStage) -> None:
+    """Stage the upstream WPS FILE product under the declared init filename."""
+    model = config.get("model")
+    if not isinstance(model, Mapping) or not isinstance(model.get("mpas"), Mapping):
+        raise ValueError("model.mpas is required to bind a WPS forcing product.")
+    section = model["mpas"].get("initialization")
+    if not isinstance(section, Mapping) or not isinstance(section.get("wps_input"), Mapping):
+        raise ValueError("model.mpas.initialization.wps_input is required when model.wps is declared.")
+    target = section["wps_input"].get("target")
+    if not isinstance(target, str) or not target:
+        raise ValueError("model.mpas.initialization.wps_input.target must be a non-empty string.")
+    values = mpas_initialization_context(initialization.product.cycle_time)
+    try:
+        candidate = Path(target.format_map(values))
+    except KeyError as exc:
+        raise ValueError(f"WPS input target uses unknown placeholder: {exc.args[0]}") from exc
+    if not candidate.name.startswith("FILE:"):
+        raise ValueError("MPAS initialization WPS input target must use the FILE: prefix.")
+    path = candidate if candidate.is_absolute() else initialization.run_dir / candidate
+    initialization.links = (*initialization.links, LinkSpec(forcing.product.intermediate, path))
+    initialization.values["met_input"] = str(forcing.product.intermediate)
 
 
 def build_nmc_campaign(
@@ -89,17 +119,29 @@ def build_nmc_campaign(
     nmc_pairs = NmcPairsStage.from_context(context)
     pairs = nmc_pairs.pairs()
     init_times = tuple(sorted({member.init_time for pair in pairs for member in (pair.older, pair.newer)}))
-    initializations = tuple(
-        compile_mpas_initialization(
+    wps_stages = tuple(
+        compile_wps_ungrib(
+            context.config,
+            workspace=context.workspace,
+            init_time=cycle_time,
+            backend=init_factory(f"wps_ungrib_{mpas_initialization_context(cycle_time)['init_yyyymmddhh']}"),
+        )
+        for cycle_time in init_times
+    ) if _has_wps(context.config) else ()
+    wps_by_time = {stage.product.init_time: stage for stage in wps_stages}
+
+    initialized: list[MpasInitializationStage] = []
+    for cycle_time in init_times:
+        stage = compile_mpas_initialization(
             context.config,
             workspace=context.workspace,
             cycle_time=cycle_time,
-            backend=init_factory(
-                f"mpas_init_{mpas_initialization_context(cycle_time)['init_yyyymmddhh']}"
-            ),
+            backend=init_factory(f"mpas_init_{mpas_initialization_context(cycle_time)['init_yyyymmddhh']}"),
         )
-        for cycle_time in init_times
-    )
+        if wps_stages:
+            _attach_wps_file(context.config, stage, wps_by_time[cycle_time])
+        initialized.append(stage)
+    initializations = tuple(initialized)
     initial_by_time = {stage.product.cycle_time: stage for stage in initializations}
 
     forecasts: list[MpasForecastStage] = []
@@ -120,8 +162,9 @@ def build_nmc_campaign(
             )
 
     forecast_tuple = tuple(forecasts)
-    specification = nmc_campaign_workflow(initializations, forecast_tuple, nmc_pairs)
-    stages: dict[str, Stage] = {stage.spec.name: stage for stage in initializations}
+    specification = nmc_campaign_workflow(initializations, forecast_tuple, nmc_pairs, wps_stages)
+    stages: dict[str, Stage] = {stage.spec.name: stage for stage in wps_stages}
+    stages.update({stage.spec.name: stage for stage in initializations})
     stages.update({stage.spec.name: stage for stage in forecast_tuple})
     stages[nmc_pairs.spec.name] = nmc_pairs
-    return NmcCampaignPlan(specification, stages, initializations, forecast_tuple, nmc_pairs)
+    return NmcCampaignPlan(specification, stages, initializations, forecast_tuple, nmc_pairs, wps_stages)
