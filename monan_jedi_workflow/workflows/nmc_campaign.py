@@ -60,7 +60,7 @@ def _has_wps(config: Mapping[str, object]) -> bool:
 
 
 def _attach_wps_file(config: Mapping[str, object], initialization: MpasInitializationStage, forcing: WpsUngribStage) -> None:
-    """Stage the upstream WPS FILE product under the declared init filename."""
+    """Stage and expose the upstream WPS FILE product for MPAS initialization."""
     model = config.get("model")
     if not isinstance(model, Mapping) or not isinstance(model.get("mpas"), Mapping):
         raise ValueError("model.mpas is required to bind a WPS forcing product.")
@@ -80,6 +80,7 @@ def _attach_wps_file(config: Mapping[str, object], initialization: MpasInitializ
     path = candidate if candidate.is_absolute() else initialization.run_dir / candidate
     initialization.links = (*initialization.links, LinkSpec(forcing.product.intermediate, path))
     initialization.values["met_input"] = str(forcing.product.intermediate)
+    initialization.values["met_input_filename"] = path.name
 
 
 def build_nmc_campaign(
