@@ -59,6 +59,18 @@ def _has_wps(config: Mapping[str, object]) -> bool:
     return isinstance(model, Mapping) and isinstance(model.get("wps"), Mapping)
 
 
+def _partition_prefix(initialization: MpasInitializationStage) -> str:
+    """Derive the exact MPAS decomposition prefix from a declared partition link."""
+    for link in initialization.links:
+        name = link.target.name
+        if ".graph.info.part." not in name:
+            continue
+        stem, separator, ranks = name.rpartition(".")
+        if separator and ranks.isdigit():
+            return f"{stem}."
+    raise ValueError("MPAS initialization requires an explicit *.graph.info.part.<ranks> link for WPS forcing.")
+
+
 def _attach_wps_file(config: Mapping[str, object], initialization: MpasInitializationStage, forcing: WpsUngribStage) -> None:
     """Stage and expose the upstream WPS FILE product for MPAS initialization."""
     model = config.get("model")
@@ -81,6 +93,7 @@ def _attach_wps_file(config: Mapping[str, object], initialization: MpasInitializ
     initialization.links = (*initialization.links, LinkSpec(forcing.product.intermediate, path))
     initialization.values["met_input"] = str(forcing.product.intermediate)
     initialization.values["met_input_filename"] = path.name
+    initialization.values["decomposition_prefix"] = _partition_prefix(initialization)
 
 
 def build_nmc_campaign(
