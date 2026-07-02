@@ -9,7 +9,8 @@ from .initialization import (
     mpas_initialization_context,
 )
 from .initialization_config import MpasInitializationConfigurationError, compile_mpas_initialization
-from .output_validation import MpasOutputContract, validate_output_contract
+from .netcdf_contracts import MpasNetcdfContractError, artifact_check_from_mapping, mpas_artifact_check
+from .output_validation import MpasNetcdfCheck, MpasOutputContract, validate_output_contract
 from .products import (
     MpasForecastProduct,
     MpasForecastProductLayout,
@@ -29,12 +30,16 @@ __all__ = [
     "MpasInitializationProduct",
     "MpasInitializationProductLayout",
     "MpasInitializationStage",
+    "MpasNetcdfCheck",
+    "MpasNetcdfContractError",
     "MpasOutputContract",
     "MpasProductLayoutError",
     "MpasStagingError",
     "TemplateSpec",
+    "artifact_check_from_mapping",
     "compile_mpas_forecast",
     "compile_mpas_initialization",
+    "mpas_artifact_check",
     "mpas_initialization_context",
     "mpas_time_context",
     "normalize_mpas_time",
