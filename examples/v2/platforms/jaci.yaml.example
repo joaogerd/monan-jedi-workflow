@@ -1,0 +1,20 @@
+# JACI site profile for V2 MPAS NMC campaigns.
+platform:
+  jaci:
+    pbs:
+      common:
+        poll_seconds: 30
+        prelude:
+          - "module load jedi-mpas-env/1.0.0"
+      initialization:
+        queue: pesqmini
+        walltime: "00:30:00"
+        select: 1
+        ncpus: 128
+        mpiprocs: 128
+      forecast:
+        queue: pesqmidi
+        walltime: "01:00:00"
+        select: 1
+        ncpus: 128
+        mpiprocs: 128
