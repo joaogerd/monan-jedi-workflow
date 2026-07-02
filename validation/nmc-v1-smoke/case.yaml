@@ -1,0 +1,121 @@
+# Real JACI smoke case for x1.10242 NMC pairs, 22--25 June 2026.
+# This file declares existing institutional inputs; it never downloads GFS.
+case:
+  name: nmc_x1_10242_20260622_20260625_jaci_v1_smoke
+
+model:
+  wps:
+    ungrib_products:
+      root: /p/projetos/monan_das/joao.gerd/projects/tmp/monan-jedi-workflow/validation/nmc-v1-smoke/workspace/wps
+      intermediate_template: "{init_yyyymmddhh}/FILE:{wps_time}"
+
+    ungrib:
+      run_dir: /p/projetos/monan_das/joao.gerd/projects/tmp/monan-jedi-workflow/validation/nmc-v1-smoke/workspace/wps/{init_yyyymmddhh}
+      argv:
+        - /p/projetos/monan_das/joao.gerd/data/mpas-bmatrix-global/external/WPS/WPS-4.6.0/ungrib.exe
+      resources:
+        mpi_ranks: 1
+        threads_per_rank: 1
+        walltime: "00:10:00"
+      grib_inputs:
+        # The template is instantiated for 2026062000 through 2026062400.
+        - source: /p/projetos/monan_das/joao.gerd/work/nmc_bmatrix_20260622_20260625/inputs/gfs/gfs.{init_yyyymmddhh}.pgrb2.0p25.f000
+          target: GRIBFILE.AAA
+      links:
+        - source: /p/projetos/monan_das/joao.gerd/data/mpas-bmatrix-global/external/WPS/WPS-4.6.0/ungrib/Variable_Tables/Vtable.GFS
+          target: Vtable
+      templates:
+        - source: /p/projetos/monan_das/joao.gerd/projects/tmp/monan-jedi-workflow/validation/nmc-v1-smoke/templates/namelist.wps.in
+          target: namelist.wps
+      validation:
+        log: stdout.log
+        required_log_markers: []
+
+  mpas:
+    initialization_products:
+      root: /p/projetos/monan_das/joao.gerd/projects/tmp/monan-jedi-workflow/validation/nmc-v1-smoke/workspace/runs/mpas/init
+      state_template: "{init_yyyymmddhh}/x1.10242.init.{mpas_valid_file_time}.nc"
+
+    initialization:
+      run_dir: runs/mpas/init/{init_yyyymmddhh}
+      argv:
+        - /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/bin/mpas_init_atmosphere
+      resources:
+        mpi_ranks: 128
+        threads_per_rank: 1
+        walltime: "00:30:00"
+      # The planner turns this into the matching WPS FILE artifact and stream input.
+      wps_input:
+        target: "FILE:{wps_time}"
+      links:
+        - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/mesh/x1.10242.grid.nc
+          target: x1.10242.grid.nc
+        - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/graph/x1.10242.graph.info
+          target: x1.10242.graph.info
+        - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/partitions/x1.10242.graph.info.part.128
+          target: x1.10242.graph.info.part.128
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc
+          target: x1.10242.invariant.nc
+      templates:
+        - source: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/share/MPAS/core_init_atmosphere/namelist.init_atmosphere
+          target: namelist.init_atmosphere
+        - source: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/share/MPAS/core_init_atmosphere/streams.init_atmosphere
+          target: streams.init_atmosphere
+      validation:
+        log: log.init_atmosphere.0000.out
+        required_log_markers:
+          - "Critical error messages =            0"
+          - "Error messages =                     0"
+
+    forecast_products:
+      root: /p/projetos/monan_das/joao.gerd/projects/tmp/monan-jedi-workflow/validation/nmc-v1-smoke/workspace/runs/mpas/forecast
+      restart_template: "{init_yyyymmddhh}/f{lead_hours_03d}/restart.{mpas_valid_file_time}.nc"
+      state_template: "{init_yyyymmddhh}/f{lead_hours_03d}/mpasout.{mpas_valid_file_time}.nc"
+
+    forecast:
+      run_dir: runs/mpas/forecast/{init_yyyymmddhh}/f{lead_hours_03d}
+      argv:
+        - /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/bin/mpas_atmosphere
+      resources:
+        mpi_ranks: 128
+        threads_per_rank: 1
+        walltime: "01:00:00"
+      links:
+        - source: "{initial_state}"
+          target: init.nc
+        - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/mesh/x1.10242.grid.nc
+          target: x1.10242.grid.nc
+        - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/graph/x1.10242.graph.info
+          target: x1.10242.graph.info
+        - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/partitions/x1.10242.graph.info.part.128
+          target: x1.10242.graph.info.part.128
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc
+          target: x1.10242.invariant.nc
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/stream_list.atmosphere.background
+          target: stream_list.atmosphere.background
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/stream_list.atmosphere.analysis
+          target: stream_list.atmosphere.analysis
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/stream_list.atmosphere.ensemble
+          target: stream_list.atmosphere.ensemble
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/stream_list.atmosphere.control
+          target: stream_list.atmosphere.control
+      templates:
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/namelist.atmosphere_240km
+          target: namelist.atmosphere
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/streams.atmosphere_240km
+          target: streams.atmosphere
+      validation:
+        log: log.atmosphere.0000.out
+        required_log_markers:
+          - "Finished running the atmosphere core"
+
+bmatrix:
+  nmc_pairs:
+    start_valid_time: "2026-06-22T00:00:00Z"
+    end_valid_time: "2026-06-25T00:00:00Z"
+    interval_hours: 24
+    older_lead_hours: 48
+    newer_lead_hours: 24
+    minimum_pairs: 4
+    manifest_path: artifacts/bmatrix/nmc_pairs/bflow-manifest.tsv
+    report_path: artifacts/bmatrix/nmc_pairs/validation-report.json
