@@ -11,6 +11,8 @@ from ..components.model.mpas import (
     MpasInitializationStage,
     compile_mpas_forecast,
     compile_mpas_initialization,
+    mpas_initialization_context,
+    mpas_time_context,
 )
 from ..core.stage import RunContext, Stage
 from ..core.workflow_spec import WorkflowSpec
@@ -89,7 +91,9 @@ def build_nmc_campaign(
             context.config,
             workspace=context.workspace,
             cycle_time=cycle_time,
-            backend=init_factory(f"mpas_init_{cycle_time.replace('-', '').replace('_', '').replace(':', '')}"),
+            backend=init_factory(
+                f"mpas_init_{mpas_initialization_context(cycle_time)['init_yyyymmddhh']}"
+            ),
         )
         for cycle_time in init_times
     )
@@ -99,7 +103,8 @@ def build_nmc_campaign(
     for pair in pairs:
         for member in (pair.older, pair.newer):
             initialization = initial_by_time[member.init_time]
-            label = f"mpas_forecast_{member.init_time.replace('-', '').replace('_', '').replace(':', '')}_f{member.lead_hours:03d}"
+            init_label = mpas_time_context(member.init_time, member.lead_hours)["init_yyyymmddhh"]
+            label = f"mpas_forecast_{init_label}_f{member.lead_hours:03d}"
             forecasts.append(
                 compile_mpas_forecast(
                     context.config,
