@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft V2 workflow. The planner, local execution path, JACI PBS backend, artifact wiring, dry-run CLI, isolated stage execution, and simpleWorkflow rendering are implemented. A real JACI campaign, NetCDF semantic checks, and a BFLOW run using the V2 manifest remain pending.
+Draft V2 workflow. The planner, local execution path, JACI PBS backend, artifact wiring, dry-run CLI, isolated stage execution, simpleWorkflow rendering, structural NetCDF contracts, and persisted campaign audit are implemented. A real JACI campaign and a BFLOW run using the V2 manifest remain pending.
 
 ## Purpose
 
@@ -45,15 +45,18 @@ forecast restart files
 forecast MPAS state files
 artifacts/bmatrix/nmc_pairs/bflow-manifest.tsv
 artifacts/bmatrix/nmc_pairs/validation-report.json
+.monan-jedi-workflow/validation/nmc-campaign.json
 ```
 
 ## Artifact Contract
 
 The planner supplies the initialization product to each forecast using `{initial_state}`. The DAG also records the initialization stage as a dependency of that forecast, so path wiring and scheduler dependency agree.
 
+The audit JSON records an output-validation report for every stage in deterministic DAG order. It never submits a model or PBS job.
+
 ## YAML Configuration
 
-Use `examples/v2/bmatrix/nmc_campaign.yaml.example` as the campaign starting point. For JACI, compose it with `examples/v2/platforms/jaci.yaml.example`.
+Use `examples/v2/bmatrix/nmc_campaign.yaml.example` as the campaign starting point. For JACI, compose it with `examples/v2/platforms/jaci.yaml.example`. Compose the advanced NetCDF profile `examples/v2/science/mpas_artifact_validation.yaml.example` after the case profile when the selected consumer contract is known.
 
 ## Parameters
 
@@ -68,7 +71,8 @@ The workflow combines the parameters documented in:
 - Python 3.10 or newer;
 - MPAS initialization and forecast executables;
 - site runtime inputs and static files;
-- JACI PBS commands for JACI execution.
+- JACI PBS commands for JACI execution;
+- netCDF4 Python bindings for structural artifact validation.
 
 ## CLI Usage
 
@@ -92,7 +96,17 @@ monan-jedi-workflow-v2 nmc-campaign \
   --dry-run
 ```
 
-Remove `--dry-run` only after adapting paths, executable commands, validation markers, and site settings.
+Final artifact audit after the campaign has completed:
+
+```bash
+python -m monan_jedi_workflow.cli_validate_nmc \
+  --config /path/to/resolved-or-source-case.yaml \
+  --config /path/to/jaci.yaml \
+  --workspace /path/to/nmc-campaign \
+  --backend jaci-pbs
+```
+
+The audit writes `.monan-jedi-workflow/validation/nmc-campaign.json`, returns `0` only when every stage output contract validates, and returns `2` otherwise.
 
 ## simpleWorkflow Usage
 
@@ -120,16 +134,16 @@ The same graph can be rendered as ecFlow triggers or Cylc dependencies. Each for
 
 ## Validation
 
-The workflow validates stage products, not only scheduler status. NMC publication requires all expected restart and state files before it writes the BFLOW manifest.
+The workflow validates stage products, not only scheduler status. NMC publication requires all expected restart and state files before it writes the BFLOW manifest. Optional contracts can check NetCDF container format, variables, dimensions, global mesh metadata, and expected time.
 
 ## Restart and Idempotency Behavior
 
-The local runner and isolated task runner revalidate prior successful outputs before skipping a stage. Missing initialization, forecast, or manifest products invalidate reuse.
+The local runner and isolated task runner revalidate prior successful outputs before skipping a stage. Missing initialization, forecast, or manifest products invalidate reuse. When an upstream stage is regenerated, local execution regenerates its downstream stages rather than reusing outputs derived from the earlier upstream artifact.
 
 ## Limitations
 
 - No real JACI execution evidence yet.
-- No MPAS NetCDF semantic/mesh/time validation yet.
+- The production MPAS variable, mesh-metadata, time, and consumer format contracts must be confirmed against the selected baseline.
 - No V2 BFLOW consumption test yet.
 - The sequential local runner is a development executor; it does not exploit scheduler-level forecast parallelism.
 
@@ -142,6 +156,10 @@ The f048/f024 windows overlap but require initialization times from two days bef
 ### Can a forecast use an initial state outside this workflow?
 
 Yes, but then it should be modeled as an external artifact with an explicit validation contract. The current NMC campaign planner intentionally requires in-workflow initialization coverage.
+
+### Does the audit submit jobs or modify scientific products?
+
+No. It only validates existing outputs and writes a JSON evidence record under the workspace metadata directory.
 
 ## References
 
