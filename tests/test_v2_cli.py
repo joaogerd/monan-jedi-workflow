@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from monan_jedi_workflow.cli_v2 import main
+from monan_jedi_workflow.cli_validate_nmc import main as validate_nmc
 
 
 def test_nmc_pairs_dry_run_writes_resolved_configuration(tmp_path: Path) -> None:
@@ -67,3 +68,11 @@ def test_stage_run_dry_run_plans_one_declared_campaign_stage(tmp_path: Path) -> 
         "--dry-run",
     ]) == 0
     assert (workspace / ".monan-jedi-workflow/provenance.json").is_file()
+
+
+def test_nmc_audit_cli_writes_invalid_report_for_empty_workspace(tmp_path: Path) -> None:
+    """The audit CLI returns a nonzero status and persistent report on failure."""
+    campaign = Path("examples/v2/bmatrix/nmc_campaign.yaml.example")
+    workspace = tmp_path / "audit"
+    assert validate_nmc(["--config", str(campaign), "--workspace", str(workspace)]) == 2
+    assert (workspace / ".monan-jedi-workflow/validation/nmc-campaign.json").is_file()
