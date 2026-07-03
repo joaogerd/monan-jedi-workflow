@@ -25,7 +25,10 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
     partition = _write(tmp_path / "inputs/x1.10242.graph.info.part.128")
     streams = _write(
         tmp_path / "templates/streams.init_atmosphere",
-        '<streams><immutable_stream name="input" filename_template="wrong-grid.nc" /></streams>',
+        """<streams>
+<immutable_stream name="input" filename_template="wrong-grid.nc" />
+<immutable_stream name="output" filename_template="x1.40962.init.nc" />
+</streams>""",
     )
     namelist = _write(
         tmp_path / "templates/namelist.init_atmosphere",
@@ -109,6 +112,8 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
     stream = (init.run_dir / "streams.init_atmosphere").read_text(encoding="utf-8")
     assert "x1.10242.grid.nc" in stream
     assert "FILE:2026-06-20_00" not in stream
+    assert 'filename_template="init.nc"' in stream
+    assert "x1.40962.init.nc" not in stream
     rendered = (init.run_dir / "namelist.init_atmosphere").read_text(encoding="utf-8")
     assert "config_met_prefix = 'FILE'" in rendered
     assert "x1.10242.graph.info.part." in rendered
