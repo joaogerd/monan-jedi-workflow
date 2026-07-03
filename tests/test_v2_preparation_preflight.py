@@ -21,10 +21,11 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
     """Preflight stages static inputs and declared dangling upstream links only."""
     grib = _write(tmp_path / "inputs/gfs.grib2")
     vtable = _write(tmp_path / "inputs/Vtable.GFS")
+    grid = _write(tmp_path / "inputs/x1.10242.grid.nc")
     partition = _write(tmp_path / "inputs/x1.10242.graph.info.part.128")
     streams = _write(
         tmp_path / "templates/streams.init_atmosphere",
-        '<streams><immutable_stream name="input" filename_template="x1.10242.grid.nc" /></streams>',
+        '<streams><immutable_stream name="input" filename_template="wrong-grid.nc" /></streams>',
     )
     namelist = _write(
         tmp_path / "templates/namelist.init_atmosphere",
@@ -64,7 +65,10 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
                     "run_dir": "runs/init/{init_yyyymmddhh}",
                     "argv": ["/bin/false"],
                     "wps_input": {"target": "FILE:{wps_time}"},
-                    "links": [{"source": str(partition), "target": "x1.10242.graph.info.part.128"}],
+                    "links": [
+                        {"source": str(grid), "target": "x1.10242.grid.nc"},
+                        {"source": str(partition), "target": "x1.10242.graph.info.part.128"},
+                    ],
                     "templates": [
                         {"source": str(streams), "target": "streams.init_atmosphere"},
                         {"source": str(namelist), "target": "namelist.init_atmosphere"},
@@ -98,10 +102,13 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
     forecast = next(stage for stage in plan.forecasts if stage.product.init_time == "2026-06-20_00:00:00")
     assert (init.run_dir / "FILE:2026-06-20_00").is_symlink()
     assert not (init.run_dir / "FILE:2026-06-20_00").exists()
+    assert (init.run_dir / "x1.10242.grid.nc").is_symlink()
+    assert (init.run_dir / "x1.10242.graph.info.part.128").is_symlink()
     assert (forecast.run_dir / "init.nc").is_symlink()
     assert not (forecast.run_dir / "init.nc").exists()
-    assert (init.run_dir / "x1.10242.graph.info.part.128").is_symlink()
-    assert "FILE:2026-06-20_00" in (init.run_dir / "streams.init_atmosphere").read_text(encoding="utf-8")
+    stream = (init.run_dir / "streams.init_atmosphere").read_text(encoding="utf-8")
+    assert "x1.10242.grid.nc" in stream
+    assert "FILE:2026-06-20_00" not in stream
     rendered = (init.run_dir / "namelist.init_atmosphere").read_text(encoding="utf-8")
     assert "config_met_prefix = 'FILE'" in rendered
     assert "x1.10242.graph.info.part." in rendered
