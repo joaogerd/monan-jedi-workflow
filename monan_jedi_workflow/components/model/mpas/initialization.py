@@ -123,17 +123,30 @@ class MpasInitializationStage(MpasExecutionStage):
             artifacts=(product.state,),
         )
 
-    def _patch_wps_stream(self, forcing: str) -> None:
-        """Bind the initialized MPAS input stream to the exact WPS FILE artifact."""
+    def _mesh_filename(self) -> str:
+        """Return the declared MPAS mesh NetCDF filename for stream bootstrap.
+
+        WPS ``FILE:`` intermediates are meteorological forcing, not MPAS mesh
+        NetCDF files. The MPAS `input` stream must therefore bootstrap from the
+        explicit ``*.grid.nc`` link while the namelist consumes WPS forcing via
+        ``config_met_prefix = 'FILE'``.
+        """
+        for link in self.links:
+            if link.target.name.endswith(".grid.nc"):
+                return link.target.name
+        raise RuntimeError("MPAS initialization with WPS forcing requires an explicit *.grid.nc link.")
+
+    def _patch_mesh_stream(self, mesh_filename: str) -> None:
+        """Bind the MPAS bootstrap stream to the declared mesh NetCDF file."""
         streams = self.run_dir / "streams.init_atmosphere"
         if not streams.is_file():
-            raise RuntimeError(f"MPAS initialization WPS stream patch requires: {streams}")
+            raise RuntimeError(f"MPAS initialization stream patch requires: {streams}")
         tree = ElementTree.parse(streams)
         root = tree.getroot()
         stream = next((item for item in root.iter("immutable_stream") if item.get("name") == "input"), None)
         if stream is None:
-            stream = ElementTree.SubElement(root, "immutable_stream", {"name": "input", "type": "input"})
-        stream.set("filename_template", forcing)
+            raise RuntimeError("MPAS initialization stream template lacks required input stream.")
+        stream.set("filename_template", mesh_filename)
         stream.set("input_interval", "initial_only")
         tree.write(streams, encoding="unicode")
 
@@ -158,12 +171,17 @@ class MpasInitializationStage(MpasExecutionStage):
             rendered = _replace_namelist_assignment(rendered, name, value)
         namelist.write_text(rendered, encoding="utf-8")
 
-    def prepare(self, context: RunContext) -> StageResult:
-        """Stage inputs and render WPS FILE plus mesh-specific init settings.
+    def _require_wps_forcing_link(self, forcing: str) -> None:
+        """Require the declared WPS intermediate link without treating it as mesh."""
+        if not any(link.target.name == forcing and link.upstream_artifact for link in self.links):
+            raise RuntimeError(f"MPAS initialization is missing declared upstream WPS forcing link: {forcing}")
 
-        The WPS path requires the selected `FILE:` input stream and the actual
-        graph decomposition prefix. Both are derived from declared artifacts,
-        preventing stale x1.40962 settings from leaking into x1.10242 runs.
+    def prepare(self, context: RunContext) -> StageResult:
+        """Stage mesh, WPS forcing, and cycle-specific initialization settings.
+
+        The upstream `FILE:` is staged as a separate forcing artifact. The MPAS
+        stream bootstrap remains the declared mesh NetCDF artifact, preventing
+        SMIOL from trying to open a WPS intermediate as a NetCDF mesh.
         """
         result = super().prepare(context)
         forcing = self.values.get("met_input_filename")
@@ -171,7 +189,8 @@ class MpasInitializationStage(MpasExecutionStage):
             return result
         if not isinstance(forcing, str) or not forcing.startswith("FILE:"):
             raise RuntimeError("MPAS initialization met_input_filename must use the WPS FILE: prefix.")
-        self._patch_wps_stream(forcing)
+        self._require_wps_forcing_link(forcing)
+        self._patch_mesh_stream(self._mesh_filename())
         if (self.run_dir / "namelist.init_atmosphere").is_file():
             self._patch_wps_namelist()
         return result
