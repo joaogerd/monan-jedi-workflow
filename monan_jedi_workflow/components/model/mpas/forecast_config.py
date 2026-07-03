@@ -78,6 +78,34 @@ def _runtime_files(section: Mapping[str, object], runtime: CompiledMpasRuntime) 
     return tuple(links)
 
 
+def _baseline_values(section: Mapping[str, object]) -> dict[str, object]:
+    """Compile declared producer-baseline overrides for forecast rendering."""
+    raw_overrides = section.get("namelist_overrides", {})
+    if not isinstance(raw_overrides, Mapping):
+        raise MpasForecastConfigurationError("model.mpas.forecast.namelist_overrides must be a mapping.")
+    overrides: dict[str, str] = {}
+    for name, value in raw_overrides.items():
+        if not isinstance(name, str) or not name or not isinstance(value, str) or not value:
+            raise MpasForecastConfigurationError(
+                "model.mpas.forecast.namelist_overrides must map non-empty strings to non-empty strings."
+            )
+        overrides[name] = value
+    protected = {"config_start_time", "config_stop_time", "config_run_duration", "config_do_restart", "config_block_decomp_file_prefix"}
+    collision = protected.intersection(overrides)
+    if collision:
+        raise MpasForecastConfigurationError(
+            "model.mpas.forecast.namelist_overrides cannot replace generated values: " + ", ".join(sorted(collision))
+        )
+
+    output_interval = section.get("output_interval")
+    if output_interval is not None and (not isinstance(output_interval, str) or not output_interval):
+        raise MpasForecastConfigurationError("model.mpas.forecast.output_interval must be a non-empty string when set.")
+    values: dict[str, object] = {"forecast_namelist_overrides": overrides}
+    if output_interval is not None:
+        values["forecast_output_interval"] = output_interval
+    return values
+
+
 def compile_mpas_forecast(
     config: Mapping[str, object],
     *,
@@ -87,29 +115,7 @@ def compile_mpas_forecast(
     backend: ExecutionBackend,
     extra_values: Mapping[str, object] | None = None,
 ) -> MpasForecastStage:
-    """Compile one configured MPAS forecast into an executable stage.
-
-    Parameters
-    ----------
-    config : Mapping[str, object]
-        Resolved case configuration.
-    workspace : Path
-        Explicit workflow workspace.
-    init_time : str
-        Forecast initialization time.
-    lead_hours : int
-        Positive forecast lead time.
-    backend : ExecutionBackend
-        Local or platform-specific execution backend.
-    extra_values : Mapping[str, object] | None, default=None
-        Explicit upstream artifact values available to path, command, and
-        template rendering. Core product tokens cannot be overridden.
-
-    Returns
-    -------
-    MpasForecastStage
-        Stage with explicit runtime, staging, output, and NetCDF contracts.
-    """
+    """Compile one configured MPAS forecast into an executable stage."""
     try:
         model = require_mapping(config.get("model"), "model")
         mpas = require_mapping(model.get("mpas"), "model.mpas")
@@ -147,6 +153,7 @@ def compile_mpas_forecast(
             backend=backend,
         )
         support_links = _runtime_files(section, runtime)
+        baseline_values = _baseline_values(section)
         initial_state = upstream.get("initial_state")
         links = tuple(
             LinkSpec(item.source, item.target, upstream_artifact=isinstance(initial_state, str) and item.source == Path(initial_state))
@@ -188,5 +195,5 @@ def compile_mpas_forecast(
         backend=backend,
         links=links,
         templates=runtime.templates,
-        extra_values=upstream,
+        extra_values={**upstream, **baseline_values},
     )
