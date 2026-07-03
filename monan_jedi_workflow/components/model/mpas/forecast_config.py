@@ -11,12 +11,71 @@ from .forecast import MpasForecastStage
 from .netcdf_contracts import MpasNetcdfContractError, mpas_artifact_check
 from .output_validation import MpasOutputContract
 from .products import MPAS_TIME_FORMAT, MpasForecastProductLayout, MpasProductLayoutError
-from .runtime_config import MpasRuntimeConfigurationError, compile_runtime, require_mapping
+from .runtime_config import CompiledMpasRuntime, MpasRuntimeConfigurationError, compile_runtime, require_mapping
 from .staging import LinkSpec
 
 
 class MpasForecastConfigurationError(MpasRuntimeConfigurationError):
     """Raised when `model.mpas.forecast` configuration is invalid."""
+
+
+def _runtime_files(section: Mapping[str, object], runtime: CompiledMpasRuntime) -> tuple[LinkSpec, ...]:
+    """Compile explicit top-level MPAS physics/runtime files for one forecast.
+
+    The MPAS atmosphere installation carries required tables beside its namelist
+    and streams templates. They are a scientific runtime input, not an implicit
+    site-side effect. Templates remain rendered separately and are excluded from
+    the staged support-file set.
+    """
+    raw = section.get("runtime_files")
+    if raw is None:
+        return ()
+    values = require_mapping(raw, "model.mpas.forecast.runtime_files")
+    unknown = set(values).difference({"source_dir", "exclude"})
+    if unknown:
+        raise MpasForecastConfigurationError(
+            "model.mpas.forecast.runtime_files contains unsupported key(s): "
+            + ", ".join(sorted(str(item) for item in unknown))
+            + "."
+        )
+    source_value = values.get("source_dir")
+    if not isinstance(source_value, str) or not source_value:
+        raise MpasForecastConfigurationError("model.mpas.forecast.runtime_files.source_dir must be a non-empty string.")
+    source_dir = Path(source_value)
+    if not source_dir.is_absolute():
+        raise MpasForecastConfigurationError("model.mpas.forecast.runtime_files.source_dir must be absolute.")
+    if not source_dir.is_dir():
+        raise MpasForecastConfigurationError(f"MPAS forecast runtime_files.source_dir does not exist: {source_dir}")
+
+    raw_exclude = values.get("exclude", ["namelist.atmosphere", "streams.atmosphere"])
+    if not isinstance(raw_exclude, list) or not all(isinstance(item, str) and item for item in raw_exclude):
+        raise MpasForecastConfigurationError(
+            "model.mpas.forecast.runtime_files.exclude must be a list of non-empty filenames."
+        )
+    excluded = set(raw_exclude)
+    required_exclusions = {"namelist.atmosphere", "streams.atmosphere"}
+    if not required_exclusions.issubset(excluded):
+        missing = ", ".join(sorted(required_exclusions.difference(excluded)))
+        raise MpasForecastConfigurationError(
+            f"model.mpas.forecast.runtime_files.exclude must include rendered templates: {missing}."
+        )
+
+    occupied = {item.target.name for item in runtime.links} | {item.target.name for item in runtime.templates}
+    links: list[LinkSpec] = []
+    for source in sorted(source_dir.iterdir(), key=lambda item: item.name):
+        if not source.is_file() or source.name in excluded:
+            continue
+        if source.name in occupied:
+            raise MpasForecastConfigurationError(
+                f"MPAS forecast runtime file target collides with declared link/template: {source.name}"
+            )
+        occupied.add(source.name)
+        links.append(LinkSpec(source, runtime.run_dir / source.name))
+    if not links:
+        raise MpasForecastConfigurationError(
+            f"MPAS forecast runtime_files.source_dir contains no staged regular files: {source_dir}"
+        )
+    return tuple(links)
 
 
 def compile_mpas_forecast(
@@ -87,10 +146,11 @@ def compile_mpas_forecast(
             values=values,
             backend=backend,
         )
+        support_links = _runtime_files(section, runtime)
         initial_state = upstream.get("initial_state")
         links = tuple(
             LinkSpec(item.source, item.target, upstream_artifact=isinstance(initial_state, str) and item.source == Path(initial_state))
-            for item in runtime.links
+            for item in (*runtime.links, *support_links)
         )
         checks = tuple(
             check
