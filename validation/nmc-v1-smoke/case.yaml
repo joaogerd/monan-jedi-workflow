@@ -85,7 +85,7 @@ model:
       output_interval: "24:00:00"
       # Exact producer baseline from mpas-bmatrix-global/refactor/bflow-python-pipeline.
       namelist_overrides:
-        config_dt: "60.0"
+        config_dt: "1200.0"
         config_sst_update: ".false."
         config_sstdiurn_update: ".false."
         config_deepsoiltemp_update: ".false."
