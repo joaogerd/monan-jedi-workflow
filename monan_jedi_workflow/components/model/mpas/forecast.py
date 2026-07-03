@@ -1,8 +1,13 @@
 """MPAS forecast specialization of the reusable execution stage."""
 
+from __future__ import annotations
+
+import re
 from collections.abc import Mapping
 from pathlib import Path
+from xml.etree import ElementTree
 
+from ....core.stage import RunContext, StageResult
 from ....core.workflow_spec import StageSpec
 from ....platforms.base import ExecutionBackend, ExecutionRequest
 from .execution_stage import MpasExecutionStage
@@ -11,29 +16,24 @@ from .products import MpasForecastProduct, mpas_time_context
 from .staging import LinkSpec, TemplateSpec
 
 
-class MpasForecastStage(MpasExecutionStage):
-    """Execute one MPAS forecast and publish restart and state products.
+def _replace_namelist_assignment(text: str, name: str, value: str) -> str:
+    """Replace one required Fortran namelist assignment without reformatting it."""
+    pattern = re.compile(
+        rf"^(?P<prefix>\s*{re.escape(name)}\s*=\s*)(?P<old>[^!\n]*?)(?P<suffix>\s*(?:!.*)?$)",
+        re.MULTILINE,
+    )
+    updated, count = pattern.subn(
+        lambda match: f"{match.group('prefix')}{value}{match.group('suffix')}",
+        text,
+        count=1,
+    )
+    if count != 1:
+        raise RuntimeError(f"MPAS forecast namelist is missing required assignment: {name}")
+    return updated
 
-    Parameters
-    ----------
-    product : MpasForecastProduct
-        Forecast identity and expected restart/state artifacts.
-    run_dir : Path
-        Forecast working directory.
-    contract : MpasOutputContract
-        Additional output and log validation requirements.
-    request : ExecutionRequest | None, default=None
-        Explicit command request.
-    backend : ExecutionBackend | None, default=None
-        Selected execution backend.
-    links : tuple[LinkSpec, ...], default=()
-        Links staged before the forecast.
-    templates : tuple[TemplateSpec, ...], default=()
-        Templates rendered before the forecast.
-    extra_values : Mapping[str, object] | None, default=None
-        Explicit upstream artifact values such as ``initial_state``. Core
-        product tokens cannot be overridden.
-    """
+
+class MpasForecastStage(MpasExecutionStage):
+    """Execute one MPAS forecast and publish restart and state products."""
 
     def __init__(
         self,
@@ -87,3 +87,72 @@ class MpasForecastStage(MpasExecutionStage):
             values=values,
             artifacts=(product.restart, product.state),
         )
+
+    def _initial_state_link(self) -> LinkSpec | None:
+        """Return the explicit initialization-state link, when this forecast has one."""
+        return next((link for link in self.links if link.upstream_artifact), None)
+
+    def _decomposition_prefix(self) -> str | None:
+        """Derive the partition prefix from a declared graph-partition link."""
+        for link in self.links:
+            name = link.target.name
+            if ".graph.info.part." not in name:
+                continue
+            stem, separator, ranks = name.rpartition(".")
+            if separator and ranks.isdigit():
+                return f"{stem}."
+        return None
+
+    def _patch_input_stream(self, initial_state: LinkSpec) -> None:
+        """Bind the forecast input stream to the stage's explicit init-state link."""
+        streams = self.run_dir / "streams.atmosphere"
+        if not streams.is_file():
+            return
+        tree = ElementTree.parse(streams)
+        root = tree.getroot()
+        stream = next(
+            (
+                item
+                for item in root.iter()
+                if item.get("name") == "input" and item.tag in {"stream", "immutable_stream"}
+            ),
+            None,
+        )
+        if stream is None:
+            raise RuntimeError(f"MPAS forecast stream template lacks required input stream: {streams}")
+        stream.set("filename_template", initial_state.target.name)
+        stream.set("input_interval", "initial_only")
+        tree.write(streams, encoding="unicode")
+
+    def _patch_namelist(self, decomposition_prefix: str | None) -> None:
+        """Render cycle times and decomposition settings into the forecast namelist."""
+        namelist = self.run_dir / "namelist.atmosphere"
+        if not namelist.is_file():
+            return
+        if decomposition_prefix is None:
+            raise RuntimeError("MPAS forecast namelist rendering requires a declared graph partition link.")
+        values = {
+            "config_start_time": f"'{self.product.init_time}'",
+            "config_stop_time": f"'{self.product.valid_time}'",
+            "config_block_decomp_file_prefix": f"'{decomposition_prefix}'",
+            "config_do_restart": "false",
+        }
+        rendered = namelist.read_text(encoding="utf-8")
+        for name, value in values.items():
+            rendered = _replace_namelist_assignment(rendered, name, value)
+        namelist.write_text(rendered, encoding="utf-8")
+
+    def prepare(self, context: RunContext) -> StageResult:
+        """Stage inputs and render forecast files for this exact init/lead pair.
+
+        Historical MPAS templates are accepted as sources, but their start/stop
+        times, input state, and decomposition prefix are always replaced from
+        declared V2 products before any execution backend can run them.
+        """
+        result = super().prepare(context)
+        initial_state = self._initial_state_link()
+        if initial_state is None:
+            return result
+        self._patch_input_stream(initial_state)
+        self._patch_namelist(self._decomposition_prefix())
+        return result
