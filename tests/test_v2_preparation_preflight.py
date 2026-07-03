@@ -18,13 +18,11 @@ def _write(path: Path, content: str = "input") -> Path:
 
 
 def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> None:
-    """Preflight stages static inputs and declared dangling upstream links only."""
+    """Preflight stages the invariant-static WPS initialization contract."""
     grib = _write(tmp_path / "inputs/gfs.grib2")
     vtable = _write(tmp_path / "inputs/Vtable.GFS")
-    grid = _write(tmp_path / "inputs/x1.10242.grid.nc")
+    invariant = _write(tmp_path / "inputs/x1.10242.invariant.nc")
     partition = _write(tmp_path / "inputs/x1.10242.graph.info.part.128")
-    geog = tmp_path / "inputs/geog"
-    _write(geog / "topo_gmted2010_30s/index")
     streams = _write(
         tmp_path / "templates/streams.init_atmosphere",
         """<streams>
@@ -40,7 +38,13 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
  config_stop_time = '2000-01-01_00:00:00'
  config_geog_data_path = '/glade/work/wrfhelp/WPS_GEOG/'
  config_met_prefix = 'UNKNOWN'
+ config_sfc_prefix = 'SST'
  config_fg_interval = 0
+ config_static_interp = true
+ config_native_gwd_static = true
+ config_native_gwd_gsl_static = false
+ config_vertical_grid = true
+ config_met_interp = true
  config_block_decomp_file_prefix = 'x1.40962.graph.info.part.'
 /
 """,
@@ -71,10 +75,13 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
                     "run_dir": "runs/init/{init_yyyymmddhh}",
                     "argv": ["/bin/false"],
                     "wps_input": {"target": "FILE:{wps_time}"},
-                    "geog_data_path": str(geog),
-                    "geog_required_datasets": ["topo_gmted2010_30s"],
+                    "static_fields": {
+                        "mode": "invariant",
+                        "source": str(invariant),
+                        "target": "x1.10242.grid.nc",
+                    },
                     "links": [
-                        {"source": str(grid), "target": "x1.10242.grid.nc"},
+                        {"source": str(invariant), "target": "x1.10242.grid.nc"},
                         {"source": str(partition), "target": "x1.10242.graph.info.part.128"},
                     ],
                     "templates": [
@@ -111,6 +118,7 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
     assert (init.run_dir / "FILE:2026-06-20_00").is_symlink()
     assert not (init.run_dir / "FILE:2026-06-20_00").exists()
     assert (init.run_dir / "x1.10242.grid.nc").is_symlink()
+    assert (init.run_dir / "x1.10242.grid.nc").resolve() == invariant
     assert (init.run_dir / "x1.10242.graph.info.part.128").is_symlink()
     assert (forecast.run_dir / "init.nc").is_symlink()
     assert not (forecast.run_dir / "init.nc").exists()
@@ -120,7 +128,12 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
     assert 'filename_template="init.nc"' in stream
     assert "x1.40962.init.nc" not in stream
     rendered = (init.run_dir / "namelist.init_atmosphere").read_text(encoding="utf-8")
-    assert f"config_geog_data_path = '{geog}/'" in rendered
     assert "config_met_prefix = 'FILE'" in rendered
+    assert "config_sfc_prefix = 'FILE'" in rendered
+    assert "config_static_interp = .false." in rendered
+    assert "config_native_gwd_static = .false." in rendered
+    assert "config_native_gwd_gsl_static = .false." in rendered
+    assert "config_vertical_grid = .true." in rendered
+    assert "config_met_interp = .true." in rendered
     assert "x1.10242.graph.info.part." in rendered
     assert not context.state_path.exists()
