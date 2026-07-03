@@ -21,6 +21,19 @@ class MpasInitializationConfigurationError(MpasRuntimeConfigurationError):
     """Raised when `model.mpas.initialization` configuration is invalid."""
 
 
+def _compile_geog_contract(section: Mapping[str, object]) -> tuple[str | None, tuple[str, ...]]:
+    """Compile optional, explicit geographical-data inputs for WPS-backed init."""
+    path = section.get("geog_data_path")
+    if path is not None and (not isinstance(path, str) or not path):
+        raise MpasInitializationConfigurationError("model.mpas.initialization.geog_data_path must be a non-empty string.")
+    datasets = section.get("geog_required_datasets", ())
+    if not isinstance(datasets, list) or not all(isinstance(item, str) and item for item in datasets):
+        raise MpasInitializationConfigurationError(
+            "model.mpas.initialization.geog_required_datasets must be a list of non-empty dataset names."
+        )
+    return path, tuple(datasets)
+
+
 def compile_mpas_initialization(
     config: Mapping[str, object],
     *,
@@ -44,7 +57,7 @@ def compile_mpas_initialization(
     Returns
     -------
     MpasInitializationStage
-        Stage with explicit runtime, staging, output, and NetCDF contracts.
+        Stage with explicit runtime, staging, output, geodata, and NetCDF contracts.
     """
     try:
         model = require_mapping(config.get("model"), "model")
@@ -66,6 +79,7 @@ def compile_mpas_initialization(
             values=values,
             backend=backend,
         )
+        geog_data_path, geog_required_datasets = _compile_geog_contract(section)
         check = mpas_artifact_check(
             config,
             name="initialization_state",
@@ -81,7 +95,7 @@ def compile_mpas_initialization(
         required_log_markers=runtime.contract.required_log_markers,
         netcdf_checks=(*runtime.contract.netcdf_checks, *((check,) if check is not None else ())),
     )
-    return MpasInitializationStage(
+    stage = MpasInitializationStage(
         product,
         runtime.run_dir,
         contract,
@@ -90,3 +104,7 @@ def compile_mpas_initialization(
         links=runtime.links,
         templates=runtime.templates,
     )
+    if geog_data_path is not None:
+        stage.values["geog_data_path"] = geog_data_path
+        stage.values["geog_required_datasets"] = geog_required_datasets
+    return stage
