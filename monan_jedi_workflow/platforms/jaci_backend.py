@@ -11,7 +11,13 @@ from ..core.progress import JobProgressReporter, TerminalJobProgressReporter
 from .base import ExecutionBackend, ExecutionHandle, ExecutionRequest
 from .jaci_pbs import JaciPbsResources, render_pbs
 
-_NOT_FOUND = ("unknown job id", "unknown job", "not found", "does not exist")
+_NOT_FOUND = (
+    "unknown job id",
+    "unknown job",
+    "not found",
+    "does not exist",
+    "job has finished",
+)
 _STATE = re.compile(r"^\s*job_state\s*=\s*([A-Za-z])\s*$", re.MULTILINE)
 _PROGRESS_BACKEND = "JACI PBS"
 
@@ -70,7 +76,13 @@ class JaciPbsBackend(ExecutionBackend):
         return handle
 
     def _query(self, job_id: str) -> tuple[bool, str | None]:
-        """Return JACI job visibility and state from ``qstat -f``."""
+        """Return JACI job visibility and state from ``qstat -f``.
+
+        JACI removes completed jobs from ordinary ``qstat`` output and returns a
+        nonzero diagnostic advising callers to query history with ``-x`` or
+        ``-H``. That response is a terminal wait condition, not a watcher error;
+        scientific success is still decided later by the stage output contract.
+        """
         result = subprocess.run((self.qstat, "-f", job_id), text=True, capture_output=True, check=False)
         text = "\n".join(item for item in (result.stdout.strip(), result.stderr.strip()) if item)
         if result.returncode:
