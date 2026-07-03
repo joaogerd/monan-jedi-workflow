@@ -70,12 +70,14 @@ def test_initialization_stage_runs_and_publishes_state(tmp_path: Path) -> None:
 
 
 def test_initialization_preparation_renders_mesh_and_output_separately(tmp_path: Path) -> None:
-    """WPS forcing must not replace the mesh or inherited output filename."""
+    """WPS forcing must not replace mesh-specific initialization output names."""
     streams = tmp_path / "streams.init.in"
     streams.write_text(
         """<streams>
 <immutable_stream name="input" type="input" filename_template="wrong-grid.nc" input_interval="initial_only" />
 <immutable_stream name="output" type="output" filename_template="x1.40962.init.nc" output_interval="initial_only" />
+<immutable_stream name="ugwp_oro_data" type="output" filename_template="x1.40962.ugwp_oro_data.nc" output_interval="initial_only" />
+<immutable_stream name="surface" type="output" filename_template="x1.40962.sfc_update.nc" output_interval="86400" />
 </streams>""",
         encoding="utf-8",
     )
@@ -115,10 +117,14 @@ def test_initialization_preparation_renders_mesh_and_output_separately(tmp_path:
     root = ElementTree.parse(stage.run_dir / "streams.init_atmosphere").getroot()
     input_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "input")
     output_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "output")
+    ugwp_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "ugwp_oro_data")
+    surface_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "surface")
     assert input_stream.get("filename_template") == "x1.10242.grid.nc"
     assert input_stream.get("filename_template") != "FILE:2026-06-20_00"
     assert output_stream.get("filename_template") == "x1.10242.init.2026-06-20_00.00.00.nc"
     assert output_stream.get("filename_template") != "x1.40962.init.nc"
+    assert ugwp_stream.get("filename_template") == "x1.10242.ugwp_oro_data.nc"
+    assert surface_stream.get("filename_template") == "x1.10242.sfc_update.nc"
     assert (stage.run_dir / "FILE:2026-06-20_00").is_symlink()
 
 
