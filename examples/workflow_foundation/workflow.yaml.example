@@ -1,0 +1,34 @@
+workflow:
+  # prepare: inputs + optional initialization; forecast: preparation and model;
+  # cycle: forecast/background plus MPAS-JEDI; bmatrix: a producer campaign for BFLOW.
+  mode: bmatrix
+  mesh: x1.10242
+  input_source: gfs_grib2
+
+  # auto uses UNGRIB only for GRIB-family inputs. Set always or never only when
+  # the declared source contract requires an explicit override.
+  use_wps: auto
+
+  stages:
+    mpas_init: true
+    forecast: true
+    assimilation: false
+    bmatrix: true
+
+  bmatrix:
+    # Four is the technical minimum accepted by the BFLOW consumer. This 6-hour
+    # smoke campaign has four valid times and eight distinct analysis/init times:
+    # f048 starts 48 h before each valid time; f024 starts 24 h before it.
+    campaign:
+      start_valid_time: "2026-06-22T00:00:00Z"
+      end_valid_time: "2026-06-22T18:00:00Z"
+      valid_interval_hours: 6
+      minimum_pairs: 4
+      output_dir: products/nmc-campaign
+
+      forecasts:
+        f024_hours: 24
+        f048_hours: 48
+        products:
+          restart: restart.{mpas_valid_file_time}.nc
+          bflow: mpasout.{mpas_valid_file_time}.nc

@@ -1,0 +1,29 @@
+# Select one source through workflow.input_source. Paths and URLs accept the
+# standard cycle placeholders, e.g. {cycle_yyyymmddhh} and {mpas_time}.
+inputs:
+  sources:
+    local_mpas_init:
+      provider: infrastructure
+      target: /shared/monan/input/x1.10242.init.{mpas_time}.nc
+      format: netcdf
+      mesh: x1.10242
+      min_bytes: 1048576
+
+    gfs_grib2:
+      # GFS and reanalysis are remote providers. Retrieval happens only with
+      # `input-fetch` or `workflow-run --execute --fetch-inputs`.
+      provider: gfs
+      url: "https://example.invalid/gfs.{cycle_yyyymmddhh}.f000.grib2"
+      target: data/gfs/gfs.{cycle_yyyymmddhh}.f000.grib2
+      format: grib2
+      suffixes: [.grib2]
+      mesh: x1.10242
+      coverage:
+        start: "2018-04-01T00:00:00Z"
+        end: "2018-05-01T00:00:00Z"
+
+    era5_local:
+      provider: local
+      target: /archive/era5/{cycle_year}/{cycle_month}/era5_{cycle_yyyymmddhh}.nc
+      format: netcdf
+      mesh: x1.10242

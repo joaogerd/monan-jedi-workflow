@@ -86,6 +86,8 @@ def _render_template(source: Path, target: Path, context: dict[str, str]) -> Non
         raise StageConfigurationError(
             f"MPAS template {source} uses an unknown placeholder: {error.args[0]!r}"
         ) from error
+    if target.is_file() and target.read_text(encoding="utf-8") == content:
+        return
     target.write_text(content, encoding="utf-8")
 
 
@@ -98,15 +100,30 @@ def _clean_declared_outputs(run_dir: Path, patterns: list[Any]) -> None:
                 path.unlink()
 
 
-def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
-    """Load ``mpas.yaml`` and resolve a concrete execution layout for one cycle."""
+def _resolve_lead_hours(config: dict[str, Any], lead_hours: int | None) -> int:
+    configured = int(config.get("lead_hours", 0))
+    resolved = configured if lead_hours is None else int(lead_hours)
+    if resolved < 0:
+        raise StageConfigurationError("mpas.lead_hours must not be negative.")
+    return resolved
+
+
+def load_mpas_run(
+    config_dir: Path,
+    cycle_time: str,
+    *,
+    lead_hours: int | None = None,
+) -> MPASRun:
+    """Load ``mpas.yaml`` and resolve one cycle/lead-specific execution layout.
+
+    ``lead_hours`` is an explicit runtime override intended for NMC f024/f048
+    campaigns. When omitted, the value declared in ``mpas.yaml`` is preserved.
+    """
     config_dir = config_dir.resolve()
     config = load_stage_config(config_dir, "mpas.yaml", "mpas")
     cycle = parse_cycle_time(cycle_time)
-    lead_hours = int(config.get("lead_hours", 0))
-    if lead_hours < 0:
-        raise StageConfigurationError("mpas.lead_hours must not be negative.")
-    context = cycle_render_context(cycle, lead_hours=lead_hours)
+    resolved_lead = _resolve_lead_hours(config, lead_hours)
+    context = cycle_render_context(cycle, lead_hours=resolved_lead)
 
     run_dir_value = config.get("run_dir")
     if not isinstance(run_dir_value, str) or not run_dir_value:
@@ -183,11 +200,22 @@ def _render_pbs(run: MPASRun) -> None:
     run.pbs_path.chmod(0o755)
 
 
-def prepare_mpas(config_dir: Path, cycle_time: str) -> MPASRun:
-    """Stage links and templates, then render a PBS script for one MPAS cycle."""
-    run = load_mpas_run(config_dir, cycle_time)
+def prepare_mpas(
+    config_dir: Path,
+    cycle_time: str,
+    *,
+    lead_hours: int | None = None,
+    force: bool = False,
+) -> MPASRun:
+    """Stage links/templates and render PBS for one MPAS cycle/lead.
+
+    Declared output cleanup is intentionally opt-in through ``force``; repeated
+    preparation must not delete an otherwise valid forecast product.
+    """
+    run = load_mpas_run(config_dir, cycle_time, lead_hours=lead_hours)
     run.run_dir.mkdir(parents=True, exist_ok=True)
-    _clean_declared_outputs(run.run_dir, run.config.get("clean_patterns", []))
+    if force:
+        _clean_declared_outputs(run.run_dir, run.config.get("clean_patterns", []))
 
     for index, raw_entry in enumerate(_require_list(run.config.get("links", []), "mpas.links")):
         entry = _require_mapping(raw_entry, f"mpas.links[{index}]")
@@ -221,12 +249,13 @@ def prepare_mpas(config_dir: Path, cycle_time: str) -> MPASRun:
             "prepared_at": _timestamp(),
             "cycle_time": run.cycle.cycle_time,
             "cycle_id": run.cycle.cycle_id,
+            "lead_hours": int(run.context["lead_hours"]),
             "run_dir": str(run.run_dir),
             "pbs_file": str(run.pbs_path),
             "state": "prepared",
         },
     )
-    print(f"[OK] prepared MPAS cycle: {run.cycle.cycle_time}")
+    print(f"[OK] prepared MPAS cycle: {run.cycle.cycle_time} lead={run.context['lead_hours']}h")
     return run
 
 
@@ -255,13 +284,14 @@ def submit_mpas(
     config_dir: Path,
     cycle_time: str,
     *,
+    lead_hours: int | None = None,
     resubmit: bool = False,
     wait: bool = False,
     poll_seconds: int = 30,
     timeout_seconds: int | None = None,
 ) -> str:
-    """Submit a prepared MPAS cycle and optionally wait for its PBS job."""
-    run = load_mpas_run(config_dir, cycle_time)
+    """Submit a prepared MPAS cycle/lead and optionally wait for PBS completion."""
+    run = load_mpas_run(config_dir, cycle_time, lead_hours=lead_hours)
     manifest = _load_manifest(run)
     previous_job = manifest.get("job_id")
     if isinstance(previous_job, str) and previous_job and not resubmit:
@@ -292,7 +322,13 @@ def submit_mpas(
         print(f"[OK] submitted MPAS PBS job: {job_id}")
 
     if wait:
-        wait_mpas(config_dir, cycle_time, poll_seconds=poll_seconds, timeout_seconds=timeout_seconds)
+        wait_mpas(
+            config_dir,
+            cycle_time,
+            lead_hours=lead_hours,
+            poll_seconds=poll_seconds,
+            timeout_seconds=timeout_seconds,
+        )
     return job_id
 
 
@@ -300,6 +336,7 @@ def wait_mpas(
     config_dir: Path,
     cycle_time: str,
     *,
+    lead_hours: int | None = None,
     poll_seconds: int = 30,
     timeout_seconds: int | None = None,
 ) -> str | None:
@@ -308,7 +345,7 @@ def wait_mpas(
         raise ValueError("poll_seconds must be at least 1.")
     if timeout_seconds is not None and timeout_seconds < 1:
         raise ValueError("timeout_seconds must be at least 1 when provided.")
-    run = load_mpas_run(config_dir, cycle_time)
+    run = load_mpas_run(config_dir, cycle_time, lead_hours=lead_hours)
     manifest = _load_manifest(run)
     job_id = manifest.get("job_id")
     if not isinstance(job_id, str) or not job_id:
@@ -337,9 +374,14 @@ def wait_mpas(
         time.sleep(poll_seconds)
 
 
-def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
-    """Validate the MPAS log and products declared for one submitted cycle."""
-    run = load_mpas_run(config_dir, cycle_time)
+def validate_mpas(
+    config_dir: Path,
+    cycle_time: str,
+    *,
+    lead_hours: int | None = None,
+) -> Path:
+    """Validate the MPAS log and products declared for one submitted cycle/lead."""
+    run = load_mpas_run(config_dir, cycle_time, lead_hours=lead_hours)
     manifest = _load_manifest(run)
     if not isinstance(manifest.get("job_id"), str) or not manifest["job_id"]:
         raise MPASValidationError("MPAS validation requires a submitted job manifest.")
@@ -374,6 +416,7 @@ def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
         "validated_at": _timestamp(),
         "cycle_time": run.cycle.cycle_time,
         "cycle_id": run.cycle.cycle_id,
+        "lead_hours": int(run.context["lead_hours"]),
         "job_id": manifest["job_id"],
         "valid": not missing_markers and not missing_outputs,
         "log": str(log_path),
