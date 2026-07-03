@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local execution, JACI PBS rendering/submission/wait, artifact validation, optional structural NetCDF contracts, and NMC campaign planning are implemented and covered by local tests. When a campaign declares `model.wps`, the planner provides one explicit WPS `FILE:` forcing artifact per initialization. Real JACI execution and scientific baseline validation remain pending.
+Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local execution, JACI PBS rendering/submission/wait, artifact validation, optional structural NetCDF contracts, and NMC campaign planning are implemented and covered by local tests. When a campaign declares `model.wps`, the planner provides one explicit WPS `FILE:` forcing artifact per initialization. The first real JACI canary established that WPS ungrib succeeds; MPAS initialization remains pending after correction of the mesh-stream/WPS-forcing separation.
 
 ## Purpose
 
@@ -10,7 +10,12 @@ Draft V2 component. YAML-to-stage compilation, explicit runtime staging, local e
 
 ## Scientific Context
 
-An MPAS forecast must start from a state consistent with the selected mesh, static fields, forcing, and cycle time. In the global configuration used by the NMC campaign, `init_atmosphere` consumes the WPS `FILE:YYYY-MM-DD_HH` intermediate directly through `config_met_prefix = 'FILE'`.
+An MPAS forecast must start from a state consistent with the selected mesh, static fields, forcing, and cycle time. In the global configuration used by the NMC campaign, `init_atmosphere` reads two distinct inputs:
+
+- the MPAS mesh NetCDF file through the `input` stream, for example `x1.10242.grid.nc`;
+- the WPS `FILE:YYYY-MM-DD_HH` intermediate through `config_met_prefix = 'FILE'` and `config_fg_interval`.
+
+The WPS intermediate is not a NetCDF mesh and must never replace the mesh stream filename.
 
 ## When to Use the Tool
 
@@ -20,7 +25,8 @@ Use this component before any V2 MPAS forecast that depends on an initial state 
 
 - a cycle time;
 - `model.mpas.initialization_products` with an absolute initial-state root and path template;
-- static geography and other model inputs declared as explicit links or templates;
+- an explicit `*.grid.nc` mesh link for MPAS stream bootstrap;
+- static geography, graph, partition, and other model inputs declared as explicit links or templates;
 - an upstream WPS `FILE:` artifact when the NMC campaign declares `model.wps`;
 - `model.mpas.initialization` with an explicit command, run directory, optional environment, links, templates, and validation rules.
 
@@ -32,7 +38,8 @@ The stage publishes one initial MPAS state file. Its path is defined by `state_t
 
 | Artifact | Producer | Consumer | Current validation |
 | --- | --- | --- | --- |
-| WPS `FILE:` forcing | WPS ungrib | MPAS initialization | Declared producer, explicit link, existence/non-empty |
+| MPAS `*.grid.nc` mesh | Static mesh source | MPAS initialization stream `input` | Declared link and stream filename |
+| WPS `FILE:` forcing | WPS ungrib | MPAS initialization namelist path | Declared producer, separate explicit link, existence/non-empty |
 | Initial MPAS state | MPAS initialization | MPAS forecast | Exists/non-empty; optional NetCDF format/schema/mesh/time contract |
 | Initialization log | MPAS initialization | Validation/orchestration | Optional markers |
 | PBS script | JACI platform adapter | PBS | Explicit argv/resources |
@@ -51,7 +58,12 @@ model:
     initialization:
       wps_input:
         target: "FILE:{wps_time}"
+      links:
+        - source: /absolute/path/to/x1.10242.grid.nc
+          target: x1.10242.grid.nc
 ```
+
+`wps_input.target` creates the separate WPS forcing link. The initialization renderer keeps the stream `input` bound to the declared `*.grid.nc` mesh link.
 
 Optional structural checks live under `model.mpas.artifact_validation.initialization_state`; see `examples/v2/science/mpas_artifact_validation.yaml.example`.
 
@@ -65,7 +77,7 @@ Optional structural checks live under `model.mpas.artifact_validation.initializa
 | `argv` | Exact executable arguments. |
 | `links` | Inputs staged as idempotent symbolic links. |
 | `templates` | Input files rendered from explicit context. |
-| `wps_input.target` | Target filename for the upstream WPS artifact; it must begin with `FILE:`. |
+| `wps_input.target` | Separate target filename for the upstream WPS artifact; it must begin with `FILE:`. |
 | `required_log_markers` | Completion markers checked in the selected log. |
 | `artifact_validation` | Optional NetCDF format, schema, metadata, and time checks. |
 
@@ -100,7 +112,7 @@ The orchestration task invokes the same explicit request. Queue, module prelude,
 
 ## Validation
 
-The stage validates link/template sources before execution, then requires the initial-state file, optional log markers, and configured NetCDF format/schema/metadata/time checks after backend completion. Scheduler completion alone is not scientific success.
+The stage validates link/template sources before execution, then requires the initial-state file, optional log markers, and configured NetCDF format/schema/metadata/time checks after backend completion. Scheduler completion alone is not scientific success. A preflight must verify both that the `FILE:` forcing link exists and that the rendered MPAS `input` stream still names the grid NetCDF file.
 
 ## Restart and Idempotency Behavior
 
@@ -108,7 +120,7 @@ Matching symbolic links are reused. Regular run-directory targets are not overwr
 
 ## Limitations
 
-- No real JACI initialization evidence yet.
+- The first MPAS init canary failed because an earlier renderer incorrectly substituted the WPS `FILE:` for the mesh stream; the corrected renderer requires revalidation.
 - The exact production baseline variables, mesh metadata, static geography, forcing coverage, and time conventions still need confirmation.
 - No standalone public V2 CLI yet.
 - No scientific comparison against an accepted MPAS initialization baseline yet.
@@ -122,6 +134,10 @@ The stages publish different scientific products, have different validation cont
 ### Why does initialization receive a WPS FILE artifact rather than metgrid output?
 
 The selected MPAS global initialization configuration reads the WPS intermediate directly. The workflow should model the artifact actually consumed instead of creating an unused metgrid stage.
+
+### Why does the MPAS input stream not point to WPS FILE?
+
+The input stream bootstraps MPAS from its mesh NetCDF file. WPS `FILE:` is a separate intermediate forcing format and is selected by the initialization namelist, not by the mesh stream.
 
 ### Does a successful initialization guarantee a valid forecast?
 
