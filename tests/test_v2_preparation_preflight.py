@@ -23,6 +23,8 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
     vtable = _write(tmp_path / "inputs/Vtable.GFS")
     grid = _write(tmp_path / "inputs/x1.10242.grid.nc")
     partition = _write(tmp_path / "inputs/x1.10242.graph.info.part.128")
+    geog = tmp_path / "inputs/geog"
+    _write(geog / "topo_gmted2010_30s/index")
     streams = _write(
         tmp_path / "templates/streams.init_atmosphere",
         """<streams>
@@ -36,6 +38,7 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
  config_init_case = 0
  config_start_time = '2000-01-01_00:00:00'
  config_stop_time = '2000-01-01_00:00:00'
+ config_geog_data_path = '/glade/work/wrfhelp/WPS_GEOG/'
  config_met_prefix = 'UNKNOWN'
  config_fg_interval = 0
  config_block_decomp_file_prefix = 'x1.40962.graph.info.part.'
@@ -68,6 +71,8 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
                     "run_dir": "runs/init/{init_yyyymmddhh}",
                     "argv": ["/bin/false"],
                     "wps_input": {"target": "FILE:{wps_time}"},
+                    "geog_data_path": str(geog),
+                    "geog_required_datasets": ["topo_gmted2010_30s"],
                     "links": [
                         {"source": str(grid), "target": "x1.10242.grid.nc"},
                         {"source": str(partition), "target": "x1.10242.graph.info.part.128"},
@@ -115,6 +120,7 @@ def test_prepare_only_renders_wps_and_mpas_without_execution(tmp_path: Path) -> 
     assert 'filename_template="init.nc"' in stream
     assert "x1.40962.init.nc" not in stream
     rendered = (init.run_dir / "namelist.init_atmosphere").read_text(encoding="utf-8")
+    assert f"config_geog_data_path = '{geog}/'" in rendered
     assert "config_met_prefix = 'FILE'" in rendered
     assert "x1.10242.graph.info.part." in rendered
     assert not context.state_path.exists()
