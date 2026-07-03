@@ -16,13 +16,17 @@ from .products import MpasForecastProduct, mpas_time_context
 from .staging import LinkSpec, TemplateSpec
 
 
-def _replace_namelist_assignment(text: str, name: str, value: str) -> str:
-    """Replace one required Fortran namelist assignment without reformatting it."""
-    pattern = re.compile(
+def _assignment_pattern(name: str) -> re.Pattern[str]:
+    """Return one anchored Fortran-namelist assignment pattern."""
+    return re.compile(
         rf"^(?P<prefix>\s*{re.escape(name)}\s*=\s*)(?P<old>[^!\n]*?)(?P<suffix>\s*(?:!.*)?$)",
         re.MULTILINE,
     )
-    updated, count = pattern.subn(
+
+
+def _replace_namelist_assignment(text: str, name: str, value: str) -> str:
+    """Replace a required Fortran namelist assignment without reformatting it."""
+    updated, count = _assignment_pattern(name).subn(
         lambda match: f"{match.group('prefix')}{value}{match.group('suffix')}",
         text,
         count=1,
@@ -30,6 +34,11 @@ def _replace_namelist_assignment(text: str, name: str, value: str) -> str:
     if count != 1:
         raise RuntimeError(f"MPAS forecast namelist is missing required assignment: {name}")
     return updated
+
+
+def _has_assignment(text: str, name: str) -> bool:
+    """Return whether a namelist template defines a named assignment."""
+    return _assignment_pattern(name).search(text) is not None
 
 
 class MpasForecastStage(MpasExecutionStage):
@@ -89,7 +98,7 @@ class MpasForecastStage(MpasExecutionStage):
         )
 
     def _initial_state_link(self) -> LinkSpec | None:
-        """Return the explicit initialization-state link, when this forecast has one."""
+        """Return the explicit initialization-state link, when present."""
         return next((link for link in self.links if link.upstream_artifact), None)
 
     def _decomposition_prefix(self) -> str | None:
@@ -104,16 +113,15 @@ class MpasForecastStage(MpasExecutionStage):
         return None
 
     def _patch_input_stream(self, initial_state: LinkSpec) -> None:
-        """Bind the forecast input stream to the stage's explicit init-state link."""
+        """Bind the forecast input stream to the explicit init-state link."""
         streams = self.run_dir / "streams.atmosphere"
         if not streams.is_file():
             return
         tree = ElementTree.parse(streams)
-        root = tree.getroot()
         stream = next(
             (
                 item
-                for item in root.iter()
+                for item in tree.getroot().iter()
                 if item.get("name") == "input" and item.tag in {"stream", "immutable_stream"}
             ),
             None,
@@ -124,30 +132,39 @@ class MpasForecastStage(MpasExecutionStage):
         stream.set("input_interval", "initial_only")
         tree.write(streams, encoding="unicode")
 
+    def _duration(self) -> str:
+        """Render the MPAS `D_HH:MM:SS` duration for this forecast lead."""
+        days, hours = divmod(self.product.lead_hours, 24)
+        return f"'{days}_{hours:02d}:00:00'"
+
     def _patch_namelist(self, decomposition_prefix: str | None) -> None:
-        """Render cycle times and decomposition settings into the forecast namelist."""
+        """Render cycle, duration, and decomposition into the forecast namelist."""
         namelist = self.run_dir / "namelist.atmosphere"
         if not namelist.is_file():
             return
         if decomposition_prefix is None:
             raise RuntimeError("MPAS forecast namelist rendering requires a declared graph partition link.")
-        values = {
+        rendered = namelist.read_text(encoding="utf-8")
+        for name, value in {
             "config_start_time": f"'{self.product.init_time}'",
-            "config_stop_time": f"'{self.product.valid_time}'",
             "config_block_decomp_file_prefix": f"'{decomposition_prefix}'",
             "config_do_restart": "false",
-        }
-        rendered = namelist.read_text(encoding="utf-8")
-        for name, value in values.items():
+        }.items():
             rendered = _replace_namelist_assignment(rendered, name, value)
+        if _has_assignment(rendered, "config_stop_time"):
+            rendered = _replace_namelist_assignment(rendered, "config_stop_time", f"'{self.product.valid_time}'")
+        elif _has_assignment(rendered, "config_run_duration"):
+            rendered = _replace_namelist_assignment(rendered, "config_run_duration", self._duration())
+        else:
+            raise RuntimeError("MPAS forecast namelist must define config_stop_time or config_run_duration.")
         namelist.write_text(rendered, encoding="utf-8")
 
     def prepare(self, context: RunContext) -> StageResult:
-        """Stage inputs and render forecast files for this exact init/lead pair.
+        """Stage inputs and render files for the exact init-time and lead.
 
-        Historical MPAS templates are accepted as sources, but their start/stop
-        times, input state, and decomposition prefix are always replaced from
-        declared V2 products before any execution backend can run them.
+        Historical templates can be used as sources, but their time, duration,
+        input state, and graph decomposition are replaced from explicit V2
+        products before a backend can execute MPAS.
         """
         result = super().prepare(context)
         initial_state = self._initial_state_link()
