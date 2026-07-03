@@ -18,7 +18,6 @@ model:
         threads_per_rank: 1
         walltime: "00:10:00"
       grib_inputs:
-        # The template is instantiated for 20260620 through 20260624.
         - source: /p/projetos/monan_das/joao.gerd/work/nmc_bmatrix_20260622_20260625/inputs/gfs/gfs.{init_yyyymmddhh}.pgrb2.0p25.f000
           target: GRIBFILE.AAA
       links:
@@ -44,29 +43,21 @@ model:
         mpi_ranks: 128
         threads_per_rank: 1
         walltime: "00:30:00"
-      # The planner stages WPS FILE forcing separately. The MPAS input stream
-      # remains bound to the declared x1.10242.grid.nc mesh link.
       wps_input:
         target: "FILE:{wps_time}"
-      # Low-resolution WPS_GEOG aliases prepared by mpas-bmatrix-global.
-      # The init executable requests the *_30s directory names below.
-      geog_data_path: /p/projetos/monan_das/joao.gerd/data/mpas-bmatrix-global/external/WPS_GEOG/mpas_lowres_compat
-      geog_required_datasets:
-        - topo_gmted2010_30s
-        - soiltype_top_30s
-        - soiltype_bot_30s
-        - modis_landuse_20class_30s
-        - modis_landuse_20class_30s_with_lakes
-        - greenfrac_fpar_modis_30s
+      # Reproduce the validated producer baseline: static fields are supplied by
+      # the tutorial invariant file, presented to MPAS under the grid filename.
+      static_fields:
+        mode: invariant
+        source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc
+        target: x1.10242.grid.nc
       links:
-        - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/mesh/x1.10242.grid.nc
+        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc
           target: x1.10242.grid.nc
         - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/graph/x1.10242.graph.info
           target: x1.10242.graph.info
         - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/partitions/x1.10242.graph.info.part.128
           target: x1.10242.graph.info.part.128
-        - source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc
-          target: x1.10242.invariant.nc
       templates:
         - source: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/share/MPAS/core_init_atmosphere/namelist.init_atmosphere
           target: namelist.init_atmosphere
