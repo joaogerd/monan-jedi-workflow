@@ -112,24 +112,69 @@ class MpasForecastStage(MpasExecutionStage):
                 return f"{stem}."
         return None
 
-    def _patch_input_stream(self, initial_state: LinkSpec) -> None:
-        """Bind the forecast input stream to the explicit init-state link."""
+    @staticmethod
+    def _stream(root: ElementTree.Element, name: str, tag: str = "immutable_stream") -> ElementTree.Element:
+        """Return or create one named stream element with the requested tag."""
+        stream = next((item for item in root.iter() if item.get("name") == name), None)
+        if stream is not None:
+            return stream
+        return ElementTree.SubElement(root, tag, {"name": name})
+
+    def _invariant_filename(self) -> str | None:
+        """Return the run-local invariant filename when explicitly staged."""
+        for link in self.links:
+            if link.target.name.endswith(".invariant.nc"):
+                return link.target.name
+        return None
+
+    def _patch_streams(self, initial_state: LinkSpec) -> None:
+        """Bind validated producer-baseline streams to explicit V2 artifacts."""
         streams = self.run_dir / "streams.atmosphere"
         if not streams.is_file():
             return
         tree = ElementTree.parse(streams)
-        stream = next(
-            (
-                item
-                for item in tree.getroot().iter()
-                if item.get("name") == "input" and item.tag in {"stream", "immutable_stream"}
-            ),
-            None,
-        )
-        if stream is None:
-            raise RuntimeError(f"MPAS forecast stream template lacks required input stream: {streams}")
-        stream.set("filename_template", initial_state.target.name)
-        stream.set("input_interval", "initial_only")
+        root = tree.getroot()
+
+        input_stream = self._stream(root, "input")
+        input_stream.set("type", "input")
+        input_stream.set("filename_template", initial_state.target.name)
+        input_stream.set("input_interval", "initial_only")
+
+        interval = self.values.get("forecast_output_interval")
+        if interval is not None:
+            if not isinstance(interval, str) or not interval:
+                raise RuntimeError("MPAS forecast_output_interval must be a non-empty string when declared.")
+            invariant = self._invariant_filename()
+            if invariant is None:
+                raise RuntimeError("MPAS forecast producer baseline requires a declared *.invariant.nc link.")
+            invariant_stream = self._stream(root, "invariant")
+            invariant_stream.set("type", "input")
+            invariant_stream.set("filename_template", invariant)
+            invariant_stream.set("input_interval", "initial_only")
+
+            da_state = self._stream(root, "da_state")
+            da_state.set("type", "output")
+            da_state.set("precision", da_state.get("precision", "single"))
+            da_state.set("io_type", da_state.get("io_type", "pnetcdf,cdf5"))
+            da_state.set("filename_template", "mpasout.$Y-$M-$D_$h.$m.$s.nc")
+            da_state.set("packages", "jedi_da")
+            da_state.set("output_interval", interval)
+            da_state.set("filename_interval", "output_interval")
+            da_state.set("clobber_mode", "overwrite")
+
+            restart = self._stream(root, "restart", tag="stream")
+            restart.set("type", "output")
+            restart.set("filename_template", "restart.$Y-$M-$D_$h.$m.$s.nc")
+            restart.set("filename_interval", "output_interval")
+            restart.set("output_interval", interval)
+            restart.set("clobber_mode", "overwrite")
+
+            for name in ("output", "diagnostics"):
+                stream = next((item for item in root.iter() if item.get("name") == name), None)
+                if stream is not None:
+                    stream.set("type", "none")
+                    stream.set("output_interval", "none")
+
         tree.write(streams, encoding="unicode")
 
     def _duration(self) -> str:
@@ -138,18 +183,29 @@ class MpasForecastStage(MpasExecutionStage):
         return f"'{days}_{hours:02d}:00:00'"
 
     def _patch_namelist(self, decomposition_prefix: str | None) -> None:
-        """Render cycle, duration, and decomposition into the forecast namelist."""
+        """Render cycle, duration, decomposition, and declared baseline values."""
         namelist = self.run_dir / "namelist.atmosphere"
         if not namelist.is_file():
             return
         if decomposition_prefix is None:
             raise RuntimeError("MPAS forecast namelist rendering requires a declared graph partition link.")
         rendered = namelist.read_text(encoding="utf-8")
-        for name, value in {
+        replacements: dict[str, str] = {
             "config_start_time": f"'{self.product.init_time}'",
             "config_block_decomp_file_prefix": f"'{decomposition_prefix}'",
-            "config_do_restart": "false",
-        }.items():
+            "config_do_restart": ".false.",
+        }
+        overrides = self.values.get("forecast_namelist_overrides", {})
+        if not isinstance(overrides, Mapping) or not all(isinstance(name, str) and isinstance(value, str) for name, value in overrides.items()):
+            raise RuntimeError("MPAS forecast_namelist_overrides must be a string mapping.")
+        protected = set(replacements)
+        collision = protected.intersection(overrides)
+        if collision:
+            raise RuntimeError(
+                "MPAS forecast_namelist_overrides cannot replace generated values: " + ", ".join(sorted(collision))
+            )
+        replacements.update(overrides)
+        for name, value in replacements.items():
             rendered = _replace_namelist_assignment(rendered, name, value)
         if _has_assignment(rendered, "config_stop_time"):
             rendered = _replace_namelist_assignment(rendered, "config_stop_time", f"'{self.product.valid_time}'")
@@ -160,16 +216,11 @@ class MpasForecastStage(MpasExecutionStage):
         namelist.write_text(rendered, encoding="utf-8")
 
     def prepare(self, context: RunContext) -> StageResult:
-        """Stage inputs and render files for the exact init-time and lead.
-
-        Historical templates can be used as sources, but their time, duration,
-        input state, and graph decomposition are replaced from explicit V2
-        products before a backend can execute MPAS.
-        """
+        """Stage inputs and render files for the exact init-time and lead."""
         result = super().prepare(context)
         initial_state = self._initial_state_link()
         if initial_state is None:
             return result
-        self._patch_input_stream(initial_state)
+        self._patch_streams(initial_state)
         self._patch_namelist(self._decomposition_prefix())
         return result
