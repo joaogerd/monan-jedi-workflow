@@ -74,15 +74,23 @@ model:
 
     forecast:
       run_dir: runs/mpas/forecast/{init_yyyymmddhh}/f{lead_hours_03d}
+      # Match the validated producer: execute the run-local binary link, rather
+      # than a site path that happens to point at the same installation today.
       argv:
-        - /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/bin/mpas_atmosphere
+        - ./mpas_atmosphere
       resources:
         mpi_ranks: 128
         threads_per_rank: 1
-        walltime: "01:00:00"
-      # Reproduce the functional producer preparation: stage all regular physics
-      # support files from core_atmosphere, while rendering templates and taking
-      # stream lists from the tutorial physics directory explicitly below.
+        walltime: "02:00:00"
+      output_interval: "24:00:00"
+      # Exact producer baseline from mpas-bmatrix-global/refactor/bflow-python-pipeline.
+      namelist_overrides:
+        config_dt: "60.0"
+        config_sst_update: ".false."
+        config_sstdiurn_update: ".false."
+        config_deepsoiltemp_update: ".false."
+        config_do_DAcycling: ".true."
+        config_jedi_da: ".true."
       runtime_files:
         source_dir: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/share/MPAS/core_atmosphere
         exclude:
@@ -93,6 +101,8 @@ model:
           - stream_list.atmosphere.ensemble
           - stream_list.atmosphere.control
       links:
+        - source: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/bin/mpas_atmosphere
+          target: mpas_atmosphere
         - source: "{initial_state}"
           target: init.nc
         - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/mesh/x1.10242.grid.nc
