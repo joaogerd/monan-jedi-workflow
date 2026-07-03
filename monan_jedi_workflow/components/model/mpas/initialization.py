@@ -156,6 +156,28 @@ class MpasInitializationStage(MpasExecutionStage):
                 continue
             stream.set("filename_template", _MESH_OUTPUT_PREFIX.sub(mesh_identifier, template, count=1))
 
+    def _geog_data_path(self) -> Path:
+        """Return one declared local geographical-data root for MPAS initialization."""
+        configured = self.values.get("geog_data_path")
+        if not isinstance(configured, str) or not configured:
+            raise RuntimeError("MPAS initialization with WPS forcing requires declared geog_data_path.")
+        path = Path(configured)
+        if not path.is_absolute():
+            raise RuntimeError("MPAS initialization geog_data_path must be absolute.")
+        if not path.is_dir():
+            raise RuntimeError(f"MPAS initialization geog_data_path does not exist: {path}")
+        return path
+
+    def _require_geog_datasets(self, root: Path) -> None:
+        """Require declared geodata directories to expose WPS `index` files."""
+        datasets = self.values.get("geog_required_datasets", ())
+        if not isinstance(datasets, tuple) or not all(isinstance(item, str) and item for item in datasets):
+            raise RuntimeError("MPAS initialization geog_required_datasets must be a tuple of non-empty dataset names.")
+        for dataset in datasets:
+            index = root / dataset / "index"
+            if not index.is_file():
+                raise RuntimeError(f"MPAS initialization geographical dataset is missing index: {index}")
+
     def _patch_streams(self, mesh_filename: str) -> None:
         """Render mesh bootstrap and mesh-specific initialization output filenames.
 
@@ -182,8 +204,8 @@ class MpasInitializationStage(MpasExecutionStage):
             raise RuntimeError("MPAS initialization stream renderer failed to bind the declared state filename.")
         tree.write(streams, encoding="unicode")
 
-    def _patch_wps_namelist(self) -> None:
-        """Render cycle, WPS, and partition settings into a declared init namelist."""
+    def _patch_wps_namelist(self, geog_data_path: Path) -> None:
+        """Render cycle, WPS, geographical-data, and partition settings into namelist."""
         prefix = self.values.get("decomposition_prefix")
         if not isinstance(prefix, str) or not prefix.endswith(".graph.info.part."):
             raise RuntimeError("MPAS initialization requires a declared graph decomposition prefix for WPS forcing.")
@@ -194,6 +216,7 @@ class MpasInitializationStage(MpasExecutionStage):
             "config_init_case": "7",
             "config_start_time": f"'{self.product.cycle_time}'",
             "config_stop_time": f"'{self.product.cycle_time}'",
+            "config_geog_data_path": f"'{geog_data_path}/'",
             "config_met_prefix": "'FILE'",
             "config_fg_interval": "86400",
             "config_block_decomp_file_prefix": f"'{prefix}'",
@@ -217,7 +240,9 @@ class MpasInitializationStage(MpasExecutionStage):
         if not isinstance(forcing, str) or not forcing.startswith("FILE:"):
             raise RuntimeError("MPAS initialization met_input_filename must use the WPS FILE: prefix.")
         self._require_wps_forcing_link(forcing)
+        geog_data_path = self._geog_data_path()
+        self._require_geog_datasets(geog_data_path)
         self._patch_streams(self._mesh_filename())
         if (self.run_dir / "namelist.init_atmosphere").is_file():
-            self._patch_wps_namelist()
+            self._patch_wps_namelist(geog_data_path)
         return result
