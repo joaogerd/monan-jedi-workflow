@@ -7,6 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 from monan_jedi_workflow.components.model.mpas import compile_mpas_initialization
+from monan_jedi_workflow.components.model.mpas.staging import LinkSpec
 from monan_jedi_workflow.core.config import load_mapping
 from monan_jedi_workflow.core.stage import RunContext
 from monan_jedi_workflow.core.workflow_spec import WorkflowSpec
@@ -68,13 +69,19 @@ def test_initialization_stage_runs_and_publishes_state(tmp_path: Path) -> None:
     assert runner.run(context) == ()
 
 
-def test_initialization_preparation_binds_wps_file_to_input_stream(tmp_path: Path) -> None:
-    """WPS-enabled init preparation must not leave the generic grid input stream."""
+def test_initialization_preparation_keeps_mesh_stream_separate_from_wps_forcing(tmp_path: Path) -> None:
+    """MPAS bootstrap uses grid NetCDF while WPS FILE remains a separate link."""
     streams = tmp_path / "streams.init.in"
     streams.write_text(
-        '<streams><immutable_stream name="input" type="input" filename_template="x1.10242.grid.nc" input_interval="initial_only" /></streams>',
+        '<streams><immutable_stream name="input" type="input" filename_template="wrong-grid.nc" input_interval="initial_only" /></streams>',
         encoding="utf-8",
     )
+    grid = tmp_path / "inputs/x1.10242.grid.nc"
+    grid.parent.mkdir(parents=True)
+    grid.write_bytes(b"grid")
+    forcing = tmp_path / "wps/FILE:2026-06-20_00"
+    forcing.parent.mkdir(parents=True)
+    forcing.write_bytes(b"wps")
     config = {
         "model": {
             "mpas": {
@@ -85,6 +92,7 @@ def test_initialization_preparation_binds_wps_file_to_input_stream(tmp_path: Pat
                 "initialization": {
                     "run_dir": "runs/init/{init_yyyymmddhh}",
                     "argv": ["/bin/true"],
+                    "links": [{"source": str(grid), "target": "x1.10242.grid.nc"}],
                     "templates": [{"source": str(streams), "target": "streams.init_atmosphere"}],
                 },
             }
@@ -97,13 +105,15 @@ def test_initialization_preparation_binds_wps_file_to_input_stream(tmp_path: Pat
         cycle_time="2026-06-20T00:00:00Z",
         backend=LocalProcessBackend(),
     )
+    stage.links = (*stage.links, LinkSpec(forcing, stage.run_dir / "FILE:2026-06-20_00", upstream_artifact=True))
     stage.values["met_input_filename"] = "FILE:2026-06-20_00"
     stage.prepare(context)
 
     root = ElementTree.parse(stage.run_dir / "streams.init_atmosphere").getroot()
-    stream = next(item for item in root if item.get("name") == "input")
-    assert stream.get("filename_template") == "FILE:2026-06-20_00"
-    assert stream.get("filename_template") != "x1.10242.grid.nc"
+    stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "input")
+    assert stream.get("filename_template") == "x1.10242.grid.nc"
+    assert stream.get("filename_template") != "FILE:2026-06-20_00"
+    assert (stage.run_dir / "FILE:2026-06-20_00").is_symlink()
 
 
 def test_initialization_tool_page_has_required_sections() -> None:
