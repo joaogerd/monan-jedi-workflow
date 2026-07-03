@@ -49,9 +49,11 @@ def test_nmc_campaign_planner_wires_initial_states_to_forecasts(tmp_path: Path) 
 
 
 def test_nmc_campaign_wires_wps_file_products_to_matching_initializations(tmp_path: Path) -> None:
-    """WPS FILE artifacts must be explicit init inputs and scheduler dependencies."""
+    """WPS forcing and invariant static fields must be explicit init inputs."""
     grib = tmp_path / "gfs.grib2"
     grib.write_bytes(b"grib")
+    invariant = tmp_path / "x1.10242.invariant.nc"
+    invariant.write_bytes(b"invariant")
     partition = tmp_path / "x1.10242.graph.info.part.128"
     partition.write_text("partition", encoding="utf-8")
     config = {
@@ -63,8 +65,14 @@ def test_nmc_campaign_wires_wps_file_products_to_matching_initializations(tmp_pa
             "mpas": {
                 "initialization_products": {"root": str(tmp_path / "init"), "state_template": "{init_yyyymmddhh}/init.nc"},
                 "initialization": {
-                    "run_dir": "runs/init/{init_yyyymmddhh}", "argv": ["/bin/true"], "wps_input": {"target": "FILE:{wps_time}"},
-                    "links": [{"source": str(partition), "target": "x1.10242.graph.info.part.128"}],
+                    "run_dir": "runs/init/{init_yyyymmddhh}",
+                    "argv": ["/bin/true"],
+                    "wps_input": {"target": "FILE:{wps_time}"},
+                    "static_fields": {"mode": "invariant", "source": str(invariant), "target": "x1.10242.grid.nc"},
+                    "links": [
+                        {"source": str(invariant), "target": "x1.10242.grid.nc"},
+                        {"source": str(partition), "target": "x1.10242.graph.info.part.128"},
+                    ],
                 },
                 "forecast_products": {"root": str(tmp_path / "forecast"), "restart_template": "restart.{mpas_valid_file_time}.nc", "state_template": "state.{mpas_valid_file_time}.nc"},
                 "forecast": {"run_dir": "runs/forecast/{init_yyyymmddhh}/f{lead_hours_03d}", "argv": ["/bin/true"], "links": [{"source": "{initial_state}", "target": "initial_state.nc"}]},
@@ -83,4 +91,5 @@ def test_nmc_campaign_wires_wps_file_products_to_matching_initializations(tmp_pa
         assert initialization.links[-1].source == forcing.product.intermediate
         assert initialization.links[-1].target.name == f"FILE:{forcing.product.wps_time}"
         assert initialization.values["decomposition_prefix"] == "x1.10242.graph.info.part."
+        assert initialization.values["static_fields_mode"] == "invariant"
         assert plan.specification.stage(initialization.spec.name).needs == (forcing.spec.name,)
