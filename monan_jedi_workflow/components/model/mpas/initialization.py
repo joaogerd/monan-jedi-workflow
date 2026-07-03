@@ -126,22 +126,36 @@ class MpasInitializationStage(MpasExecutionStage):
                 return link.target.name
         raise RuntimeError("MPAS initialization with WPS forcing requires an explicit *.grid.nc link.")
 
+    @staticmethod
+    def _stream(root: ElementTree.Element, name: str) -> ElementTree.Element:
+        """Return one required immutable stream by logical name."""
+        stream = next((item for item in root.iter("immutable_stream") if item.get("name") == name), None)
+        if stream is None:
+            raise RuntimeError(f"MPAS initialization stream template lacks required {name!r} immutable stream.")
+        return stream
+
     def _patch_streams(self, mesh_filename: str) -> None:
-        """Render separate mesh input and state output stream filenames."""
+        """Render separate mesh bootstrap and state output stream filenames.
+
+        WPS `FILE:` is forcing selected by the namelist, never a mesh stream.
+        Requiring both streams makes a stale historical mesh or output filename
+        a deterministic preparation failure rather than a short-lived MPI job.
+        """
         streams = self.run_dir / "streams.init_atmosphere"
         if not streams.is_file():
             raise RuntimeError(f"MPAS initialization stream patch requires: {streams}")
         tree = ElementTree.parse(streams)
         root = tree.getroot()
-        input_stream = next((item for item in root.iter("immutable_stream") if item.get("name") == "input"), None)
-        if input_stream is None:
-            raise RuntimeError("MPAS initialization stream template lacks required input stream.")
+        input_stream = self._stream(root, "input")
+        output_stream = self._stream(root, "output")
         input_stream.set("filename_template", mesh_filename)
         input_stream.set("input_interval", "initial_only")
-        output_stream = next((item for item in root.iter("immutable_stream") if item.get("name") == "output"), None)
-        if output_stream is not None:
-            output_stream.set("filename_template", self.product.state.name)
-            output_stream.set("output_interval", "initial_only")
+        output_stream.set("filename_template", self.product.state.name)
+        output_stream.set("output_interval", "initial_only")
+        if input_stream.get("filename_template") != mesh_filename:
+            raise RuntimeError("MPAS initialization stream renderer failed to bind the declared mesh filename.")
+        if output_stream.get("filename_template") != self.product.state.name:
+            raise RuntimeError("MPAS initialization stream renderer failed to bind the declared state filename.")
         tree.write(streams, encoding="unicode")
 
     def _patch_wps_namelist(self) -> None:
