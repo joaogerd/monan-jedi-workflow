@@ -19,6 +19,9 @@ from .products import MPAS_TIME_FORMAT, MpasProductLayoutError, normalize_mpas_t
 from .staging import LinkSpec, TemplateSpec
 
 
+_MESH_OUTPUT_PREFIX = re.compile(r"^x\d+\.\d+(?=\.)")
+
+
 def mpas_initialization_context(cycle_time: str) -> dict[str, str | int]:
     """Build canonical template values for one MPAS initialization."""
     normalized = normalize_mpas_time(cycle_time)
@@ -134,12 +137,32 @@ class MpasInitializationStage(MpasExecutionStage):
             raise RuntimeError(f"MPAS initialization stream template lacks required {name!r} immutable stream.")
         return stream
 
+    @staticmethod
+    def _mesh_identifier(mesh_filename: str) -> str:
+        """Return the mesh stem used by MPAS output filenames."""
+        suffix = ".grid.nc"
+        if not mesh_filename.endswith(suffix):
+            raise RuntimeError(f"MPAS initialization mesh filename must end with {suffix}: {mesh_filename}")
+        return mesh_filename[: -len(suffix)]
+
+    @staticmethod
+    def _patch_auxiliary_output_mesh_names(root: ElementTree.Element, mesh_identifier: str) -> None:
+        """Replace legacy mesh prefixes in auxiliary init output stream names only."""
+        for stream in root.iter("immutable_stream"):
+            if stream.get("type") != "output":
+                continue
+            template = stream.get("filename_template")
+            if template is None:
+                continue
+            stream.set("filename_template", _MESH_OUTPUT_PREFIX.sub(mesh_identifier, template, count=1))
+
     def _patch_streams(self, mesh_filename: str) -> None:
-        """Render separate mesh bootstrap and state output stream filenames.
+        """Render mesh bootstrap and mesh-specific initialization output filenames.
 
         WPS `FILE:` is forcing selected by the namelist, never a mesh stream.
-        Requiring both streams makes a stale historical mesh or output filename
-        a deterministic preparation failure rather than a short-lived MPI job.
+        Auxiliary init outputs distributed with a reference mesh are renamed only
+        when their filename begins with a mesh identifier, preserving unrelated
+        stream templates unchanged.
         """
         streams = self.run_dir / "streams.init_atmosphere"
         if not streams.is_file():
@@ -148,6 +171,7 @@ class MpasInitializationStage(MpasExecutionStage):
         root = tree.getroot()
         input_stream = self._stream(root, "input")
         output_stream = self._stream(root, "output")
+        self._patch_auxiliary_output_mesh_names(root, self._mesh_identifier(mesh_filename))
         input_stream.set("filename_template", mesh_filename)
         input_stream.set("input_interval", "initial_only")
         output_stream.set("filename_template", self.product.state.name)
