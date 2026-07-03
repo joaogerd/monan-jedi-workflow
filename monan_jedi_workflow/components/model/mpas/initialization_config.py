@@ -26,7 +26,7 @@ def _compile_geog_contract(section: Mapping[str, object]) -> tuple[str | None, t
     path = section.get("geog_data_path")
     if path is not None and (not isinstance(path, str) or not path):
         raise MpasInitializationConfigurationError("model.mpas.initialization.geog_data_path must be a non-empty string.")
-    datasets = section.get("geog_required_datasets", ())
+    datasets = section.get("geog_required_datasets", [])
     if not isinstance(datasets, list) or not all(isinstance(item, str) and item for item in datasets):
         raise MpasInitializationConfigurationError(
             "model.mpas.initialization.geog_required_datasets must be a list of non-empty dataset names."
