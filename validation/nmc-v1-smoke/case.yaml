@@ -18,7 +18,7 @@ model:
         threads_per_rank: 1
         walltime: "00:10:00"
       grib_inputs:
-        # The template is instantiated for 2026062000 through 2026062400.
+        # The template is instantiated for 20260620 through 20260624.
         - source: /p/projetos/monan_das/joao.gerd/work/nmc_bmatrix_20260622_20260625/inputs/gfs/gfs.{init_yyyymmddhh}.pgrb2.0p25.f000
           target: GRIBFILE.AAA
       links:
@@ -48,6 +48,16 @@ model:
       # remains bound to the declared x1.10242.grid.nc mesh link.
       wps_input:
         target: "FILE:{wps_time}"
+      # Low-resolution WPS_GEOG aliases prepared by mpas-bmatrix-global.
+      # The init executable requests the *_30s directory names below.
+      geog_data_path: /p/projetos/monan_das/joao.gerd/data/mpas-bmatrix-global/external/WPS_GEOG/mpas_lowres_compat
+      geog_required_datasets:
+        - topo_gmted2010_30s
+        - soiltype_top_30s
+        - soiltype_bot_30s
+        - modis_landuse_20class_30s
+        - modis_landuse_20class_30s_with_lakes
+        - greenfrac_fpar_modis_30s
       links:
         - source: /p/projetos/monan_das/joao.gerd/projects/mpas_meshes/quasi_uniform/x1.10242_240km/mesh/x1.10242.grid.nc
           target: x1.10242.grid.nc
