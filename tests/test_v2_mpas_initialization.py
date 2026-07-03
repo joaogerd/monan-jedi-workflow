@@ -69,8 +69,8 @@ def test_initialization_stage_runs_and_publishes_state(tmp_path: Path) -> None:
     assert runner.run(context) == ()
 
 
-def test_initialization_preparation_renders_mesh_output_and_geodata(tmp_path: Path) -> None:
-    """WPS forcing must use declared mesh, output names, and local geodata."""
+def test_initialization_preparation_uses_invariant_static_fields(tmp_path: Path) -> None:
+    """The validated WPS baseline uses invariant fields, not static interpolation."""
     streams = tmp_path / "streams.init.in"
     streams.write_text(
         """<streams>
@@ -89,21 +89,24 @@ def test_initialization_preparation_renders_mesh_output_and_geodata(tmp_path: Pa
  config_stop_time = '2000-01-01_00:00:00'
  config_geog_data_path = '/glade/work/wrfhelp/WPS_GEOG/'
  config_met_prefix = 'UNKNOWN'
+ config_sfc_prefix = 'SST'
  config_fg_interval = 0
+ config_static_interp = true
+ config_native_gwd_static = true
+ config_native_gwd_gsl_static = false
+ config_vertical_grid = true
+ config_met_interp = true
  config_block_decomp_file_prefix = 'x1.40962.graph.info.part.'
 /
 """,
         encoding="utf-8",
     )
-    grid = tmp_path / "inputs/x1.10242.grid.nc"
-    grid.parent.mkdir(parents=True)
-    grid.write_bytes(b"grid")
+    invariant = tmp_path / "inputs/x1.10242.invariant.nc"
+    invariant.parent.mkdir(parents=True)
+    invariant.write_bytes(b"static")
     forcing = tmp_path / "wps/FILE:2026-06-20_00"
     forcing.parent.mkdir(parents=True)
     forcing.write_bytes(b"wps")
-    geog = tmp_path / "geog"
-    (geog / "topo_gmted2010_30s").mkdir(parents=True)
-    (geog / "topo_gmted2010_30s/index").write_text("index", encoding="utf-8")
     config = {
         "model": {
             "mpas": {
@@ -114,9 +117,13 @@ def test_initialization_preparation_renders_mesh_output_and_geodata(tmp_path: Pa
                 "initialization": {
                     "run_dir": "runs/init/{init_yyyymmddhh}",
                     "argv": ["/bin/true"],
-                    "geog_data_path": str(geog),
-                    "geog_required_datasets": ["topo_gmted2010_30s"],
-                    "links": [{"source": str(grid), "target": "x1.10242.grid.nc"}],
+                    "wps_input": {"target": "FILE:{wps_time}"},
+                    "static_fields": {
+                        "mode": "invariant",
+                        "source": str(invariant),
+                        "target": "x1.10242.grid.nc",
+                    },
+                    "links": [{"source": str(invariant), "target": "x1.10242.grid.nc"}],
                     "templates": [
                         {"source": str(streams), "target": "streams.init_atmosphere"},
                         {"source": str(namelist), "target": "namelist.init_atmosphere"},
@@ -145,12 +152,20 @@ def test_initialization_preparation_renders_mesh_output_and_geodata(tmp_path: Pa
     assert input_stream.get("filename_template") == "x1.10242.grid.nc"
     assert input_stream.get("filename_template") != "FILE:2026-06-20_00"
     assert output_stream.get("filename_template") == "x1.10242.init.2026-06-20_00.00.00.nc"
-    assert output_stream.get("filename_template") != "x1.40962.init.nc"
     assert ugwp_stream.get("filename_template") == "x1.10242.ugwp_oro_data.nc"
     assert surface_stream.get("filename_template") == "x1.10242.sfc_update.nc"
+    assert (stage.run_dir / "x1.10242.grid.nc").resolve() == invariant
     assert (stage.run_dir / "FILE:2026-06-20_00").is_symlink()
+
     rendered = (stage.run_dir / "namelist.init_atmosphere").read_text(encoding="utf-8")
-    assert f"config_geog_data_path = '{geog}/'" in rendered
+    assert "config_met_prefix = 'FILE'" in rendered
+    assert "config_sfc_prefix = 'FILE'" in rendered
+    assert "config_fg_interval = 86400" in rendered
+    assert "config_static_interp = .false." in rendered
+    assert "config_native_gwd_static = .false." in rendered
+    assert "config_native_gwd_gsl_static = .false." in rendered
+    assert "config_vertical_grid = .true." in rendered
+    assert "config_met_interp = .true." in rendered
 
 
 def test_initialization_tool_page_has_required_sections() -> None:
