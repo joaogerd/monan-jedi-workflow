@@ -44,7 +44,8 @@ model:
         mpi_ranks: 128
         threads_per_rank: 1
         walltime: "00:30:00"
-      # The planner turns this into the matching WPS FILE artifact and stream input.
+      # The planner stages WPS FILE forcing separately. The MPAS input stream
+      # remains bound to the declared x1.10242.grid.nc mesh link.
       wps_input:
         target: "FILE:{wps_time}"
       links:
