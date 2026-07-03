@@ -49,17 +49,17 @@ def _time_strings(variable: Any) -> tuple[str, ...]:
     import numpy as np
 
     values = variable[:]
-    if getattr(variable, "units", None):
-        from netCDF4 import num2date
-
-        decoded = num2date(values, units=variable.units, calendar=getattr(variable, "calendar", "standard"))
-        return tuple(str(item) for item in np.asarray(decoded).reshape(-1))
     if getattr(values, "dtype", None) is not None and values.dtype.kind in {"S", "U"}:
         from netCDF4 import chartostring
 
         if values.ndim > 1:
             values = chartostring(values)
         return tuple(str(item.decode() if isinstance(item, bytes) else item).strip("\x00 ") for item in np.asarray(values).reshape(-1))
+    if getattr(variable, "units", None):
+        from netCDF4 import num2date
+
+        decoded = num2date(values, units=variable.units, calendar=getattr(variable, "calendar", "standard"))
+        return tuple(str(item) for item in np.asarray(decoded).reshape(-1))
     return tuple(str(item) for item in np.asarray(values).reshape(-1))
 
 
