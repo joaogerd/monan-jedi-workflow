@@ -7,11 +7,13 @@ import subprocess
 import time
 from pathlib import Path
 
+from ..core.progress import JobProgressReporter, TerminalJobProgressReporter
 from .base import ExecutionBackend, ExecutionHandle, ExecutionRequest
 from .jaci_pbs import JaciPbsResources, render_pbs
 
 _NOT_FOUND = ("unknown job id", "unknown job", "not found", "does not exist")
 _STATE = re.compile(r"^\s*job_state\s*=\s*([A-Za-z])\s*$", re.MULTILINE)
+_PROGRESS_BACKEND = "JACI PBS"
 
 
 class JaciPbsError(RuntimeError):
@@ -21,11 +23,10 @@ class JaciPbsError(RuntimeError):
 class JaciPbsBackend(ExecutionBackend):
     """Submit explicit requests to JACI PBS and wait for scheduler completion.
 
-    Scheduler completion remains distinct from scientific success. The calling
-    stage validates its declared outputs after ``wait`` returns. Submission and
-    periodic scheduler-status messages are deliberately emitted to stdout so a
-    foreground ``stage run`` does not appear stalled while PBS queues or runs a
-    job.
+    PBS-specific behavior is limited to script rendering, ``qsub``, and
+    ``qstat``. Foreground status messages are delegated to the generic
+    ``JobProgressReporter`` so other execution backends can present the same
+    lifecycle consistently.
     """
 
     def __init__(
@@ -38,6 +39,7 @@ class JaciPbsBackend(ExecutionBackend):
         poll_seconds: int = 30,
         timeout_seconds: int | None = None,
         progress_seconds: int = 60,
+        progress: JobProgressReporter | None = None,
     ) -> None:
         if poll_seconds < 1:
             raise ValueError("poll_seconds must be at least 1.")
@@ -47,9 +49,10 @@ class JaciPbsBackend(ExecutionBackend):
         self.qsub, self.qstat = qsub, qstat
         self.poll_seconds, self.timeout_seconds = poll_seconds, timeout_seconds
         self.progress_seconds = progress_seconds
+        self.progress = TerminalJobProgressReporter() if progress is None else progress
 
     def submit(self, request: ExecutionRequest) -> ExecutionHandle:
-        """Render one PBS file, submit it, report the job id, and return it."""
+        """Render one PBS file, submit it, and report the returned job id."""
         script = request.cwd / ".monan-jedi-workflow" / "pbs" / f"{self.resources.job_name}.pbs"
         render_pbs(script, request, self.resources, prelude=self.prelude)
         result = subprocess.run((self.qsub, str(script)), cwd=request.cwd, text=True, capture_output=True, check=False)
@@ -59,10 +62,10 @@ class JaciPbsBackend(ExecutionBackend):
         if not lines:
             raise JaciPbsError("qsub returned no PBS job identifier.")
         handle = ExecutionHandle(lines[-1].split()[0], "jaci-pbs")
-        print(
-            f"[JACI PBS] submitted {handle.identifier} ({self.resources.job_name}); "
-            "waiting for scheduler completion.",
-            flush=True,
+        self.progress.submitted(
+            backend=_PROGRESS_BACKEND,
+            identifier=handle.identifier,
+            label=self.resources.job_name,
         )
         return handle
 
@@ -77,44 +80,56 @@ class JaciPbsBackend(ExecutionBackend):
         match = _STATE.search(result.stdout)
         return True, match.group(1).upper() if match else None
 
-    def wait(self, handle: ExecutionHandle) -> None:
-        """Wait with state changes and periodic heartbeat messages.
+    def _close_progress(self) -> None:
+        """Stop optional interactive presentation after an exceptional wait exit."""
+        close = getattr(self.progress, "close", None)
+        if callable(close):
+            close()
 
-        The method does not infer scientific success from PBS state. It reports
-        scheduler visibility only, then returns so the stage output contract can
-        decide whether the scientific executable actually succeeded.
+    def wait(self, handle: ExecutionHandle) -> None:
+        """Wait with generic state changes and periodic heartbeat messages.
+
+        Scheduler completion remains distinct from scientific success. The stage
+        validates its declared output contract only after this backend-level
+        wait returns.
         """
         if handle.backend != "jaci-pbs":
             raise ValueError(f"Unexpected backend handle: {handle.backend}")
         started = time.monotonic()
         last_state: str | None = None
         last_progress = started
-        while True:
-            visible, state = self._query(handle.identifier)
-            elapsed = int(time.monotonic() - started)
-            if not visible or state in {"C", "F"}:
-                suffix = f"state={state}" if state is not None else "left qstat"
-                print(
-                    f"[JACI PBS] {handle.identifier} {suffix} after {elapsed}s; "
-                    "scheduler wait completed.",
-                    flush=True,
-                )
-                return
-            if state != last_state:
+        try:
+            while True:
+                visible, state = self._query(handle.identifier)
+                elapsed = int(time.monotonic() - started)
+                if not visible or state in {"C", "F"}:
+                    self.progress.completed(
+                        backend=_PROGRESS_BACKEND,
+                        identifier=handle.identifier,
+                        terminal_state=state if visible else None,
+                        elapsed_seconds=elapsed,
+                    )
+                    return
                 printable_state = state or "unknown"
-                print(
-                    f"[JACI PBS] {handle.identifier} state={printable_state}; still waiting.",
-                    flush=True,
-                )
-                last_state = state
-                last_progress = time.monotonic()
-            elif time.monotonic() - last_progress >= self.progress_seconds:
-                printable_state = state or "unknown"
-                print(
-                    f"[JACI PBS] {handle.identifier} still state={printable_state} after {elapsed}s.",
-                    flush=True,
-                )
-                last_progress = time.monotonic()
-            if self.timeout_seconds is not None and time.monotonic() - started >= self.timeout_seconds:
-                raise TimeoutError(f"Timed out waiting for JACI PBS job {handle.identifier}.")
-            time.sleep(self.poll_seconds)
+                if state != last_state:
+                    self.progress.state(
+                        backend=_PROGRESS_BACKEND,
+                        identifier=handle.identifier,
+                        state=printable_state,
+                    )
+                    last_state = state
+                    last_progress = time.monotonic()
+                elif time.monotonic() - last_progress >= self.progress_seconds:
+                    self.progress.heartbeat(
+                        backend=_PROGRESS_BACKEND,
+                        identifier=handle.identifier,
+                        state=printable_state,
+                        elapsed_seconds=elapsed,
+                    )
+                    last_progress = time.monotonic()
+                if self.timeout_seconds is not None and time.monotonic() - started >= self.timeout_seconds:
+                    raise TimeoutError(f"Timed out waiting for JACI PBS job {handle.identifier}.")
+                time.sleep(self.poll_seconds)
+        except Exception:
+            self._close_progress()
+            raise
