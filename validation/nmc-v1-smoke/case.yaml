@@ -45,8 +45,6 @@ model:
         walltime: "00:30:00"
       wps_input:
         target: "FILE:{wps_time}"
-      # Reproduce the validated producer baseline: static fields are supplied by
-      # the tutorial invariant file, presented to MPAS under the grid filename.
       static_fields:
         mode: invariant
         source: /p/projetos/monan_das/joao.gerd/external-inputs/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc
@@ -82,6 +80,18 @@ model:
         mpi_ranks: 128
         threads_per_rank: 1
         walltime: "01:00:00"
+      # Reproduce the functional producer preparation: stage all regular physics
+      # support files from core_atmosphere, while rendering templates and taking
+      # stream lists from the tutorial physics directory explicitly below.
+      runtime_files:
+        source_dir: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/share/MPAS/core_atmosphere
+        exclude:
+          - namelist.atmosphere
+          - streams.atmosphere
+          - stream_list.atmosphere.background
+          - stream_list.atmosphere.analysis
+          - stream_list.atmosphere.ensemble
+          - stream_list.atmosphere.control
       links:
         - source: "{initial_state}"
           target: init.nc
