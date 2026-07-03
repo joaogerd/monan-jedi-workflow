@@ -71,7 +71,7 @@ def test_forecast_prepare_replaces_historical_template_values(tmp_path: Path) ->
     assert "config_start_time = '2026-06-21_00:00:00'" in text
     assert "config_stop_time = '2026-06-22_00:00:00'" in text
     assert "config_block_decomp_file_prefix = 'x1.10242.graph.info.part.'" in text
-    assert "config_do_restart = false" in text
+    assert "config_do_restart = .false." in text
     assert "2018-04-15" not in text
     assert "x1.40962" not in text
 
