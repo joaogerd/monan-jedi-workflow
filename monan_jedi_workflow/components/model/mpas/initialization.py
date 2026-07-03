@@ -123,11 +123,11 @@ class MpasInitializationStage(MpasExecutionStage):
         )
 
     def _mesh_filename(self) -> str:
-        """Return the declared MPAS mesh NetCDF filename for stream bootstrap."""
+        """Return the declared MPAS bootstrap filename exposed by staging."""
         for link in self.links:
             if link.target.name.endswith(".grid.nc"):
                 return link.target.name
-        raise RuntimeError("MPAS initialization with WPS forcing requires an explicit *.grid.nc link.")
+        raise RuntimeError("MPAS initialization with WPS forcing requires an explicit *.grid.nc bootstrap link.")
 
     @staticmethod
     def _stream(root: ElementTree.Element, name: str) -> ElementTree.Element:
@@ -156,11 +156,38 @@ class MpasInitializationStage(MpasExecutionStage):
                 continue
             stream.set("filename_template", _MESH_OUTPUT_PREFIX.sub(mesh_identifier, template, count=1))
 
+    def _static_fields_mode(self) -> str:
+        """Return the explicit static-fields strategy required for WPS-backed init."""
+        mode = self.values.get("static_fields_mode")
+        if mode not in {"invariant", "interpolate_geography"}:
+            raise RuntimeError(
+                "MPAS initialization with WPS forcing requires static_fields.mode to be 'invariant' or 'interpolate_geography'."
+            )
+        return str(mode)
+
+    def _require_invariant_bootstrap_link(self, mesh_filename: str) -> None:
+        """Require that the rendered bootstrap name resolves to declared invariant data."""
+        source = self.values.get("static_fields_source")
+        target = self.values.get("static_fields_target")
+        if not isinstance(source, str) or not isinstance(target, str):
+            raise RuntimeError("MPAS invariant static-fields mode requires declared source and target.")
+        if target != mesh_filename:
+            raise RuntimeError(
+                f"MPAS invariant static-fields target must match bootstrap stream {mesh_filename!r}, got {target!r}."
+            )
+        expected_source = Path(source)
+        if not expected_source.name.endswith(".invariant.nc"):
+            raise RuntimeError(f"MPAS invariant static-fields source must end with '.invariant.nc': {expected_source}")
+        if not any(link.source == expected_source and link.target.name == target for link in self.links):
+            raise RuntimeError(
+                f"MPAS invariant static-fields link is missing: {expected_source} -> {self.run_dir / target}"
+            )
+
     def _geog_data_path(self) -> Path:
-        """Return one declared local geographical-data root for MPAS initialization."""
+        """Return one declared local geographical-data root for interpolation mode."""
         configured = self.values.get("geog_data_path")
         if not isinstance(configured, str) or not configured:
-            raise RuntimeError("MPAS initialization with WPS forcing requires declared geog_data_path.")
+            raise RuntimeError("MPAS geographical interpolation requires declared geog_data_path.")
         path = Path(configured)
         if not path.is_absolute():
             raise RuntimeError("MPAS initialization geog_data_path must be absolute.")
@@ -171,21 +198,15 @@ class MpasInitializationStage(MpasExecutionStage):
     def _require_geog_datasets(self, root: Path) -> None:
         """Require declared geodata directories to expose WPS `index` files."""
         datasets = self.values.get("geog_required_datasets", ())
-        if not isinstance(datasets, tuple) or not all(isinstance(item, str) and item for item in datasets):
-            raise RuntimeError("MPAS initialization geog_required_datasets must be a tuple of non-empty dataset names.")
+        if not isinstance(datasets, tuple) or not datasets or not all(isinstance(item, str) and item for item in datasets):
+            raise RuntimeError("MPAS interpolation mode requires geog_required_datasets as non-empty dataset names.")
         for dataset in datasets:
             index = root / dataset / "index"
             if not index.is_file():
                 raise RuntimeError(f"MPAS initialization geographical dataset is missing index: {index}")
 
     def _patch_streams(self, mesh_filename: str) -> None:
-        """Render mesh bootstrap and mesh-specific initialization output filenames.
-
-        WPS `FILE:` is forcing selected by the namelist, never a mesh stream.
-        Auxiliary init outputs distributed with a reference mesh are renamed only
-        when their filename begins with a mesh identifier, preserving unrelated
-        stream templates unchanged.
-        """
+        """Render mesh bootstrap and mesh-specific initialization output filenames."""
         streams = self.run_dir / "streams.init_atmosphere"
         if not streams.is_file():
             raise RuntimeError(f"MPAS initialization stream patch requires: {streams}")
@@ -204,27 +225,50 @@ class MpasInitializationStage(MpasExecutionStage):
             raise RuntimeError("MPAS initialization stream renderer failed to bind the declared state filename.")
         tree.write(streams, encoding="unicode")
 
-    def _patch_wps_namelist(self, geog_data_path: Path) -> None:
-        """Render cycle, WPS, geographical-data, and partition settings into namelist."""
-        prefix = self.values.get("decomposition_prefix")
-        if not isinstance(prefix, str) or not prefix.endswith(".graph.info.part."):
-            raise RuntimeError("MPAS initialization requires a declared graph decomposition prefix for WPS forcing.")
+    def _patch_namelist(self, values: Mapping[str, str]) -> None:
+        """Render mandatory initialization settings into the installed namelist."""
         namelist = self.run_dir / "namelist.init_atmosphere"
         if not namelist.is_file():
-            raise RuntimeError(f"MPAS initialization WPS namelist patch requires: {namelist}")
-        values = {
-            "config_init_case": "7",
-            "config_start_time": f"'{self.product.cycle_time}'",
-            "config_stop_time": f"'{self.product.cycle_time}'",
-            "config_geog_data_path": f"'{geog_data_path}/'",
-            "config_met_prefix": "'FILE'",
-            "config_fg_interval": "86400",
-            "config_block_decomp_file_prefix": f"'{prefix}'",
-        }
+            raise RuntimeError(f"MPAS initialization namelist patch requires: {namelist}")
         rendered = namelist.read_text(encoding="utf-8")
         for name, value in values.items():
             rendered = _replace_namelist_assignment(rendered, name, value)
         namelist.write_text(rendered, encoding="utf-8")
+
+    def _base_wps_namelist_values(self) -> dict[str, str]:
+        """Return namelist settings shared by every WPS-backed initialization."""
+        prefix = self.values.get("decomposition_prefix")
+        if not isinstance(prefix, str) or not prefix.endswith(".graph.info.part."):
+            raise RuntimeError("MPAS initialization requires a declared graph decomposition prefix for WPS forcing.")
+        return {
+            "config_init_case": "7",
+            "config_start_time": f"'{self.product.cycle_time}'",
+            "config_stop_time": f"'{self.product.cycle_time}'",
+            "config_met_prefix": "'FILE'",
+            "config_fg_interval": "86400",
+            "config_block_decomp_file_prefix": f"'{prefix}'",
+        }
+
+    def _patch_invariant_namelist(self) -> None:
+        """Render the validated invariant-static baseline used by MPAS forecasts."""
+        values = {
+            **self._base_wps_namelist_values(),
+            "config_sfc_prefix": "'FILE'",
+            "config_static_interp": ".false.",
+            "config_native_gwd_static": ".false.",
+            "config_native_gwd_gsl_static": ".false.",
+            "config_vertical_grid": ".true.",
+            "config_met_interp": ".true.",
+        }
+        self._patch_namelist(values)
+
+    def _patch_geography_namelist(self, geog_data_path: Path) -> None:
+        """Render the explicit geographical-interpolation strategy."""
+        values = {
+            **self._base_wps_namelist_values(),
+            "config_geog_data_path": f"'{geog_data_path}/'",
+        }
+        self._patch_namelist(values)
 
     def _require_wps_forcing_link(self, forcing: str) -> None:
         """Require the declared WPS intermediate link without treating it as mesh."""
@@ -232,7 +276,7 @@ class MpasInitializationStage(MpasExecutionStage):
             raise RuntimeError(f"MPAS initialization is missing declared upstream WPS forcing link: {forcing}")
 
     def prepare(self, context: RunContext) -> StageResult:
-        """Stage mesh, WPS forcing, and cycle-specific initialization settings."""
+        """Stage WPS forcing, static fields, and cycle-specific initialization settings."""
         result = super().prepare(context)
         forcing = self.values.get("met_input_filename")
         if forcing is None:
@@ -240,9 +284,14 @@ class MpasInitializationStage(MpasExecutionStage):
         if not isinstance(forcing, str) or not forcing.startswith("FILE:"):
             raise RuntimeError("MPAS initialization met_input_filename must use the WPS FILE: prefix.")
         self._require_wps_forcing_link(forcing)
-        geog_data_path = self._geog_data_path()
-        self._require_geog_datasets(geog_data_path)
-        self._patch_streams(self._mesh_filename())
-        if (self.run_dir / "namelist.init_atmosphere").is_file():
-            self._patch_wps_namelist(geog_data_path)
+        mesh_filename = self._mesh_filename()
+        mode = self._static_fields_mode()
+        self._patch_streams(mesh_filename)
+        if mode == "invariant":
+            self._require_invariant_bootstrap_link(mesh_filename)
+            self._patch_invariant_namelist()
+        else:
+            geog_data_path = self._geog_data_path()
+            self._require_geog_datasets(geog_data_path)
+            self._patch_geography_namelist(geog_data_path)
         return result
