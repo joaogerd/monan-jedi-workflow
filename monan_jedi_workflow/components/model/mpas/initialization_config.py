@@ -21,17 +21,69 @@ class MpasInitializationConfigurationError(MpasRuntimeConfigurationError):
     """Raised when `model.mpas.initialization` configuration is invalid."""
 
 
-def _compile_geog_contract(section: Mapping[str, object]) -> tuple[str | None, tuple[str, ...]]:
-    """Compile optional, explicit geographical-data inputs for WPS-backed init."""
-    path = section.get("geog_data_path")
-    if path is not None and (not isinstance(path, str) or not path):
-        raise MpasInitializationConfigurationError("model.mpas.initialization.geog_data_path must be a non-empty string.")
-    datasets = section.get("geog_required_datasets", [])
-    if not isinstance(datasets, list) or not all(isinstance(item, str) and item for item in datasets):
-        raise MpasInitializationConfigurationError(
-            "model.mpas.initialization.geog_required_datasets must be a list of non-empty dataset names."
+def _require_string(value: object, label: str) -> str:
+    """Require one non-empty string with a YAML-specific error message."""
+    if not isinstance(value, str) or not value:
+        raise MpasInitializationConfigurationError(f"{label} must be a non-empty string.")
+    return value
+
+
+def _compile_static_fields(section: Mapping[str, object], runtime_links: tuple[object, ...]) -> dict[str, object]:
+    """Compile the declared static-fields strategy for WPS-backed initialization."""
+    if section.get("wps_input") is None:
+        return {}
+    fields = require_mapping(section.get("static_fields"), "model.mpas.initialization.static_fields")
+    mode = _require_string(fields.get("mode"), "model.mpas.initialization.static_fields.mode")
+
+    if mode == "invariant":
+        source = Path(_require_string(fields.get("source"), "model.mpas.initialization.static_fields.source"))
+        target = Path(_require_string(fields.get("target"), "model.mpas.initialization.static_fields.target"))
+        if not source.is_absolute() or not source.name.endswith(".invariant.nc"):
+            raise MpasInitializationConfigurationError(
+                "model.mpas.initialization.static_fields.source must be an absolute '.invariant.nc' path."
+            )
+        if target.is_absolute() or target.parent != Path(".") or not target.name.endswith(".grid.nc"):
+            raise MpasInitializationConfigurationError(
+                "model.mpas.initialization.static_fields.target must be a run-local '*.grid.nc' filename."
+            )
+        if not any(
+            getattr(link, "source", None) == source and getattr(link, "target", None).name == target.name
+            for link in runtime_links
+        ):
+            raise MpasInitializationConfigurationError(
+                "model.mpas.initialization.static_fields invariant source/target must also be declared in links."
+            )
+        return {
+            "static_fields_mode": mode,
+            "static_fields_source": str(source),
+            "static_fields_target": target.name,
+        }
+
+    if mode == "interpolate_geography":
+        root = Path(
+            _require_string(
+                fields.get("geog_data_path"),
+                "model.mpas.initialization.static_fields.geog_data_path",
+            )
         )
-    return path, tuple(datasets)
+        datasets = fields.get("geog_required_datasets")
+        if not root.is_absolute():
+            raise MpasInitializationConfigurationError(
+                "model.mpas.initialization.static_fields.geog_data_path must be absolute."
+            )
+        if not isinstance(datasets, list) or not datasets or not all(isinstance(item, str) and item for item in datasets):
+            raise MpasInitializationConfigurationError(
+                "model.mpas.initialization.static_fields.geog_required_datasets must be a non-empty string list."
+            )
+        return {
+            "static_fields_mode": mode,
+            "geog_data_path": str(root),
+            "geog_required_datasets": tuple(datasets),
+        }
+
+    raise MpasInitializationConfigurationError(
+        "model.mpas.initialization.static_fields.mode must be 'invariant' or 'interpolate_geography'."
+    )
 
 
 def compile_mpas_initialization(
@@ -41,24 +93,7 @@ def compile_mpas_initialization(
     cycle_time: str,
     backend: ExecutionBackend,
 ) -> MpasInitializationStage:
-    """Compile one configured MPAS initialization into an executable stage.
-
-    Parameters
-    ----------
-    config : Mapping[str, object]
-        Resolved case configuration.
-    workspace : Path
-        Explicit workflow workspace.
-    cycle_time : str
-        Initialization or analysis time.
-    backend : ExecutionBackend
-        Local or platform-specific execution backend.
-
-    Returns
-    -------
-    MpasInitializationStage
-        Stage with explicit runtime, staging, output, geodata, and NetCDF contracts.
-    """
+    """Compile one configured MPAS initialization into an executable stage."""
     try:
         model = require_mapping(config.get("model"), "model")
         mpas = require_mapping(model.get("mpas"), "model.mpas")
@@ -79,7 +114,7 @@ def compile_mpas_initialization(
             values=values,
             backend=backend,
         )
-        geog_data_path, geog_required_datasets = _compile_geog_contract(section)
+        static_values = _compile_static_fields(section, runtime.links)
         check = mpas_artifact_check(
             config,
             name="initialization_state",
@@ -104,7 +139,5 @@ def compile_mpas_initialization(
         links=runtime.links,
         templates=runtime.templates,
     )
-    if geog_data_path is not None:
-        stage.values["geog_data_path"] = geog_data_path
-        stage.values["geog_required_datasets"] = geog_required_datasets
+    stage.values.update(static_values)
     return stage
