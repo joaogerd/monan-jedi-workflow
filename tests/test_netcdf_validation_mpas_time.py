@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from netCDF4 import Dataset, stringtochar
+from netCDF4 import Dataset
 
 from monan_jedi_workflow.core.netcdf import NetcdfFormat
 from monan_jedi_workflow.core.netcdf_validation import NetcdfStructureContract, validate_netcdf_structure
@@ -20,7 +20,8 @@ def test_character_mpas_xtime_takes_precedence_over_units_attribute(tmp_path: Pa
         dataset.createDimension("StrLen", 64)
         xtime = dataset.createVariable("xtime", "S1", ("Time", "StrLen"))
         xtime.units = "MPAS character timestamp"
-        xtime[:] = stringtochar(np.array([expected], dtype="S64"))
+        raw = np.frombuffer(expected.encode("ascii").ljust(64, b"\x00"), dtype="S1").reshape(1, 64)
+        xtime[:] = raw
 
     report = validate_netcdf_structure(
         path,
