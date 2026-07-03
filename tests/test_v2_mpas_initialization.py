@@ -69,11 +69,14 @@ def test_initialization_stage_runs_and_publishes_state(tmp_path: Path) -> None:
     assert runner.run(context) == ()
 
 
-def test_initialization_preparation_keeps_mesh_stream_separate_from_wps_forcing(tmp_path: Path) -> None:
-    """MPAS bootstrap uses grid NetCDF while WPS FILE remains a separate link."""
+def test_initialization_preparation_renders_mesh_and_output_separately(tmp_path: Path) -> None:
+    """WPS forcing must not replace the mesh or inherited output filename."""
     streams = tmp_path / "streams.init.in"
     streams.write_text(
-        '<streams><immutable_stream name="input" type="input" filename_template="wrong-grid.nc" input_interval="initial_only" /></streams>',
+        """<streams>
+<immutable_stream name="input" type="input" filename_template="wrong-grid.nc" input_interval="initial_only" />
+<immutable_stream name="output" type="output" filename_template="x1.40962.init.nc" output_interval="initial_only" />
+</streams>""",
         encoding="utf-8",
     )
     grid = tmp_path / "inputs/x1.10242.grid.nc"
@@ -87,7 +90,7 @@ def test_initialization_preparation_keeps_mesh_stream_separate_from_wps_forcing(
             "mpas": {
                 "initialization_products": {
                     "root": str(tmp_path / "products"),
-                    "state_template": "{init_yyyymmddhh}/init.nc",
+                    "state_template": "{init_yyyymmddhh}/x1.10242.init.{mpas_valid_file_time}.nc",
                 },
                 "initialization": {
                     "run_dir": "runs/init/{init_yyyymmddhh}",
@@ -110,9 +113,12 @@ def test_initialization_preparation_keeps_mesh_stream_separate_from_wps_forcing(
     stage.prepare(context)
 
     root = ElementTree.parse(stage.run_dir / "streams.init_atmosphere").getroot()
-    stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "input")
-    assert stream.get("filename_template") == "x1.10242.grid.nc"
-    assert stream.get("filename_template") != "FILE:2026-06-20_00"
+    input_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "input")
+    output_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "output")
+    assert input_stream.get("filename_template") == "x1.10242.grid.nc"
+    assert input_stream.get("filename_template") != "FILE:2026-06-20_00"
+    assert output_stream.get("filename_template") == "x1.10242.init.2026-06-20_00.00.00.nc"
+    assert output_stream.get("filename_template") != "x1.40962.init.nc"
     assert (stage.run_dir / "FILE:2026-06-20_00").is_symlink()
 
 
