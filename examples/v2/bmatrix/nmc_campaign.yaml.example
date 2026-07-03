@@ -47,6 +47,15 @@ model:
       # The planner stages the matching upstream WPS product at this filename.
       wps_input:
         target: "FILE:{wps_time}"
+      # WPS forcing and static fields are separate scientific inputs. This
+      # example reproduces the invariant-static producer baseline.
+      static_fields:
+        mode: invariant
+        source: /path/to/x1.10242.invariant.nc
+        target: x1.10242.grid.nc
+      links:
+        - source: /path/to/x1.10242.invariant.nc
+          target: x1.10242.grid.nc
       validation:
         log: stdout.log
         required_log_markers:
