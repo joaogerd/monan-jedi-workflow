@@ -28,8 +28,25 @@ def _require_string(value: object, label: str) -> str:
     return value
 
 
+def _declared_static_link(
+    runtime_links: tuple[object, ...],
+    source: Path,
+    target: Path,
+    *,
+    label: str,
+) -> None:
+    """Require the declared static artifact to be staged under its configured name."""
+    if not any(
+        getattr(link, "source", None) == source and getattr(link, "target", None).name == target.name
+        for link in runtime_links
+    ):
+        raise MpasInitializationConfigurationError(
+            f"{label} source/target must also be declared in links."
+        )
+
+
 def _compile_static_fields(section: Mapping[str, object], runtime_links: tuple[object, ...]) -> dict[str, object]:
-    """Compile the declared static-fields strategy for WPS-backed initialization."""
+    """Compile the explicit bootstrap strategy for WPS-backed dynamic initialization."""
     if section.get("wps_input") is None:
         return {}
     fields = require_mapping(section.get("static_fields"), "model.mpas.initialization.static_fields")
@@ -46,13 +63,25 @@ def _compile_static_fields(section: Mapping[str, object], runtime_links: tuple[o
             raise MpasInitializationConfigurationError(
                 "model.mpas.initialization.static_fields.target must be a run-local '*.grid.nc' filename."
             )
-        if not any(
-            getattr(link, "source", None) == source and getattr(link, "target", None).name == target.name
-            for link in runtime_links
-        ):
+        _declared_static_link(runtime_links, source, target, label="MPAS invariant static-fields")
+        return {
+            "static_fields_mode": mode,
+            "static_fields_source": str(source),
+            "static_fields_target": target.name,
+        }
+
+    if mode == "static_product":
+        source = Path(_require_string(fields.get("source"), "model.mpas.initialization.static_fields.source"))
+        target = Path(_require_string(fields.get("target"), "model.mpas.initialization.static_fields.target"))
+        if not source.is_absolute() or not source.name.endswith(".static.nc"):
             raise MpasInitializationConfigurationError(
-                "model.mpas.initialization.static_fields invariant source/target must also be declared in links."
+                "model.mpas.initialization.static_fields.source must be an absolute '.static.nc' path."
             )
+        if target.is_absolute() or target.parent != Path(".") or not target.name.endswith(".static.nc"):
+            raise MpasInitializationConfigurationError(
+                "model.mpas.initialization.static_fields.target must be a run-local '*.static.nc' filename."
+            )
+        _declared_static_link(runtime_links, source, target, label="MPAS static-product")
         return {
             "static_fields_mode": mode,
             "static_fields_source": str(source),
@@ -82,7 +111,7 @@ def _compile_static_fields(section: Mapping[str, object], runtime_links: tuple[o
         }
 
     raise MpasInitializationConfigurationError(
-        "model.mpas.initialization.static_fields.mode must be 'invariant' or 'interpolate_geography'."
+        "model.mpas.initialization.static_fields.mode must be 'invariant', 'static_product', or 'interpolate_geography'."
     )
 
 
