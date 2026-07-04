@@ -69,8 +69,8 @@ def test_initialization_stage_runs_and_publishes_state(tmp_path: Path) -> None:
     assert runner.run(context) == ()
 
 
-def test_initialization_preparation_uses_invariant_static_fields(tmp_path: Path) -> None:
-    """The validated WPS baseline uses invariant fields, not static interpolation."""
+def _init_templates(tmp_path: Path) -> tuple[Path, Path]:
+    """Create minimal installed-style init templates used by WPS-backed tests."""
     streams = tmp_path / "streams.init.in"
     streams.write_text(
         """<streams>
@@ -101,13 +101,19 @@ def test_initialization_preparation_uses_invariant_static_fields(tmp_path: Path)
 """,
         encoding="utf-8",
     )
-    invariant = tmp_path / "inputs/x1.10242.invariant.nc"
-    invariant.parent.mkdir(parents=True)
-    invariant.write_bytes(b"static")
-    forcing = tmp_path / "wps/FILE:2026-06-20_00"
-    forcing.parent.mkdir(parents=True)
-    forcing.write_bytes(b"wps")
-    config = {
+    return streams, namelist
+
+
+def _wps_init_config(
+    tmp_path: Path,
+    *,
+    bootstrap: Path,
+    bootstrap_target: str,
+    mode: str,
+) -> dict[str, object]:
+    """Build one minimal WPS-backed dynamic-init configuration."""
+    streams, namelist = _init_templates(tmp_path)
+    return {
         "model": {
             "mpas": {
                 "initialization_products": {
@@ -119,11 +125,11 @@ def test_initialization_preparation_uses_invariant_static_fields(tmp_path: Path)
                     "argv": ["/bin/true"],
                     "wps_input": {"target": "FILE:{wps_time}"},
                     "static_fields": {
-                        "mode": "invariant",
-                        "source": str(invariant),
-                        "target": "x1.10242.grid.nc",
+                        "mode": mode,
+                        "source": str(bootstrap),
+                        "target": bootstrap_target,
                     },
-                    "links": [{"source": str(invariant), "target": "x1.10242.grid.nc"}],
+                    "links": [{"source": str(bootstrap), "target": bootstrap_target}],
                     "templates": [
                         {"source": str(streams), "target": "streams.init_atmosphere"},
                         {"source": str(namelist), "target": "namelist.init_atmosphere"},
@@ -132,6 +138,16 @@ def test_initialization_preparation_uses_invariant_static_fields(tmp_path: Path)
             }
         }
     }
+
+
+def _prepare_wps_init(
+    tmp_path: Path,
+    config: dict[str, object],
+) -> tuple[RunContext, object, Path]:
+    """Compile and prepare one initialization after attaching its upstream FILE input."""
+    forcing = tmp_path / "wps/FILE:2026-06-20_00"
+    forcing.parent.mkdir(parents=True, exist_ok=True)
+    forcing.write_bytes(b"wps")
     context = RunContext("bmatrix", "init-wps", tmp_path, config=config)
     stage = compile_mpas_initialization(
         config,
@@ -143,6 +159,21 @@ def test_initialization_preparation_uses_invariant_static_fields(tmp_path: Path)
     stage.values["met_input_filename"] = "FILE:2026-06-20_00"
     stage.values["decomposition_prefix"] = "x1.10242.graph.info.part."
     stage.prepare(context)
+    return context, stage, forcing
+
+
+def test_initialization_preparation_uses_invariant_static_fields(tmp_path: Path) -> None:
+    """The historical WPS baseline can use invariant fields as a grid bootstrap."""
+    invariant = tmp_path / "inputs/x1.10242.invariant.nc"
+    invariant.parent.mkdir(parents=True)
+    invariant.write_bytes(b"static")
+    config = _wps_init_config(
+        tmp_path,
+        bootstrap=invariant,
+        bootstrap_target="x1.10242.grid.nc",
+        mode="invariant",
+    )
+    _, stage, forcing = _prepare_wps_init(tmp_path, config)
 
     root = ElementTree.parse(stage.run_dir / "streams.init_atmosphere").getroot()
     input_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "input")
@@ -156,10 +187,44 @@ def test_initialization_preparation_uses_invariant_static_fields(tmp_path: Path)
     assert surface_stream.get("filename_template") == "x1.10242.sfc_update.nc"
     assert (stage.run_dir / "x1.10242.grid.nc").resolve() == invariant
     assert (stage.run_dir / "FILE:2026-06-20_00").is_symlink()
+    assert forcing.is_file()
 
     rendered = (stage.run_dir / "namelist.init_atmosphere").read_text(encoding="utf-8")
     assert "config_met_prefix = 'FILE'" in rendered
     assert "config_sfc_prefix = 'FILE'" in rendered
+    assert "config_fg_interval = 86400" in rendered
+    assert "config_static_interp = .false." in rendered
+    assert "config_native_gwd_static = .false." in rendered
+    assert "config_native_gwd_gsl_static = .false." in rendered
+    assert "config_vertical_grid = .true." in rendered
+    assert "config_met_interp = .true." in rendered
+
+
+def test_initialization_preparation_consumes_validated_static_product(tmp_path: Path) -> None:
+    """The CD-CT/NMC dynamic-init contract consumes static.nc, not the raw grid."""
+    static = tmp_path / "static/x1.10242.static.nc"
+    static.parent.mkdir(parents=True)
+    static.write_bytes(b"validated-static")
+    config = _wps_init_config(
+        tmp_path,
+        bootstrap=static,
+        bootstrap_target="x1.10242.static.nc",
+        mode="static_product",
+    )
+    _, stage, forcing = _prepare_wps_init(tmp_path, config)
+
+    root = ElementTree.parse(stage.run_dir / "streams.init_atmosphere").getroot()
+    input_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "input")
+    output_stream = next(item for item in root.iter("immutable_stream") if item.get("name") == "output")
+    assert input_stream.get("filename_template") == "x1.10242.static.nc"
+    assert output_stream.get("filename_template") == "x1.10242.init.2026-06-20_00.00.00.nc"
+    assert (stage.run_dir / "x1.10242.static.nc").resolve() == static
+    assert (stage.run_dir / "FILE:2026-06-20_00").is_symlink()
+    assert forcing.is_file()
+
+    rendered = (stage.run_dir / "namelist.init_atmosphere").read_text(encoding="utf-8")
+    assert "config_met_prefix = 'FILE'" in rendered
+    assert "config_sfc_prefix = 'SST'" in rendered
     assert "config_fg_interval = 86400" in rendered
     assert "config_static_interp = .false." in rendered
     assert "config_native_gwd_static = .false." in rendered
