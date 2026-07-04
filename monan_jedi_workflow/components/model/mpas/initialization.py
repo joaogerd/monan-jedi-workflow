@@ -122,12 +122,17 @@ class MpasInitializationStage(MpasExecutionStage):
             artifacts=(product.state,),
         )
 
-    def _mesh_filename(self) -> str:
-        """Return the declared MPAS bootstrap filename exposed by staging."""
+    def _bootstrap_filename(self) -> str:
+        """Return the configured run-local grid or static bootstrap filename."""
+        target = self.values.get("static_fields_target")
+        if isinstance(target, str) and target.endswith((".grid.nc", ".static.nc")):
+            return target
         for link in self.links:
             if link.target.name.endswith(".grid.nc"):
                 return link.target.name
-        raise RuntimeError("MPAS initialization with WPS forcing requires an explicit *.grid.nc bootstrap link.")
+        raise RuntimeError(
+            "MPAS initialization with WPS forcing requires an explicit '*.grid.nc' or '*.static.nc' bootstrap link."
+        )
 
     @staticmethod
     def _stream(root: ElementTree.Element, name: str) -> ElementTree.Element:
@@ -138,12 +143,15 @@ class MpasInitializationStage(MpasExecutionStage):
         return stream
 
     @staticmethod
-    def _mesh_identifier(mesh_filename: str) -> str:
+    def _mesh_identifier(bootstrap_filename: str) -> str:
         """Return the mesh stem used by MPAS output filenames."""
-        suffix = ".grid.nc"
-        if not mesh_filename.endswith(suffix):
-            raise RuntimeError(f"MPAS initialization mesh filename must end with {suffix}: {mesh_filename}")
-        return mesh_filename[: -len(suffix)]
+        for suffix in (".grid.nc", ".static.nc"):
+            if bootstrap_filename.endswith(suffix):
+                return bootstrap_filename[: -len(suffix)]
+        raise RuntimeError(
+            "MPAS initialization bootstrap filename must end with '.grid.nc' or '.static.nc': "
+            f"{bootstrap_filename}"
+        )
 
     @staticmethod
     def _patch_auxiliary_output_mesh_names(root: ElementTree.Element, mesh_identifier: str) -> None:
@@ -159,21 +167,22 @@ class MpasInitializationStage(MpasExecutionStage):
     def _static_fields_mode(self) -> str:
         """Return the explicit static-fields strategy required for WPS-backed init."""
         mode = self.values.get("static_fields_mode")
-        if mode not in {"invariant", "interpolate_geography"}:
+        if mode not in {"invariant", "static_product", "interpolate_geography"}:
             raise RuntimeError(
-                "MPAS initialization with WPS forcing requires static_fields.mode to be 'invariant' or 'interpolate_geography'."
+                "MPAS initialization with WPS forcing requires static_fields.mode to be "
+                "'invariant', 'static_product', or 'interpolate_geography'."
             )
         return str(mode)
 
-    def _require_invariant_bootstrap_link(self, mesh_filename: str) -> None:
+    def _require_invariant_bootstrap_link(self, bootstrap_filename: str) -> None:
         """Require that the rendered bootstrap name resolves to declared invariant data."""
         source = self.values.get("static_fields_source")
         target = self.values.get("static_fields_target")
         if not isinstance(source, str) or not isinstance(target, str):
             raise RuntimeError("MPAS invariant static-fields mode requires declared source and target.")
-        if target != mesh_filename:
+        if target != bootstrap_filename:
             raise RuntimeError(
-                f"MPAS invariant static-fields target must match bootstrap stream {mesh_filename!r}, got {target!r}."
+                f"MPAS invariant static-fields target must match bootstrap stream {bootstrap_filename!r}, got {target!r}."
             )
         expected_source = Path(source)
         if not expected_source.name.endswith(".invariant.nc"):
@@ -181,6 +190,24 @@ class MpasInitializationStage(MpasExecutionStage):
         if not any(link.source == expected_source and link.target.name == target for link in self.links):
             raise RuntimeError(
                 f"MPAS invariant static-fields link is missing: {expected_source} -> {self.run_dir / target}"
+            )
+
+    def _require_static_product_bootstrap_link(self, bootstrap_filename: str) -> None:
+        """Require that the rendered bootstrap name resolves to a validated static product."""
+        source = self.values.get("static_fields_source")
+        target = self.values.get("static_fields_target")
+        if not isinstance(source, str) or not isinstance(target, str):
+            raise RuntimeError("MPAS static-product mode requires declared source and target.")
+        if target != bootstrap_filename:
+            raise RuntimeError(
+                f"MPAS static-product target must match bootstrap stream {bootstrap_filename!r}, got {target!r}."
+            )
+        expected_source = Path(source)
+        if not expected_source.name.endswith(".static.nc"):
+            raise RuntimeError(f"MPAS static-product source must end with '.static.nc': {expected_source}")
+        if not any(link.source == expected_source and link.target.name == target for link in self.links):
+            raise RuntimeError(
+                f"MPAS static-product link is missing: {expected_source} -> {self.run_dir / target}"
             )
 
     def _geog_data_path(self) -> Path:
@@ -205,8 +232,8 @@ class MpasInitializationStage(MpasExecutionStage):
             if not index.is_file():
                 raise RuntimeError(f"MPAS initialization geographical dataset is missing index: {index}")
 
-    def _patch_streams(self, mesh_filename: str) -> None:
-        """Render mesh bootstrap and mesh-specific initialization output filenames."""
+    def _patch_streams(self, bootstrap_filename: str) -> None:
+        """Render bootstrap and mesh-specific initialization output filenames."""
         streams = self.run_dir / "streams.init_atmosphere"
         if not streams.is_file():
             raise RuntimeError(f"MPAS initialization stream patch requires: {streams}")
@@ -214,13 +241,13 @@ class MpasInitializationStage(MpasExecutionStage):
         root = tree.getroot()
         input_stream = self._stream(root, "input")
         output_stream = self._stream(root, "output")
-        self._patch_auxiliary_output_mesh_names(root, self._mesh_identifier(mesh_filename))
-        input_stream.set("filename_template", mesh_filename)
+        self._patch_auxiliary_output_mesh_names(root, self._mesh_identifier(bootstrap_filename))
+        input_stream.set("filename_template", bootstrap_filename)
         input_stream.set("input_interval", "initial_only")
         output_stream.set("filename_template", self.product.state.name)
         output_stream.set("output_interval", "initial_only")
-        if input_stream.get("filename_template") != mesh_filename:
-            raise RuntimeError("MPAS initialization stream renderer failed to bind the declared mesh filename.")
+        if input_stream.get("filename_template") != bootstrap_filename:
+            raise RuntimeError("MPAS initialization stream renderer failed to bind the declared bootstrap filename.")
         if output_stream.get("filename_template") != self.product.state.name:
             raise RuntimeError("MPAS initialization stream renderer failed to bind the declared state filename.")
         tree.write(streams, encoding="unicode")
@@ -250,10 +277,22 @@ class MpasInitializationStage(MpasExecutionStage):
         }
 
     def _patch_invariant_namelist(self) -> None:
-        """Render the validated invariant-static baseline used by MPAS forecasts."""
+        """Render the invariant-static baseline used by historical MPAS-JEDI cases."""
         values = {
             **self._base_wps_namelist_values(),
             "config_sfc_prefix": "'FILE'",
+            "config_static_interp": ".false.",
+            "config_native_gwd_static": ".false.",
+            "config_native_gwd_gsl_static": ".false.",
+            "config_vertical_grid": ".true.",
+            "config_met_interp": ".true.",
+        }
+        self._patch_namelist(values)
+
+    def _patch_static_product_namelist(self) -> None:
+        """Render CD-CT/NMC dynamic-init controls without overriding site defaults."""
+        values = {
+            **self._base_wps_namelist_values(),
             "config_static_interp": ".false.",
             "config_native_gwd_static": ".false.",
             "config_native_gwd_gsl_static": ".false.",
@@ -271,12 +310,12 @@ class MpasInitializationStage(MpasExecutionStage):
         self._patch_namelist(values)
 
     def _require_wps_forcing_link(self, forcing: str) -> None:
-        """Require the declared WPS intermediate link without treating it as mesh."""
+        """Require the declared WPS intermediate link without treating it as bootstrap data."""
         if not any(link.target.name == forcing and link.upstream_artifact for link in self.links):
             raise RuntimeError(f"MPAS initialization is missing declared upstream WPS forcing link: {forcing}")
 
     def prepare(self, context: RunContext) -> StageResult:
-        """Stage WPS forcing, static fields, and cycle-specific initialization settings."""
+        """Stage WPS forcing, bootstrap fields, and cycle-specific initialization settings."""
         result = super().prepare(context)
         forcing = self.values.get("met_input_filename")
         if forcing is None:
@@ -284,12 +323,15 @@ class MpasInitializationStage(MpasExecutionStage):
         if not isinstance(forcing, str) or not forcing.startswith("FILE:"):
             raise RuntimeError("MPAS initialization met_input_filename must use the WPS FILE: prefix.")
         self._require_wps_forcing_link(forcing)
-        mesh_filename = self._mesh_filename()
+        bootstrap_filename = self._bootstrap_filename()
         mode = self._static_fields_mode()
-        self._patch_streams(mesh_filename)
+        self._patch_streams(bootstrap_filename)
         if mode == "invariant":
-            self._require_invariant_bootstrap_link(mesh_filename)
+            self._require_invariant_bootstrap_link(bootstrap_filename)
             self._patch_invariant_namelist()
+        elif mode == "static_product":
+            self._require_static_product_bootstrap_link(bootstrap_filename)
+            self._patch_static_product_namelist()
         else:
             geog_data_path = self._geog_data_path()
             self._require_geog_datasets(geog_data_path)
