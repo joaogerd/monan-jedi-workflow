@@ -1,0 +1,92 @@
+# V2 NMC campaign example. Run with --dry-run before adapting site paths.
+case:
+  name: nmc_x1_10242_jun2026
+
+model:
+  wps:
+    # This MPAS global initialization consumes WPS ungrib FILE products directly.
+    # metgrid is intentionally not part of this producer path.
+    ungrib_products:
+      root: /path/to/wps-products
+      intermediate_template: "{init_yyyymmddhh}/FILE:{wps_time}"
+
+    ungrib:
+      run_dir: "/path/to/wps-products/{init_yyyymmddhh}"
+      argv:
+        - /path/to/ungrib.exe
+      resources:
+        mpi_ranks: 1
+        threads_per_rank: 1
+        walltime: "00:10:00"
+      grib_inputs:
+        - source: "/path/to/gfs/{init_yyyymmddhh}/gfs.pgrb2.0p25.f000"
+          target: GRIBFILE.AAA
+      links:
+        - source: /path/to/Vtable.GFS
+          target: Vtable
+      templates:
+        - source: /path/to/namelist.wps.in
+          target: namelist.wps
+      validation:
+        log: stdout.log
+        required_outputs: []
+
+  mpas:
+    initialization_products:
+      root: /path/to/initial-states
+      state_template: "{init_yyyymmddhh}/init.{mpas_valid_file_time}.nc"
+
+    initialization:
+      run_dir: "runs/mpas/init/{init_yyyymmddhh}"
+      argv:
+        - /path/to/mpas_init_atmosphere
+      resources:
+        mpi_ranks: 128
+        threads_per_rank: 1
+        walltime: "00:30:00"
+      # The planner stages the matching upstream WPS product at this filename.
+      wps_input:
+        target: "FILE:{wps_time}"
+      # WPS forcing and static fields are separate scientific inputs. This
+      # example reproduces the invariant-static producer baseline.
+      static_fields:
+        mode: invariant
+        source: /path/to/x1.10242.invariant.nc
+        target: x1.10242.grid.nc
+      links:
+        - source: /path/to/x1.10242.invariant.nc
+          target: x1.10242.grid.nc
+      validation:
+        log: stdout.log
+        required_log_markers:
+          - "Initialization complete"
+
+    forecast_products:
+      root: /path/to/forecast-products
+      restart_template: "{init_yyyymmddhh}/f{lead_hours_03d}/restart.{mpas_valid_file_time}.nc"
+      state_template: "{init_yyyymmddhh}/f{lead_hours_03d}/mpasout.{mpas_valid_file_time}.nc"
+
+    forecast:
+      run_dir: "runs/mpas/forecast/{init_yyyymmddhh}/f{lead_hours_03d}"
+      argv:
+        - /path/to/mpas_atmosphere
+      resources:
+        mpi_ranks: 128
+        threads_per_rank: 1
+        walltime: "01:00:00"
+      links:
+        - source: "{initial_state}"
+          target: "initial_state.nc"
+      validation:
+        log: stdout.log
+        required_log_markers:
+          - "Timing for integration"
+
+bmatrix:
+  nmc_pairs:
+    start_valid_time: "2026-06-22T00:00:00Z"
+    end_valid_time: "2026-06-25T00:00:00Z"
+    interval_hours: 24
+    older_lead_hours: 48
+    newer_lead_hours: 24
+    minimum_pairs: 4

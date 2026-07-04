@@ -70,6 +70,14 @@ A stage may omit a scheduler action only when it is intentionally local and sync
 - [ ] The stage contract is usable by the simpleWorkflow adapter.
 - [ ] The dependency and artifact contract are sufficient for future ecFlow and Cylc adapters.
 
+## Final Validation Evidence
+
+At the end of each stage, an independent validation pass must inspect the pull request, run the documented local tests and dry-run examples, check artifact contracts and restart behavior, and compare documentation with source code.
+
+For JACI-capable stages, the evidence must include the documented JACI dry-run and the smallest real PBS smoke test. Scheduler completion alone is insufficient; the declared output contract must validate.
+
+When a trusted scientific reference exists, the evidence must include the comparison method, tolerance, and result. The recorded validation summary must include the commit SHA, PR number, commands and exit codes, resolved configuration path, artifact locations, tests, JACI job identifiers when applicable, known limitations, and one final status: `complete`, `blocked`, or `needs-fixes`.
+
 ## Completion Rule
 
-A stage is marked complete only after every applicable checkbox is satisfied and the acceptance evidence is recorded in its documentation page or validation record.
+A stage is marked complete only after every applicable checkbox is satisfied and the final validation evidence is recorded in its documentation page or validation record. A stage marked `blocked` or `needs-fixes` cannot be followed by the next scientific stage.

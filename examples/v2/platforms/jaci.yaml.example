@@ -1,0 +1,39 @@
+# JACI site profile for V2 MPAS NMC campaigns.
+# Queue routing and launcher syntax are site policy. Scientific cases declare
+# only mpi_ranks, threads_per_rank, walltime, and optional memory_mb.
+platform:
+  jaci:
+    scheduler:
+      common:
+        poll_seconds: 30
+      wps:
+        # ungrib is a serial preprocessing task; it must not inherit MPAS MPI ranks.
+        queue: pesqmini
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 1
+      initialization:
+        queue: pesqmini
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 128
+      forecast:
+        queue: pesqmidi
+        cores_per_node: 128
+        max_mpi_ranks_per_node: 128
+
+    mpi_launcher:
+      argv:
+        - /opt/cray/pals/1.6/bin/mpiexec
+        - -n
+        - "{mpi_ranks}"
+
+    environment:
+      prelude:
+        - "module load jedi-mpas-env/1.0.0"
+      variables:
+        FI_CXI_RX_MATCH_MODE: hybrid
+
+    filesystem:
+      # Optionally restrict real workspaces, for example:
+      # allowed_workspace_roots:
+      #   - /p/projetos/monan_das/USER/work
+      allowed_workspace_roots: []

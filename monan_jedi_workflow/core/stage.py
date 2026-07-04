@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
@@ -26,7 +26,11 @@ class RunContext:
     config : Mapping[str, object]
         Fully resolved configuration mapping.
     dry_run : bool, default=False
-        Whether execution must plan without launching scientific software.
+        Whether execution must plan without modifying stage run directories.
+    prepare_only : bool, default=False
+        Whether the workflow must validate static inputs, stage links, and render
+        templates without submitting or running scientific software. Declared
+        upstream artifacts may be represented by dangling links in this mode.
     """
 
     workflow: str
@@ -34,6 +38,12 @@ class RunContext:
     workspace: Path
     config: Mapping[str, object]
     dry_run: bool = False
+    prepare_only: bool = False
+
+    def __post_init__(self) -> None:
+        """Reject mutually exclusive pre-execution modes."""
+        if self.dry_run and self.prepare_only:
+            raise ValueError("RunContext dry_run and prepare_only are mutually exclusive.")
 
     @property
     def state_path(self) -> Path:
@@ -43,28 +53,14 @@ class RunContext:
 
 @dataclass(frozen=True)
 class StageResult:
-    """Summarize successful work performed by one stage.
-
-    Parameters
-    ----------
-    message : str
-        Human-readable English completion summary.
-    artifacts : tuple[Path, ...], default=()
-        Paths produced or published by the stage.
-    """
+    """Summarize successful work performed by one stage."""
 
     message: str
     artifacts: tuple[Path, ...] = ()
 
 
 class Stage(ABC):
-    """Base class for one reusable executable workflow stage.
-
-    A stage owns a narrow scientific capability. It does not know whether it is
-    invoked by a local runner, simpleWorkflow, ecFlow, or Cylc. Scheduler
-    adapters may call the lifecycle methods individually; the local adapter
-    uses the synchronous `submit` default.
-    """
+    """Base class for one reusable executable workflow stage."""
 
     @property
     @abstractmethod
@@ -72,126 +68,42 @@ class Stage(ABC):
         """Return the immutable declaration associated with this implementation."""
 
     def plan(self, context: RunContext) -> StageResult:
-        """Describe intended work without modifying the workspace.
-
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-
-        Returns
-        -------
-        StageResult
-            Human-readable plan summary.
-        """
+        """Describe intended work without modifying the workspace."""
         return StageResult(message=f"Plan {self.spec.name}.")
 
     def validate_inputs(self, context: RunContext) -> ValidationReport:
-        """Validate inputs before preparation or submission.
-
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-
-        Returns
-        -------
-        ValidationReport
-            Input-validation report. The default implementation is valid.
-        """
+        """Validate all scientific inputs required before stage submission."""
         return ValidationReport(subject=f"stage:{self.spec.name}:inputs")
 
-    def prepare(self, context: RunContext) -> StageResult:
-        """Create deterministic workspace files required for execution.
+    def validate_preparation_inputs(self, context: RunContext) -> ValidationReport:
+        """Validate inputs required for safe workspace materialization.
 
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-
-        Returns
-        -------
-        StageResult
-            Preparation summary.
+        The default matches full scientific input validation. Stages whose
+        inputs are outputs of downstream campaign work may override this hook to
+        validate configuration only during a preparation-only preflight.
         """
+        return self.validate_inputs(context)
+
+    def prepare(self, context: RunContext) -> StageResult:
+        """Create deterministic workspace files required for execution."""
         return StageResult(message=f"Prepared {self.spec.name}.")
 
     def submit(self, context: RunContext) -> StageResult:
-        """Submit or synchronously run the scientific stage.
-
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-
-        Returns
-        -------
-        StageResult
-            Submission or execution summary.
-
-        Notes
-        -----
-        Local stages may implement `run` only. Scheduler-backed stages should
-        override this method and return after their scheduler submission.
-        """
+        """Submit or synchronously run the scientific stage."""
         return self.run(context)
 
     def wait(self, context: RunContext) -> StageResult:
-        """Wait for a submitted external job when the stage requires it.
-
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-
-        Returns
-        -------
-        StageResult
-            Completion summary. The default stage has no asynchronous job.
-        """
+        """Wait for a submitted external job when the stage requires it."""
         return StageResult(message=f"No wait required for {self.spec.name}.")
 
     @abstractmethod
     def run(self, context: RunContext) -> StageResult:
-        """Perform synchronous scientific work for a local execution backend.
-
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-
-        Returns
-        -------
-        StageResult
-            Execution summary and produced artifacts.
-        """
+        """Perform synchronous scientific work for a local execution backend."""
 
     def validate_outputs(self, context: RunContext) -> ValidationReport:
-        """Validate outputs after successful execution.
-
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-
-        Returns
-        -------
-        ValidationReport
-            Output-validation report. The default implementation is valid.
-        """
+        """Validate outputs after successful execution."""
         return ValidationReport(subject=f"stage:{self.spec.name}:outputs")
 
     def finalize(self, context: RunContext) -> StageResult:
-        """Publish final metadata after output validation.
-
-        Parameters
-        ----------
-        context : RunContext
-            Resolved run context.
-
-        Returns
-        -------
-        StageResult
-            Finalization summary.
-        """
+        """Publish final metadata after output validation."""
         return StageResult(message=f"Finalized {self.spec.name}.")

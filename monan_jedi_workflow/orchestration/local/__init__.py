@@ -1,5 +1,6 @@
-"""Local execution adapter for V2 workflow specifications."""
+"""Local execution adapters for V2 workflow specifications."""
 
 from .runner import LocalWorkflowRunner
+from .task_runner import StageTaskRunner
 
-__all__ = ["LocalWorkflowRunner"]
+__all__ = ["LocalWorkflowRunner", "StageTaskRunner"]

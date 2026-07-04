@@ -1,0 +1,28 @@
+# Example V2 MPAS forecast declaration.
+# Paths are illustrative and must be adapted to the selected site profile.
+model:
+  mpas:
+    forecast_products:
+      root: /path/to/products
+      restart_template: "{init_yyyymmddhh}/f{lead_hours_03d}/restart.{mpas_valid_file_time}.nc"
+      state_template: "{init_yyyymmddhh}/f{lead_hours_03d}/mpasout.{mpas_valid_file_time}.nc"
+
+    forecast:
+      run_dir: "runs/mpas/{init_yyyymmddhh}/f{lead_hours_03d}"
+      argv:
+        - /path/to/mpas_atmosphere
+      resources:
+        mpi_ranks: 128
+        threads_per_rank: 1
+        walltime: "01:00:00"
+      links:
+        - source: "inputs/x1.10242.static.nc"
+          target: "x1.10242.static.nc"
+      templates:
+        - source: "inputs/namelist.atmosphere.template"
+          target: "namelist.atmosphere"
+      validation:
+        log: stdout.log
+        required_log_markers:
+          - "Timing for integration"
+        required_outputs: []

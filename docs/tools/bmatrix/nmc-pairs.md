@@ -2,40 +2,27 @@
 
 ## Status
 
-Draft V2 implementation. The stage is locally tested but is **not complete**: it has not yet been validated on JACI, does not run MPAS forecasts, and does not inspect the semantic NetCDF content of the MPAS state files.
+Draft V2 implementation. The stage is locally tested, validates pair geometry, required MPAS products, optional NetCDF artifact contracts, and publishes a stable BFLOW manifest. Real JACI validation and a BFLOW run using the V2 manifest remain pending.
 
 ## Purpose
 
-`nmc-pairs` validates already-produced MPAS forecast products and publishes the stable TSV hand-off manifest consumed by the future BFLOW stage.
+`nmc-pairs` validates already-produced MPAS forecast products and publishes the stable TSV hand-off manifest consumed by BFLOW.
 
-The stage implements the traditional NMC relationship: an older forecast with a longer lead and a newer forecast with a shorter lead must have the same valid time.
+The stage implements the NMC relationship: an older forecast with a longer lead and a newer forecast with a shorter lead must have the same valid time.
 
-## Scope
+## Scientific Context
 
-This tool:
+NMC forecast differences approximate background-error variability from pairs of forecasts valid at the same time. The reliability of later BFLOW processing therefore depends on verified forecast identity, mesh, timing, and NetCDF compatibility.
 
-- resolves f048 and f024 product paths from a documented MPAS layout;
-- requires a non-empty restart and MPAS state file for every forecast member;
-- requires at least four complete pairs for B-matrix calibration;
-- writes a `bflow-manifest.tsv` file and JSON validation report;
-- records persistent stage state through the V2 local runner.
+## When to Use the Tool
 
-This tool does not initialize or execute MPAS. Those responsibilities belong to upstream MPAS stages.
+Use after MPAS f024/f048 forecasts are available and before BFLOW. It can validate V2-produced products or external pre-existing products when their paths and artifact contracts are explicitly configured.
 
 ## Inputs
 
-For every valid time, the tool requires:
-
-- one f048 restart file;
-- one f048 MPAS state file;
-- one f024 restart file;
-- one f024 MPAS state file.
-
-The state files are published in the manifest because BFLOW consumes them. Restart files are retained as an independent completion check.
+For every valid time, the stage requires one restart and one MPAS state for f048, plus one restart and one MPAS state for f024.
 
 ## Outputs
-
-By default, outputs are written below the explicit workflow workspace:
 
 ```text
 artifacts/bmatrix/nmc_pairs/
@@ -49,18 +36,16 @@ The manifest has exactly three tab-separated columns:
 valid_time    f048    f024
 ```
 
-`f048` is the earlier forecast state and `f024` is the later forecast state.
-
 ## Artifact Contract
 
-| Artifact | Producer | Consumer | Format | Required validation |
-| --- | --- | --- | --- | --- |
-| MPAS restart | MPAS forecast | NMC pairs | NetCDF | Exists and is non-empty |
-| MPAS state | MPAS forecast | NMC pairs, BFLOW | NetCDF | Exists and is non-empty |
-| BFLOW manifest | NMC pairs | BFLOW | TSV | Columns, ordering, unique valid times, referenced files |
-| Validation report | NMC pairs | User or orchestration layer | JSON | Written after successful pair validation |
+| Artifact | Producer | Consumer | Validation |
+| --- | --- | --- | --- |
+| MPAS restart | MPAS forecast | NMC pairs | Exists/non-empty; optional structure, format, mesh, and time contract |
+| MPAS state | MPAS forecast | NMC pairs, BFLOW | Exists/non-empty; optional structure, format, mesh, and time contract |
+| BFLOW manifest | NMC pairs | BFLOW | Column order, time ordering, unique times, referenced state files |
+| Validation report | NMC pairs | User/orchestrator | Structured JSON report |
 
-NetCDF structure and format compatibility checks will be added before the stage is marked complete.
+The advanced profile can make container format a consumer-facing contract. For example, a BFLOW build that requires CDF5 can reject NetCDF-4 files before any MPI job is submitted.
 
 ## YAML Configuration
 
@@ -73,7 +58,7 @@ case:
 model:
   mpas:
     forecast_products:
-      root: /path/to/mpas/forecasts
+      root: /absolute/path/to/mpas/forecasts
       restart_template: "{init_yyyymmddhh}/f{lead_hours_03d}/restart.{mpas_valid_file_time}.nc"
       state_template: "{init_yyyymmddhh}/f{lead_hours_03d}/mpasout.{mpas_valid_file_time}.nc"
 
@@ -87,12 +72,30 @@ bmatrix:
     minimum_pairs: 4
 ```
 
+Advanced NetCDF checks belong in a science profile, for example `examples/v2/science/mpas_artifact_validation.yaml.example`:
+
+```yaml
+model:
+  mpas:
+    artifact_validation:
+      forecast_state:
+        consumer: bmatrix.bflow
+        accepted_formats: [cdf5]
+        required_variables: [xtime]
+        required_dimensions:
+          nCells: 10242
+        required_global_attributes:
+          mesh_id: x1.10242
+        time_variable: xtime
+        require_expected_time: true
+```
+
 ## Parameters
 
 | Key | Type | Default | Effect |
 | --- | --- | --- | --- |
 | `start_valid_time` | ISO-8601 time | required | First inclusive common valid time. |
-| `end_valid_time` | ISO-8601 time | required | Last inclusive common valid time. Must align with `interval_hours`. |
+| `end_valid_time` | ISO-8601 time | required | Last inclusive common valid time. |
 | `interval_hours` | integer | `24` | Spacing between common valid times. |
 | `older_lead_hours` | integer | `48` | Lead of the earlier forecast. Must exceed `newer_lead_hours`. |
 | `newer_lead_hours` | integer | `24` | Lead of the later forecast. |
@@ -100,16 +103,18 @@ bmatrix:
 | `manifest_path` | relative path | `artifacts/bmatrix/nmc_pairs/bflow-manifest.tsv` | Manifest output path in the workflow workspace. |
 | `report_path` | relative path | `artifacts/bmatrix/nmc_pairs/validation-report.json` | Report output path in the workflow workspace. |
 
-The MPAS path templates accept only `init_time`, `init_yyyymmddhh`, `valid_time`, `valid_yyyymmddhh`, `mpas_valid_file_time`, `lead_hours`, and `lead_hours_03d`.
+`artifact_validation.<artifact>` accepts `consumer`, `accepted_formats`, `required_variables`, `required_dimensions`, `required_global_attributes`, `time_variable`, and `require_expected_time`.
 
 ## Dependencies
 
 - Python 3.10 or newer;
 - PyYAML;
-- already-completed MPAS forecasts;
-- no external scheduler is required for local validation.
+- netCDF4 Python bindings for structural artifact validation;
+- already-completed MPAS forecasts.
 
 ## CLI Usage
+
+Standalone validation of externally produced products:
 
 ```bash
 monan-jedi-workflow-v2 nmc-pairs \
@@ -117,53 +122,51 @@ monan-jedi-workflow-v2 nmc-pairs \
   --workspace /path/to/nmc-workspace
 ```
 
-Use `--dry-run` to inspect the planned stage without checking forecast products or publishing NMC artifacts. The resolved configuration is still written under `.monan-jedi-workflow/`. Use `--force` to rerun after a successful state record.
+Use `--dry-run` to inspect the plan without checking products or publishing artifacts.
 
 ## simpleWorkflow Usage
 
-A simpleWorkflow task calls the same public CLI command with explicit arguments:
+For a complete V2 campaign, render tasks with `nmc-campaign --render-simpleworkflow`. The generated NMC task calls:
 
-```yaml
-- name: nmc_pairs
-  argv:
-    - monan-jedi-workflow-v2
-    - nmc-pairs
-    - --config
-    - "{case_config}"
-    - --workspace
-    - "{workflow_workspace}"
+```text
+monan-jedi-workflow-v2 stage run --stage nmc_pairs ...
 ```
 
-The task must depend on the upstream MPAS forecast tasks that produce all requested f024 and f048 files.
+It validates all forecast task artifacts before publishing the manifest.
 
 ## ecFlow and Cylc Integration Contract
 
-An ecFlow or Cylc task must invoke the same CLI command and declare the MPAS state products as inputs and `bflow-manifest.tsv` as its output. Scheduler-specific retry policy must not bypass the stage output validation.
+An ecFlow or Cylc NMC task must invoke `stage run --stage nmc_pairs` with the resolved configuration and workspace. Scheduler dependencies establish order; NMC independently validates the products before consuming them.
 
 ## Validation and Restart Behavior
 
-The stage validates every pair before publication. A successful state is reused only when all planned restart and state files, the manifest contract, all manifest state references, and the JSON validation report still validate. Removing or truncating an input product therefore invalidates reuse and causes a new validation attempt.
+The stage validates pair count, ordering, shared valid time, restart/state availability, optional NetCDF format/schema/mesh/time checks, manifest identity, and manifest references.
+
+A successful state is reused only when all planned restart/state products, NetCDF contracts, the manifest contract, manifest state references, and the JSON report still validate.
 
 ## Limitations
 
-- MPAS initialization and forecast execution are not yet part of this stage.
-- JACI validation is pending.
-- MPAS NetCDF variables, dimensions, time coordinates, mesh identity, and format policy are not yet validated.
+- Real JACI validation is pending.
+- The exact production MPAS variable and mesh contracts must still be confirmed against the selected baseline.
 - BFLOW consumption has not yet been executed with a V2-generated manifest.
 
 ## FAQ
 
 ### Why validate restart files when BFLOW reads MPAS state files?
 
-The restart file is an independent completion product. Requiring it reduces the chance of publishing a state file from an incomplete or incorrectly staged forecast.
+The restart file is an independent completion product. Requiring it reduces the chance of publishing state from an incomplete or incorrectly staged forecast.
+
+### Why validate CDF5 before BFLOW?
+
+The consumer may be built without NetCDF-4/HDF5 support. A preflight check turns a late parallel I/O failure into an immediate, actionable configuration error.
 
 ### Why is the minimum four pairs?
 
-The project currently treats four complete pairs as the minimum technical threshold for B-matrix calibration. It is a software guard, not a claim that four samples are scientifically sufficient for every experiment.
+Four complete pairs are the current technical minimum for this workflow. They are not automatically a scientifically sufficient sample for every covariance experiment.
 
 ### Can I use leads other than f048 and f024?
 
-Yes, provided the older lead is strictly greater than the newer lead and both forecasts resolve to the same valid time. The manifest labels remain `f048` and `f024` for compatibility during this transition; general lead labels will be addressed before BFLOW V1 is declared complete.
+Yes, provided the older lead is strictly greater than the newer lead and both forecasts resolve to the same valid time. The manifest labels remain `f048` and `f024` during this transition.
 
 ## References
 

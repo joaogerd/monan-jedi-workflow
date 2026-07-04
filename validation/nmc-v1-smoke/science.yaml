@@ -1,0 +1,65 @@
+model:
+  mpas:
+    artifact_validation:
+      initialization_state:
+        consumer: model.mpas.forecast
+        accepted_formats: [cdf5]
+        required_variables: [xtime, theta, rho, u, qv, surface_pressure, latCell, lonCell, cellsOnCell, edgesOnCell, verticesOnCell]
+        required_dimensions:
+          Time: 1
+          nCells: 10242
+          nEdges: 30720
+          nVertices: 20480
+          nVertLevels: 55
+          nVertLevelsP1: 56
+          StrLen: 64
+        required_global_attributes:
+          model_name: mpas
+          core_name: init_atmosphere
+          Conventions: MPAS
+          on_a_sphere: "YES"
+          mesh_spec: "1.1"
+        time_variable: xtime
+        require_expected_time: true
+
+      forecast_restart:
+        consumer: bmatrix.nmc_pairs
+        accepted_formats: [cdf5]
+        required_variables: [xtime, theta, rho, u, qv, qc, qr, qi, qs, qg, pressure_p, pressure_base, surface_pressure]
+        required_dimensions:
+          Time: 1
+          nCells: 10242
+          nEdges: 30720
+          nVertices: 20480
+          nVertLevels: 55
+          nVertLevelsP1: 56
+          StrLen: 64
+        required_global_attributes:
+          model_name: mpas
+          core_name: atmosphere
+          Conventions: MPAS
+          on_a_sphere: "YES"
+          mesh_spec: "1.1"
+        time_variable: xtime
+        require_expected_time: true
+
+      forecast_state:
+        consumer: bmatrix.bflow
+        accepted_formats: [cdf5]
+        required_variables: [xtime, uReconstructZonal, uReconstructMeridional, theta, rho, u, qv, qc, qr, qi, qs, qg, pressure_p, pressure_base, surface_pressure]
+        required_dimensions:
+          Time: 1
+          nCells: 10242
+          nEdges: 30720
+          nVertices: 20480
+          nVertLevels: 55
+          nVertLevelsP1: 56
+          StrLen: 64
+        required_global_attributes:
+          model_name: mpas
+          core_name: atmosphere
+          Conventions: MPAS
+          on_a_sphere: "YES"
+          mesh_spec: "1.1"
+        time_variable: xtime
+        require_expected_time: true
