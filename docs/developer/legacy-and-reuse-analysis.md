@@ -36,7 +36,7 @@ Não reaproveitar Bash como arquitetura principal.
 
 ## `feature/cycled-da-roadmap`
 
-**Papel:** laboratório de arquitetura.
+**Papel:** laboratório de arquitetura específico da ciclagem.
 
 Minerar seletivamente:
 
@@ -48,6 +48,29 @@ Minerar seletivamente:
 - documentação de decisões.
 
 Não fazer merge cego da branch: ela divergiu fortemente da `main` e contém decisões anteriores à implementação atual de MPAS/Obs2IODA.
+
+## `architecture/v2-foundation` e `v2-mpas-forecast-stage`
+
+**Papel:** tentativa de arquitetura V2 mais geral, com `core/`, `components/`, `platforms/`, `workflows/` e adapters de orquestração.
+
+Essa linha é importante porque formalizou várias ideias que continuam corretas:
+
+- stage científico independente do orquestrador;
+- `WorkflowSpec` scheduler-neutral;
+- adapter que gera `simpleWorkflow` sem executar ciência;
+- separação entre plataforma/site e componente científico;
+- artifacts, provenance, validation e persistent state como contratos explícitos;
+- diferença entre término do scheduler e validação científica.
+
+Ela **não é adotada integralmente nesta fase** porque isso implicaria migrar uma arquitetura inteira (~300 commits divergentes) antes de provar o ciclo mínimo de assimilação. O objetivo atual é menor: completar a ciclagem sobre a `main` com stages explícitos e documentação clara.
+
+Os conceitos devem ser minerados progressivamente. Se a implementação simples começar a duplicar serviços gerais (artifact model, platform abstraction, workflow-spec rendering), a V2 é a primeira fonte a consultar antes de criar nova abstração.
+
+### Teste V2 órfão na `main`
+
+O commit final da `main` antes deste trabalho adicionou `tests/test_v2_jaci_wait_progress.py`, mas não adicionou os módulos `monan_jedi_workflow.platforms` e `core.progress` dos quais o teste depende. Isso deixava o CI da `main` sem coletar a suíte.
+
+A branch de desenvolvimento do cycling remove esse teste órfão em vez de importar parcialmente a V2 apenas para satisfazê-lo. Se a plataforma V2 for migrada no futuro, o teste deve retornar junto com a implementação completa correspondente.
 
 ## `simpleWorkflow`
 
@@ -85,6 +108,6 @@ Quando referências divergem, a prioridade é:
 1. baseline atual que executa com a versão atual do MONAN-JEDI
 2. interfaces do código MONAN-JEDI/MPAS atual
 3. monan-jedi-workflow atual
-4. protótipos locais
+4. protótipos/branches de desenvolvimento
 5. tutoriais históricos
 ```
