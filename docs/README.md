@@ -13,15 +13,21 @@ Esses documentos devem permanecer curtos, com comandos copiáveis e foco em tare
 
 ## Para desenvolver o workflow
 
-1. [Arquitetura de orquestração](developer/orchestration.md)
-2. [Modelo temporal do ciclo](developer/cycle-time-model.md)
-3. [Estágio JEDI](developer/jedi-stage.md)
-4. [Modelo conceitual de Cycling DA](developer/reference-cycle-model.md)
-5. [Reaproveitamento dos workflows anteriores](developer/legacy-and-reuse-analysis.md)
-6. [Política de documentação](developer/documentation-policy.md)
-7. [Architecture Decision Records](developer/adr/README.md)
+Comece pela fronteira de arquitetura e pelos contratos; depois leia a implementação específica do JEDI.
 
-A documentação de desenvolvedor pode e deve ser detalhada. Ela registra contratos, invariantes e motivos das decisões.
+1. [Arquitetura de orquestração](developer/orchestration.md)
+2. [Contratos das etapas de domínio](developer/stage-contracts.md)
+3. [Portabilidade simpleWorkflow → ecFlow/Cylc](developer/orchestrator-portability.md)
+4. [Modelo temporal do ciclo](developer/cycle-time-model.md)
+5. [Modelo conceitual de Cycling DA](developer/reference-cycle-model.md)
+6. [Mapeamento do baseline que passou para o ciclo](developer/baseline-to-cycling-mapping.md)
+7. [Estágio JEDI](developer/jedi-stage.md)
+8. [Plano de validação no JACI](developer/jaci-validation-plan.md)
+9. [Reaproveitamento dos workflows anteriores](developer/legacy-and-reuse-analysis.md)
+10. [Política de documentação](developer/documentation-policy.md)
+11. [Architecture Decision Records](developer/adr/README.md)
+
+A documentação de desenvolvedor pode e deve ser detalhada. Ela registra contratos, invariantes, efeitos colaterais e motivos das decisões.
 
 ## Documentos técnicos anteriores
 
