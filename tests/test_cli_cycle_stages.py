@@ -5,35 +5,89 @@ from monan_jedi_workflow import cli
 
 def test_cycle_stage_commands_require_cycle_time() -> None:
     parser = cli.build_parser()
-    args = parser.parse_args([
-        "mpas-submit", "configs/example", "--cycle", "2018-04-15T00:00:00Z", "--wait"
-    ])
+    args = parser.parse_args(
+        [
+            "mpas-submit",
+            "configs/example",
+            "--cycle",
+            "2018-04-15T00:00:00Z",
+            "--wait",
+        ]
+    )
     assert args.command == "mpas-submit"
     assert args.config_dir == Path("configs/example")
     assert args.cycle == "2018-04-15T00:00:00Z"
     assert args.wait is True
 
-    args = parser.parse_args([
-        "obs2ioda-run", "configs/example", "--cycle", "2018-04-15T00:00:00Z"
-    ])
+    args = parser.parse_args(
+        ["obs2ioda-run", "configs/example", "--cycle", "2018-04-15T00:00:00Z"]
+    )
     assert args.command == "obs2ioda-run"
     assert args.force is False
 
 
 def test_operational_obs2ioda_commands_are_public() -> None:
     parser = cli.build_parser()
-    doctor = parser.parse_args([
-        "obs2ioda-doctor", "configs/example", "--cycle", "2018-04-15T00:00:00Z"
-    ])
+    doctor = parser.parse_args(
+        ["obs2ioda-doctor", "configs/example", "--cycle", "2018-04-15T00:00:00Z"]
+    )
     assert doctor.command == "obs2ioda-doctor"
     assert doctor.cycle == "2018-04-15T00:00:00Z"
 
-    prepare = parser.parse_args([
-        "obs2ioda-prepare", "configs/example", "--cycle", "2018-04-15T00:00:00Z", "--refresh"
-    ])
+    prepare = parser.parse_args(
+        [
+            "obs2ioda-prepare",
+            "configs/example",
+            "--cycle",
+            "2018-04-15T00:00:00Z",
+            "--refresh",
+        ]
+    )
     assert prepare.refresh is True
 
-    validate = parser.parse_args([
-        "obs2ioda-validate", "configs/example", "--cycle", "2018-04-15T00:00:00Z"
-    ])
+    validate = parser.parse_args(
+        ["obs2ioda-validate", "configs/example", "--cycle", "2018-04-15T00:00:00Z"]
+    )
     assert validate.command == "obs2ioda-validate"
+
+
+def test_jedi_cycle_stage_commands_are_public() -> None:
+    parser = cli.build_parser()
+
+    prepare = parser.parse_args(
+        ["jedi-prepare", "configs/example", "--cycle", "2018-04-15T00:00:00Z"]
+    )
+    assert prepare.command == "jedi-prepare"
+    assert prepare.config_dir == Path("configs/example")
+
+    submit = parser.parse_args(
+        [
+            "jedi-submit",
+            "configs/example",
+            "--cycle",
+            "2018-04-15T00:00:00Z",
+            "--wait",
+        ]
+    )
+    assert submit.command == "jedi-submit"
+    assert submit.wait is True
+
+    validate = parser.parse_args(
+        ["jedi-validate", "configs/example", "--cycle", "2018-04-15T00:00:00Z"]
+    )
+    assert validate.command == "jedi-validate"
+
+
+def test_cycle_doctor_is_public() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "cycle-doctor",
+            "configs/example",
+            "--cycle",
+            "2018-04-15T00:00:00Z",
+            "--json",
+        ]
+    )
+    assert args.command == "cycle-doctor"
+    assert args.json is True
