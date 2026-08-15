@@ -1,0 +1,73 @@
+# Contrato de análise cíclica.
+#
+# IMPORTANTE: substitua os paths por assets do baseline ATUAL validado. O
+# tutorial histórico de Cycling DA é referência conceitual, não fonte de YAML,
+# executáveis ou runtime para versões novas do MPAS-JEDI.
+
+jedi:
+  cycle:
+    step_hours: 6
+    background_offset_hours: -3
+    window_hours: 6
+    first_cycle: "2018-04-15T00:00:00Z"
+
+  variables:
+    current_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
+    bmatrix_root: /path/to/published/bmatrix
+    obs_root: /path/to/validated/ioda
+    initial_background: /path/to/mpasout.2018-04-14_21.00.00.nc
+
+  # Mantido relativo ao diretório do caso neste exemplo para facilitar inspeção.
+  run_dir: "work/jedi/{cycle_id}"
+
+  # Fotografia do runtime compatível com a compilação atual: namelists, streams,
+  # tabelas e outros arquivos relativos necessários ao executável.
+  runtime:
+    skeleton: /path/to/current/3dfgat/runtime-skeleton
+
+  background:
+    initial_source: "{initial_background}"
+    source: "work/mpas/{previous_cycle_id}/history/mpasout.{background_mpas_file_time}.nc"
+    target: "background/mpasout.{background_mpas_file_time}.nc"
+
+  links:
+    # A B é produzida antes da campanha e apenas consumida aqui.
+    - source: "{bmatrix_root}"
+      target: B_Matrix
+
+    # Exemplos de observações. Ajuste nomes/coleções ao YAML JEDI atual.
+    - source: "{obs_root}/{analysis_yyyymmddhh}/sondes_obs_{analysis_yyyymmddhh}.h5"
+      target: "Data/obs/sondes_obs_{analysis_yyyymmddhh}.h5"
+    - source: "{obs_root}/{analysis_yyyymmddhh}/sfc_obs_{analysis_yyyymmddhh}.h5"
+      target: "Data/obs/sfc_obs_{analysis_yyyymmddhh}.h5"
+
+  templates:
+    # Deve ser derivado do YAML que passa com a versão atual. Substitua somente
+    # campos realmente dependentes do ciclo por placeholders documentados.
+    - source: /path/to/variational.current.yaml.in
+      target: variational.yaml
+
+  pbs:
+    filename: run_jedi.pbs
+    job_name: "jedi_{analysis_yyyymmddhh}"
+    queue: pesqmini
+    select: 1
+    ncpus: 64
+    mpiprocs: 64
+    walltime: "00:30:00"
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    command:
+      - "{current_install}/bin/mpasjedi_variational.x"
+      - variational.yaml
+    environment:
+      OMP_NUM_THREADS: "1"
+      FI_CXI_RX_MATCH_MODE: hybrid
+
+  validation:
+    # Ajuste o marcador ao log comprovado da compilação atual.
+    log: jedi.stdout.log
+    required_log_markers:
+      - OOPS Ending
+    required_outputs:
+      - role: analysis
+        path: "Data/states/mpas.3dfgat.{analysis_mpas_file_time}.nc"
