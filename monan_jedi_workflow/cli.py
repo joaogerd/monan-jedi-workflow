@@ -1,4 +1,10 @@
-"""Public command-line interface for MONAN-JEDI experiments."""
+"""Public command-line interface for MONAN-JEDI domain stages.
+
+The CLI intentionally exposes small, independently executable operations.  It
+must not become a hidden workflow engine: dependency scheduling and cycle
+orchestration belong to an external orchestrator such as simpleWorkflow during
+research and ecFlow in operations.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +12,8 @@ import argparse
 from pathlib import Path
 
 from .config import load_experiment_config, validate_experiment_config
+from .cycle_doctor import doctor_cycle, print_doctor_report
+from .jedi_stage import prepare_jedi, submit_jedi, validate_jedi, wait_jedi
 from .mpas_stage import prepare_mpas, submit_mpas, validate_mpas, wait_mpas
 from .obs2ioda_stage import (
     doctor_obs2ioda,
@@ -38,10 +46,68 @@ def _add_cycle_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_cycle_stage_commands(sub: argparse._SubParsersAction) -> None:
+    """Register cycle-aware MPAS-JEDI analysis commands.
+
+    The command split mirrors the stage contract used by external orchestrators:
+    prepare materialises a runtime, submit performs the scheduler side effect,
+    wait observes scheduler completion, and validate determines scientific/run
+    success.  Keeping these actions separate is what allows the same domain
+    commands to be called from simpleWorkflow, ecFlow, Cylc or by hand.
+    """
+    jedi_prepare = sub.add_parser(
+        "jedi-prepare", help="prepare one cycle-specific MPAS-JEDI analysis runtime"
+    )
+    _add_config_dir(jedi_prepare)
+    _add_cycle_argument(jedi_prepare)
+
+    jedi_submit = sub.add_parser(
+        "jedi-submit", help="submit one already-prepared MPAS-JEDI analysis"
+    )
+    _add_config_dir(jedi_submit)
+    _add_cycle_argument(jedi_submit)
+    jedi_submit.add_argument("--wait", action="store_true")
+    jedi_submit.add_argument("--resubmit", action="store_true")
+    _add_wait_options(jedi_submit)
+
+    jedi_wait = sub.add_parser(
+        "jedi-wait", help="wait for scheduler completion of one analysis job"
+    )
+    _add_config_dir(jedi_wait)
+    _add_cycle_argument(jedi_wait)
+    _add_wait_options(jedi_wait)
+
+    jedi_validate = sub.add_parser(
+        "jedi-validate", help="validate one analysis and publish its artifact manifest"
+    )
+    _add_config_dir(jedi_validate)
+    _add_cycle_argument(jedi_validate)
+
+    cycle_doctor = sub.add_parser(
+        "cycle-doctor",
+        help="read-only preflight of the domain-stage contracts for one analysis cycle",
+    )
+    _add_config_dir(cycle_doctor)
+    _add_cycle_argument(cycle_doctor)
+    cycle_doctor.add_argument(
+        "--no-observations",
+        action="store_true",
+        help="do not require obs2ioda.yaml (useful for analysis-only development tests)",
+    )
+    cycle_doctor.add_argument(
+        "--no-forecast",
+        action="store_true",
+        help="do not require mpas.yaml (useful for analysis-only development tests)",
+    )
+    cycle_doctor.add_argument(
+        "--json", action="store_true", help="emit the preflight report as JSON"
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="monan-jedi-workflow",
-        description="Python-first workflow commands for MONAN MPAS-JEDI experiments.",
+        description="Python-first domain-stage commands for reproducible MONAN MPAS-JEDI experiments.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -106,6 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_dir(obs_validate)
     _add_cycle_argument(obs_validate)
 
+    _add_cycle_stage_commands(sub)
     return parser
 
 
@@ -236,6 +303,39 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "obs2ioda-validate":
         validate_obs2ioda(args.config_dir, args.cycle)
         return 0
+    if args.command == "jedi-prepare":
+        prepare_jedi(args.config_dir, args.cycle)
+        return 0
+    if args.command == "jedi-submit":
+        submit_jedi(
+            args.config_dir,
+            args.cycle,
+            wait=args.wait,
+            resubmit=args.resubmit,
+            poll_seconds=args.poll_seconds,
+            timeout_seconds=args.timeout_seconds,
+        )
+        return 0
+    if args.command == "jedi-wait":
+        wait_jedi(
+            args.config_dir,
+            args.cycle,
+            poll_seconds=args.poll_seconds,
+            timeout_seconds=args.timeout_seconds,
+        )
+        return 0
+    if args.command == "jedi-validate":
+        validate_jedi(args.config_dir, args.cycle)
+        return 0
+    if args.command == "cycle-doctor":
+        report = doctor_cycle(
+            args.config_dir,
+            args.cycle,
+            require_observations=not args.no_observations,
+            require_forecast=not args.no_forecast,
+        )
+        print_doctor_report(report, json_output=args.json)
+        return 0 if report["ready"] else 2
     raise RuntimeError(f"Unsupported command: {args.command}")
 
 
