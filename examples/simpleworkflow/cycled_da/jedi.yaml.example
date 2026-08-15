@@ -1,8 +1,8 @@
 # Contrato de análise cíclica.
 #
-# IMPORTANTE: substitua os paths por assets do baseline ATUAL validado. O
-# tutorial histórico de Cycling DA é referência conceitual, não fonte de YAML,
-# executáveis ou runtime para versões novas do MPAS-JEDI.
+# IMPORTANTE: parta do baseline ATUAL validado. O template fornecido neste
+# exemplo foi derivado do baseline_passed.yaml versionado no repositório e
+# preserva seus observers/operadores/filtros.
 
 jedi:
   cycle:
@@ -14,14 +14,15 @@ jedi:
   variables:
     current_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
     bmatrix_root: /path/to/published/bmatrix
-    # Layout compartilhado com obs2ioda.yaml.example.
     obs_root: work/obs
+    # GNSSRO não vem do PREPBUFR convencional deste exemplo; é entrada externa.
+    gnssro_root: /path/to/validated/gnssro-ioda
     initial_background: /path/to/mpasout.2018-04-14_21.00.00.nc
 
   run_dir: "work/jedi/{cycle_id}"
 
-  # Fotografia do runtime compatível com a compilação atual: namelists, streams,
-  # tabelas e outros arquivos relativos necessários ao executável.
+  # O skeleton deve conter apenas assets fixos compatíveis com a compilação
+  # atual. Remova dele backgrounds/observações/outputs dependentes do ciclo.
   runtime:
     skeleton: /path/to/current/3dfgat/runtime-skeleton
 
@@ -31,20 +32,22 @@ jedi:
     target: "background/mpasout.{background_mpas_file_time}.nc"
 
   links:
-    # A B é produzida antes da campanha e apenas consumida aqui.
     - source: "{bmatrix_root}"
       target: B_Matrix
 
-    # Exemplos de observações. Ajuste o conjunto ao YAML JEDI atual.
+    # PREPBUFR convencional produzido pelo stage Obs2IODA.
     - source: "{obs_root}/{analysis_yyyymmddhh}/sondes_obs_{analysis_yyyymmddhh}.h5"
-      target: "Data/obs/sondes_obs_{analysis_yyyymmddhh}.h5"
+      target: "Data/ufo/testinput_tier_1/sondes_obs_{analysis_yyyymmddhh}_m.nc4"
     - source: "{obs_root}/{analysis_yyyymmddhh}/sfc_obs_{analysis_yyyymmddhh}.h5"
-      target: "Data/obs/sfc_obs_{analysis_yyyymmddhh}.h5"
+      target: "Data/ufo/testinput_tier_1/sfc_obs_{analysis_yyyymmddhh}_m.nc4"
+
+    # O baseline_passed usa GnssroRefNCEP. Mantemos esse observer em vez de
+    # alterar a ciência apenas para simplificar o exemplo.
+    - source: "{gnssro_root}/gnssro_obs_{analysis_yyyymmddhh}_s.nc4"
+      target: "Data/ufo/testinput_tier_1/gnssro_obs_{analysis_yyyymmddhh}_s.nc4"
 
   templates:
-    # Deve ser derivado do YAML que passa com a versão atual. Substitua somente
-    # campos realmente dependentes do ciclo por placeholders documentados.
-    - source: /path/to/variational.current.yaml.in
+    - source: templates/variational.baseline_passed.yaml.in
       target: variational.yaml
 
   pbs:
@@ -64,7 +67,7 @@ jedi:
       FI_CXI_RX_MATCH_MODE: hybrid
 
   validation:
-    # Ajuste o marcador ao log comprovado da compilação atual.
+    # Confirme este marcador no log da compilação atual antes da campanha.
     log: jedi.stdout.log
     required_log_markers:
       - OOPS Ending

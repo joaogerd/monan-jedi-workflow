@@ -15,6 +15,7 @@ workflow.yaml.example  DAG, período e contratos de artefatos
 obs2ioda.yaml.example  PREPBUFR -> IODA em layout previsível
 jedi.yaml.example      contrato cycle-aware da análise
 mpas.yaml.example      handoff análise -> forecast/background
+templates/             YAML JEDI derivado do baseline que passou
 ```
 
 ## Criar um caso
@@ -25,9 +26,13 @@ for name in workflow obs2ioda jedi mpas; do
   cp "examples/simpleworkflow/cycled_da/${name}.yaml.example" \
      "cases/3dfgat_x1.10242/${name}.yaml"
 done
+cp -a examples/simpleworkflow/cycled_da/templates \
+  cases/3dfgat_x1.10242/
 ```
 
-Edite os caminhos marcados nos três arquivos de domínio. O wrapper PREPBUFR usado pelo exemplo continua sendo o wrapper compartilhado em `scripts/obs2ioda/`; ele não é duplicado aqui.
+Edite os caminhos marcados nos arquivos de domínio. O wrapper PREPBUFR continua sendo o wrapper compartilhado em `scripts/obs2ioda/`; ele não é duplicado aqui.
+
+O template variacional preserva os três observers do `baseline_passed.yaml`: Radiosonde, GnssroRefNCEP e SfcCorrected. O PREPBUFR convencional fornece Radiosonde/superfície; portanto o exemplo declara o IODA GNSSRO como entrada externa por ciclo. Isso é deliberado: não removemos ciência do baseline só para fazer o exemplo parecer autocontido.
 
 ## Preflight
 
@@ -63,12 +68,12 @@ Isso complementa — não substitui — os manifests internos dos stages em `.mo
 
 ## O que ainda exige validação no JACI
 
-Os templates não afirmam compatibilidade automática com uma compilação do MONAN-JEDI. Antes da primeira submissão real, confirme com o baseline atual:
+Antes da primeira submissão real, confirme com o baseline atual:
 
-- YAML JEDI real usado como template;
+- se `baseline_passed.yaml` ainda representa a compilação atual;
 - nomes de análise e forecast;
 - duração necessária do MPAS para materializar o background FGAT;
 - success markers dos logs;
-- observações habilitadas;
-- caminhos da B;
+- disponibilidade das observações de cada ciclo (inclusive GNSSRO);
+- caminhos/forma de consumo da B;
 - mesh/static e partição MPI.
