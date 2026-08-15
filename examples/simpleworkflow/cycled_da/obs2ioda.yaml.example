@@ -1,0 +1,47 @@
+# Obs2IODA do caso de referência.
+#
+# Reutiliza o wrapper PREPBUFR já versionado no repositório; este arquivo existe
+# aqui para tornar o exemplo de cycling autocontido e para fixar um layout
+# previsível de outputs sob CASE/work/obs/.
+
+obs2ioda:
+  variables:
+    workflow_root: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow
+    obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
+    prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
+
+    # Ajuste à coleção real. O exemplo usa um diretório por ciclo apenas para
+    # tornar o padrão explícito; o arquivo operacional do INPE pode ter outro layout.
+    prepbufr_root: /path/to/prepbufr
+    prepbufr_input: "{prepbufr_root}/{cycle_yyyymmddhh}/prepbufr.bufr"
+
+  work_dir: "work/obs/{cycle_yyyymmddhh}"
+
+  inspection:
+    argv: [ncdump, -h, "{output}"]
+    timeout_seconds: 60
+    required_header_markers: [MetaData, ObsValue, ObsError, PreQC]
+
+  provenance:
+    sha256: true
+
+  converters:
+    - name: prepbufr-conventional
+      inputs:
+        - "{prepbufr_input}"
+        - "{prepbufr_runner}"
+      outputs:
+        - "{work_dir}/sondes_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/aircraft_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/sfc_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/satwind_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/profiler_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/ascat_obs_{cycle_yyyymmddhh}.h5"
+      timeout_seconds: 1800
+      argv:
+        - bash
+        - "{prepbufr_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
+        - --input
+        - "{prepbufr_input}"

@@ -11,28 +11,23 @@ Os mesmos comandos de domínio podem ser chamados futuramente por ecFlow ou Cylc
 ## Arquivos
 
 ```text
-workflow.yaml.example  DAG e período
+workflow.yaml.example  DAG, período e contratos de artefatos
+obs2ioda.yaml.example  PREPBUFR -> IODA em layout previsível
 jedi.yaml.example      contrato cycle-aware da análise
 mpas.yaml.example      handoff análise -> forecast/background
 ```
-
-Para observações, reutilize um perfil em `examples/obs2ioda/` e copie-o para o caso como `obs2ioda.yaml`.
 
 ## Criar um caso
 
 ```bash
 mkdir -p cases/3dfgat_x1.10242
-cp examples/simpleworkflow/cycled_da/workflow.yaml.example \
-   cases/3dfgat_x1.10242/workflow.yaml
-cp examples/simpleworkflow/cycled_da/jedi.yaml.example \
-   cases/3dfgat_x1.10242/jedi.yaml
-cp examples/simpleworkflow/cycled_da/mpas.yaml.example \
-   cases/3dfgat_x1.10242/mpas.yaml
-cp examples/obs2ioda/prepbufr-tutorial/obs2ioda.yaml.example \
-   cases/3dfgat_x1.10242/obs2ioda.yaml
+for name in workflow obs2ioda jedi mpas; do
+  cp "examples/simpleworkflow/cycled_da/${name}.yaml.example" \
+     "cases/3dfgat_x1.10242/${name}.yaml"
+done
 ```
 
-Edite os caminhos marcados nos três arquivos de domínio.
+Edite os caminhos marcados nos três arquivos de domínio. O wrapper PREPBUFR usado pelo exemplo continua sendo o wrapper compartilhado em `scripts/obs2ioda/`; ele não é duplicado aqui.
 
 ## Preflight
 
@@ -59,6 +54,12 @@ swf run cases/3dfgat_x1.10242/workflow.yaml \
 ```
 
 Valide o handoff entre os dois ciclos antes de ampliar o período.
+
+## Restart
+
+A DAG declara manifests e produtos científicos essenciais como artifacts do `simpleWorkflow`. Assim, um sucesso anterior só é reutilizado quando os outputs declarados continuam presentes.
+
+Isso complementa — não substitui — os manifests internos dos stages em `.monan-jedi-workflow/`.
 
 ## O que ainda exige validação no JACI
 

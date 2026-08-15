@@ -14,10 +14,10 @@ jedi:
   variables:
     current_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
     bmatrix_root: /path/to/published/bmatrix
-    obs_root: /path/to/validated/ioda
+    # Layout compartilhado com obs2ioda.yaml.example.
+    obs_root: work/obs
     initial_background: /path/to/mpasout.2018-04-14_21.00.00.nc
 
-  # Mantido relativo ao diretório do caso neste exemplo para facilitar inspeção.
   run_dir: "work/jedi/{cycle_id}"
 
   # Fotografia do runtime compatível com a compilação atual: namelists, streams,
@@ -35,7 +35,7 @@ jedi:
     - source: "{bmatrix_root}"
       target: B_Matrix
 
-    # Exemplos de observações. Ajuste nomes/coleções ao YAML JEDI atual.
+    # Exemplos de observações. Ajuste o conjunto ao YAML JEDI atual.
     - source: "{obs_root}/{analysis_yyyymmddhh}/sondes_obs_{analysis_yyyymmddhh}.h5"
       target: "Data/obs/sondes_obs_{analysis_yyyymmddhh}.h5"
     - source: "{obs_root}/{analysis_yyyymmddhh}/sfc_obs_{analysis_yyyymmddhh}.h5"

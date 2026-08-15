@@ -1,8 +1,8 @@
 # DAG de referência da pesquisa.
 #
 # O arquivo contém somente orquestração. As regras científicas/runtime vivem
-# nos três arquivos de domínio do CASE. Os mesmos comandos poderão ser chamados
-# por ecFlow/Cylc sem portar lógica científica.
+# nos arquivos de domínio do CASE. Os mesmos comandos poderão ser chamados por
+# ecFlow/Cylc sem portar lógica científica.
 
 workflow:
   name: monan_jedi_cycled_da_reference
@@ -18,61 +18,106 @@ cycle:
 tasks:
   - name: obs_doctor
     argv: [monan-jedi-workflow, obs2ioda-doctor, "{experiment_dir}", --cycle, "{cycle_time}"]
+    inputs:
+      required: ["{experiment_dir}/obs2ioda.yaml"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/.monan-jedi-workflow/obs2ioda-doctor.json"
 
   - name: obs_prepare
     depends_on: [obs_doctor]
     argv: [monan-jedi-workflow, obs2ioda-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/.monan-jedi-workflow/obs2ioda.json"
 
   - name: obs_run
     depends_on: [obs_prepare]
     argv: [monan-jedi-workflow, obs2ioda-run, "{experiment_dir}", --cycle, "{cycle_time}"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sondes_obs_{cycle_yyyymmddhh}.h5"
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sfc_obs_{cycle_yyyymmddhh}.h5"
 
   - name: obs_validate
     depends_on: [obs_run]
     argv: [monan-jedi-workflow, obs2ioda-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/.monan-jedi-workflow/obs2ioda.json"
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sondes_obs_{cycle_yyyymmddhh}.h5"
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sfc_obs_{cycle_yyyymmddhh}.h5"
 
   - name: jedi_prepare
     depends_on: [obs_validate]
     argv: [monan-jedi-workflow, jedi-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
+    inputs:
+      required:
+        - "{experiment_dir}/jedi.yaml"
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sondes_obs_{cycle_yyyymmddhh}.h5"
+        - "{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sfc_obs_{cycle_yyyymmddhh}.h5"
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/{cycle_id}/variational.yaml"
+        - "{experiment_dir}/work/jedi/{cycle_id}/run_jedi.pbs"
+        - "{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-submission.json"
 
   - name: jedi_submit
     depends_on: [jedi_prepare]
     argv: [monan-jedi-workflow, jedi-submit, "{experiment_dir}", --cycle, "{cycle_time}"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-submission.json"
 
   - name: jedi_wait
     depends_on: [jedi_submit]
-    argv:
-      - monan-jedi-workflow
-      - jedi-wait
-      - "{experiment_dir}"
-      - --cycle
-      - "{cycle_time}"
-      - --poll-seconds
-      - "30"
+    argv: [monan-jedi-workflow, jedi-wait, "{experiment_dir}", --cycle, "{cycle_time}", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-submission.json"
 
   - name: jedi_validate
     depends_on: [jedi_wait]
     argv: [monan-jedi-workflow, jedi-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-validation.json"
+        - "{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-artifacts.json"
+        - "{experiment_dir}/work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}.00.00.nc"
 
   - name: mpas_prepare
     depends_on: [jedi_validate]
     argv: [monan-jedi-workflow, mpas-prepare, "{experiment_dir}", --cycle, "{cycle_time}"]
+    inputs:
+      required:
+        - "{experiment_dir}/mpas.yaml"
+        - "{experiment_dir}/work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}.00.00.nc"
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/{cycle_id}/run_mpas.pbs"
+        - "{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-submission.json"
 
   - name: mpas_submit
     depends_on: [mpas_prepare]
     argv: [monan-jedi-workflow, mpas-submit, "{experiment_dir}", --cycle, "{cycle_time}"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-submission.json"
 
   - name: mpas_wait
     depends_on: [mpas_submit]
-    argv:
-      - monan-jedi-workflow
-      - mpas-wait
-      - "{experiment_dir}"
-      - --cycle
-      - "{cycle_time}"
-      - --poll-seconds
-      - "30"
+    argv: [monan-jedi-workflow, mpas-wait, "{experiment_dir}", --cycle, "{cycle_time}", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-submission.json"
 
   - name: mpas_validate
     depends_on: [mpas_wait]
     argv: [monan-jedi-workflow, mpas-validate, "{experiment_dir}", --cycle, "{cycle_time}"]
+    # O horário do background é calculado pelo stage MPAS, não pelo
+    # orquestrador. O artifact estável que simpleWorkflow acompanha aqui é o
+    # relatório de validação; o próximo jedi-prepare ainda verifica fisicamente
+    # o background antes de criar seu link.
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-validation.json"
