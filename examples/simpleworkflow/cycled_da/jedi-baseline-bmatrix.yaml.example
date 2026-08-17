@@ -65,6 +65,7 @@ jedi:
   validation:
     log: jedi.stdout.log
     required_log_markers:
+      - "with status = 0"
       - OOPS Ending
 
     required_outputs:
