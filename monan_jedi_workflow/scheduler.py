@@ -21,6 +21,7 @@ from .runtime import get_rendered_dir, get_runtime_dir
 _MANIFEST_DIR = ".monan-jedi-workflow"
 _MANIFEST_FILE = "submission.json"
 _NOT_FOUND = ("unknown job id", "unknown job", "not found", "does not exist")
+_FINISHED_REQUIRES_HISTORY = ("job has finished", "use -x", "use -h")
 _STATE = re.compile(r"^\s*job_state\s*=\s*([A-Za-z])\s*$", re.MULTILINE)
 
 
@@ -137,16 +138,63 @@ def submit(config: ExperimentConfig, *, resubmit: bool = False) -> Submission:
     return Submission(job_id=job_id, manifest_path=path)
 
 
+def _query_qstat(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run one qstat query without letting subprocess raise on PBS statuses."""
+    return subprocess.run(command, text=True, capture_output=True, check=False)
+
+
+def _query_text(process: subprocess.CompletedProcess[str]) -> str:
+    """Combine qstat stdout/stderr for diagnostics and message matching."""
+    return "\n".join(
+        part for part in (process.stdout.strip(), process.stderr.strip()) if part
+    )
+
+
+def _parse_state(stdout: str) -> str | None:
+    """Extract ``job_state`` from full qstat output when available."""
+    match = _STATE.search(stdout)
+    return match.group(1).upper() if match else None
+
+
 def query(job_id: str) -> tuple[bool, str | None]:
-    """Return whether a job is visible in qstat and its PBS state when known."""
-    process = subprocess.run(["qstat", "-f", job_id], text=True, capture_output=True, check=False)
-    text = "\n".join(part for part in (process.stdout.strip(), process.stderr.strip()) if part)
-    if process.returncode != 0:
-        if any(marker in text.lower() for marker in _NOT_FOUND):
+    """Return whether PBS knows a job and its state, including history.
+
+    PBS Pro/OpenPBS may return exit code 35 for a job immediately after it
+    leaves the active queue, with a message such as ``Job has finished, use -x
+    or -H to obtain historical job information``.  That transition is normal,
+    not a scheduler failure.  In that case we repeat the query against PBS
+    history using ``qstat -x -f`` so callers can observe the terminal ``F``
+    state instead of raising ``PBSError`` at the exact moment the job finishes.
+
+    A genuinely unknown/expired job remains ``(False, None)``.  Other qstat
+    failures are still surfaced because authentication, server or command
+    errors must not be mistaken for successful completion.
+    """
+    process = _query_qstat(["qstat", "-f", job_id])
+    text = _query_text(process)
+
+    if process.returncode == 0:
+        return True, _parse_state(process.stdout)
+
+    lowered = text.lower()
+    if any(marker in lowered for marker in _NOT_FOUND):
+        return False, None
+
+    if any(marker in lowered for marker in _FINISHED_REQUIRES_HISTORY):
+        historical = _query_qstat(["qstat", "-x", "-f", job_id])
+        historical_text = _query_text(historical)
+        if historical.returncode == 0:
+            return True, _parse_state(historical.stdout)
+        if any(marker in historical_text.lower() for marker in _NOT_FOUND):
             return False, None
-        raise PBSError(f"qstat failed for {job_id} with return code {process.returncode}: {text}")
-    match = _STATE.search(process.stdout)
-    return True, match.group(1).upper() if match else None
+        raise PBSError(
+            f"historical qstat failed for {job_id} with return code "
+            f"{historical.returncode}: {historical_text}"
+        )
+
+    raise PBSError(
+        f"qstat failed for {job_id} with return code {process.returncode}: {text}"
+    )
 
 
 def wait(config: ExperimentConfig, *, poll_seconds: int = 30, timeout_seconds: int | None = None) -> str | None:
