@@ -7,11 +7,13 @@ from pathlib import Path
 
 from . import cli as legacy
 from .init_stage import prepare_mpas_init, submit_mpas_init, validate_mpas_init, wait_mpas_init
+from .netcdf_compare import main as compare_netcdf_main
 from .wps_stage import prepare_wps, run_wps, validate_wps
 
 _NEW = {
     "wps-prepare", "wps-run", "wps-validate",
     "mpas-init-prepare", "mpas-init-submit", "mpas-init-wait", "mpas-init-validate",
+    "compare-netcdf",
 }
 
 
@@ -41,6 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] not in _NEW:
         return legacy.main(argv)
+    if argv[0] == "compare-netcdf":
+        return compare_netcdf_main(argv[1:])
+
     args = _parser().parse_args(argv)
     if args.command == "wps-prepare":
         prepare_wps(args.config_dir, args.cycle)
