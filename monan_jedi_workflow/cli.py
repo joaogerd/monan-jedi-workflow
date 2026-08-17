@@ -13,7 +13,8 @@ from pathlib import Path
 
 from .config import load_experiment_config, validate_experiment_config
 from .cycle_doctor import doctor_cycle, print_doctor_report
-from .jedi_stage import prepare_jedi, submit_jedi, validate_jedi, wait_jedi
+from .jedi_stage import prepare_jedi, submit_jedi, validate_jedi
+from .jedi_wait_ui import wait_jedi
 from .mpas_stage import prepare_mpas, submit_mpas, validate_mpas, wait_mpas
 from .obs2ioda_stage import (
     doctor_obs2ioda,
@@ -310,11 +311,18 @@ def main(argv: list[str] | None = None) -> int:
         submit_jedi(
             args.config_dir,
             args.cycle,
-            wait=args.wait,
+            wait=False,
             resubmit=args.resubmit,
             poll_seconds=args.poll_seconds,
             timeout_seconds=args.timeout_seconds,
         )
+        if args.wait:
+            wait_jedi(
+                args.config_dir,
+                args.cycle,
+                poll_seconds=args.poll_seconds,
+                timeout_seconds=args.timeout_seconds,
+            )
         return 0
     if args.command == "jedi-wait":
         wait_jedi(
