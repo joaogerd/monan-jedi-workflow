@@ -2,7 +2,7 @@
 
 Antes de configurar o ciclo completo, reproduza **uma unica analise JEDI que ja sabemos funcionar**. Isso separa problemas do novo stage de problemas de Obs2IODA, forecast MPAS e orquestracao.
 
-Neste teste use exatamente o mesmo executavel, YAML, background, observacoes e B do `baseline_bmatrix`.
+Neste teste use exatamente o mesmo executavel, YAML, background, observacoes, B **e paralelismo MPI** do `baseline_bmatrix`.
 
 **Nao edite `obs2ioda.yaml`, `mpas.yaml` ou `workflow.yaml` ainda.**
 
@@ -23,6 +23,24 @@ test -f "$BASELINE/Data/ufo/sondes_obs_2018041500_m.nc4"
 test -f "$BASELINE/Data/ufo/gnssro_obs_2018041500_s.nc4"
 test -f "$BASELINE/Data/ufo/sfc_obs_2018041500_m.nc4"
 test -d "$BASELINE/Data/covariance"
+```
+
+### O numero de MPI ranks faz parte do baseline
+
+O `baseline_bmatrix` validado foi executado com **128 MPI ranks**. A B usada nesse caso foi gerada/validada em layout `np128`, e o YAML le NICAS e amostragem local (`read local nicas` / `read local sampling`). Portanto, para esta reproducao, use:
+
+```text
+ncpus: 128
+mpiprocs: 128
+```
+
+Nao reutilize o `np64` do antigo baseline MPASstatic. Sao dois baselines diferentes.
+
+Antes de submeter, confira:
+
+```bash
+grep -nE 'np128|read local nicas|read local sampling' \
+  "$BASELINE/variants/3dfgat.bmatrix.yaml" || true
 ```
 
 ## 2. Crie um runtime skeleton limpo
@@ -104,6 +122,14 @@ cat "$RUN/run_jedi.pbs"
 
 O `diff` deve produzir **nenhuma diferenca**.
 
+Antes da submissao, o PBS deve mostrar explicitamente:
+
+```text
+#PBS -l select=1:ncpus=128:mpiprocs=128
+...
+mpiexec -n 128 ... mpasjedi_variational.x 3dfgat.bmatrix.yaml
+```
+
 O runtime deve conter, entre outros:
 
 ```text
@@ -139,7 +165,20 @@ O produto esperado pelo `baseline_bmatrix` e:
 Data/states/mpas.3dvar.2018-04-15_00.00.00.nc
 ```
 
-## 6. Somente depois que esse teste passar
+## 6. Se uma tentativa falhar
+
+Nao misture logs/produtos da tentativa anterior com a proxima. Antes de um novo `jedi-prepare`, remova apenas os artefatos dinamicos do ciclo falho:
+
+```bash
+RUN="$CASE/work/jedi/20180415T000000Z"
+rm -f "$RUN/jedi.stdout.log" "$RUN/jedi.stderr.log"
+rm -f "$RUN"/log.atmosphere.* 2>/dev/null || true
+rm -f "$RUN"/Data/os/* "$RUN"/Data/states/* 2>/dev/null || true
+```
+
+Depois rode `jedi-prepare` novamente e confira o PBS antes de submeter. O prepare reescreve o manifesto de submissao para a nova tentativa.
+
+## 7. Somente depois que esse teste passar
 
 A evolucao deve ser incremental:
 
