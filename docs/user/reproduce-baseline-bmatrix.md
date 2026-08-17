@@ -165,7 +165,28 @@ O produto esperado pelo `baseline_bmatrix` e:
 Data/states/mpas.3dvar.2018-04-15_00.00.00.nc
 ```
 
-## 6. Se uma tentativa falhar
+## 6. Compare a analise com o baseline
+
+Depois que `jedi-validate` passar, compare a saida nova com a analise manual de referencia:
+
+```bash
+REF="$BASELINE/Data/states/mpas.3dvar.2018-04-15_00.00.00.nc"
+NEW="$CASE/work/jedi/20180415T000000Z/Data/states/mpas.3dvar.2018-04-15_00.00.00.nc"
+
+monan-jedi-workflow compare-netcdf "$REF" "$NEW"
+```
+
+A ferramenta compara dimensoes, metadados e todos os valores armazenados. O atributo global `file_id` e ignorado por padrao porque pode mudar a cada escrita do MPAS mesmo quando os campos cientificos sao identicos.
+
+O resultado esperado e:
+
+```text
+[OK] NetCDF scientific contents are equivalent.
+```
+
+Veja `docs/user/compare-netcdf.md` para comparacao com tolerancias ou outros atributos ignorados.
+
+## 7. Se uma tentativa falhar
 
 Nao misture logs/produtos da tentativa anterior com a proxima. Antes de um novo `jedi-prepare`, remova apenas os artefatos dinamicos do ciclo falho:
 
@@ -178,7 +199,7 @@ rm -f "$RUN"/Data/os/* "$RUN"/Data/states/* 2>/dev/null || true
 
 Depois rode `jedi-prepare` novamente e confira o PBS antes de submeter. O prepare reescreve o manifesto de submissao para a nova tentativa.
 
-## 7. Somente depois que esse teste passar
+## 8. Somente depois que esse teste passar
 
 A evolucao deve ser incremental:
 
