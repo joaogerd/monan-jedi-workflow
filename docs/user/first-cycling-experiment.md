@@ -1,6 +1,33 @@
 # Primeiro experimento cíclico
 
-Este é o caminho curto para executar uma campanha de assimilação usando os stages do `monan-jedi-workflow` e o `simpleWorkflow` como orquestrador de pesquisa.
+O primeiro experimento **nao deve comecar pelo ciclo completo**. Comece reproduzindo uma analise JEDI que ja funciona e acrescente uma parte de cada vez.
+
+Para o caso atualmente validado em `manual-tests/baseline_bmatrix`, siga primeiro:
+
+- [Reproduzir o baseline_bmatrix](reproduce-baseline-bmatrix.md)
+
+Esse teste usa somente `jedi.yaml`. Nao e necessario entender nem editar `obs2ioda.yaml`, `mpas.yaml` e `workflow.yaml` antes de a analise conhecida passar pelo novo stage.
+
+## Sequencia recomendada
+
+```text
+FASE 1  baseline JEDI conhecido
+        jedi-prepare -> jedi-submit -> jedi-wait -> jedi-validate
+
+FASE 2  observacoes
+        substituir apenas Radiosonde/Sfc pelos produtos Obs2IODA
+
+FASE 3  forecast
+        analysis -> MPAS -> background da proxima analise
+
+FASE 4  handoff
+        analise 00Z -> forecast -> background 03Z -> analise 06Z
+
+FASE 5  orquestracao
+        reproduzir exatamente a mesma sequencia com simpleWorkflow
+```
+
+A matriz B ja deve existir antes do ciclo. O workflow apenas a consome.
 
 ## 1. Instale as ferramentas
 
@@ -9,116 +36,114 @@ cd monan-jedi-workflow
 python -m pip install -e .
 ```
 
-Instale o `simpleWorkflow` no mesmo ambiente Python ou em um ambiente onde `swf` e `monan-jedi-workflow` estejam no `PATH`.
-
-Confirme:
+Para a **Fase 1**, apenas isto e necessario:
 
 ```bash
 monan-jedi-workflow --help
-swf --help
 ```
 
-## 2. Crie o caso
+O `simpleWorkflow` so e necessario na Fase 5.
 
-Use como ponto de partida:
+## 2. Fase 1: reproduza o baseline atual
 
-```text
-examples/simpleworkflow/cycled_da/
-```
-
-Um caso completo contém:
+Nao copie os quatro YAMLs ainda. Crie um `CASE` contendo inicialmente apenas:
 
 ```text
 CASE/
   jedi.yaml
-  mpas.yaml
-  obs2ioda.yaml
-  workflow.yaml
+  runtime-skeleton/
 ```
 
-Copie os templates e edite os caminhos marcados. Para Obs2IODA, reutilize um perfil já testado em `examples/obs2ioda/` quando ele corresponder ao conjunto de dados desejado.
+Use como fonte de verdade o caso que passa com a compilacao atual. No caso `baseline_bmatrix`, isso significa preservar inicialmente:
 
-## 3. Use somente assets da versão atual
+- `variants/3dfgat.bmatrix.yaml` sem alteracao;
+- background `2018-04-14 21Z`;
+- Radiosonde, GNSSRO e superficie usados no baseline;
+- B SABER/BUMP (NICAS + HDIAG + VBAL);
+- geometria e demais arquivos fixos do runtime;
+- mesmo executavel MONAN-JEDI.
 
-Antes da primeira rodada, identifique o baseline que funciona com a compilação atual do MONAN-JEDI e use dele:
+Siga o procedimento completo em [Reproduzir o baseline_bmatrix](reproduce-baseline-bmatrix.md).
 
-- executáveis;
-- YAML variacional;
-- namelists/streams;
-- runtime skeleton;
-- mesh/static/invariant;
-- graph partition;
-- observações compatíveis;
-- matriz B validada.
-
-O tutorial histórico de Cycling DA é referência conceitual. Não copie seus arquivos científicos literalmente para uma versão diferente do MPAS-JEDI.
-
-## 4. Faça o preflight
+O primeiro comando importante e somente:
 
 ```bash
-monan-jedi-workflow cycle-doctor CASE \
+monan-jedi-workflow jedi-prepare CASE \
   --cycle 2018-04-15T00:00:00Z
 ```
 
-O doctor é read-only. Ele não cria runtime e não submete PBS.
+Ele **nao submete PBS**. Inspecione o runtime, o YAML e o PBS antes de chamar `jedi-submit`.
 
-## 5. Confira a DAG
+## 3. Fase 2: introduza Obs2IODA
+
+Somente depois de `jedi-validate` reproduzir a analise conhecida, configure `obs2ioda.yaml`.
+
+Nesta fase mantenha inalterados:
+
+- B;
+- background;
+- geometria;
+- configuracao JEDI;
+- executavel.
+
+Troque apenas as observacoes convencionais pelo output do Obs2IODA. O baseline usa tambem `GnssroRefNCEP`; GNSSRO continua sendo uma entrada separada enquanto nao houver um produtor definido no workflow.
+
+Teste os comandos diretamente antes de qualquer DAG:
+
+```bash
+monan-jedi-workflow obs2ioda-doctor CASE --cycle 2018-04-15T00:00:00Z
+monan-jedi-workflow obs2ioda-prepare CASE --cycle 2018-04-15T00:00:00Z
+monan-jedi-workflow obs2ioda-run CASE --cycle 2018-04-15T00:00:00Z
+monan-jedi-workflow obs2ioda-validate CASE --cycle 2018-04-15T00:00:00Z
+```
+
+Depois repita a analise JEDI e compare com a Fase 1.
+
+## 4. Fase 3: conecte o forecast MPAS
+
+Somente depois das observacoes estarem comprovadas, configure `mpas.yaml` para iniciar a previsao a partir da analise validada.
+
+O objetivo desta fase e responder empiricamente qual configuracao MPAS produz o estado correto de 03Z que sera usado como background da analise 06Z.
+
+Nao assuma que `lead_hours: 3` esta cientificamente validado apenas porque aparece no exemplo. Preserve o comportamento do forecast conhecido e valide o produto.
+
+## 5. Fase 4: prove dois ciclos manualmente
+
+Antes do `simpleWorkflow`, prove diretamente:
+
+```text
+JEDI 2018041500
+  -> MPAS iniciado pela analise 00Z
+     -> background valido em 03Z
+        -> JEDI 2018041506
+```
+
+O ponto critico e verificar fisicamente que o `jedi-prepare` de 06Z aponta para o produto de 03Z gerado pelo forecast de 00Z.
+
+## 6. Fase 5: use simpleWorkflow
+
+Somente quando a sequencia acima funcionar pelos comandos de dominio, crie/edite `workflow.yaml` e execute:
 
 ```bash
 swf plan CASE/workflow.yaml
-```
 
-Para o ciclo de referência, a ordem é:
-
-```text
-Obs2IODA
-   -> JEDI analysis
-      -> MPAS forecast
-         -> próximo ciclo
-```
-
-A matriz B já deve existir antes do ciclo.
-
-## 6. Rode somente um ciclo primeiro
-
-```bash
-swf run CASE/workflow.yaml \
-  --cycle-time 2018-04-15T00:00:00Z
-```
-
-Depois confira:
-
-```bash
-swf status CASE/workflow.yaml
-```
-
-Não avance para uma campanha longa antes de validar:
-
-- análise produzida;
-- background do forecast;
-- observações usadas;
-- logs JEDI/MPAS;
-- horários dos arquivos.
-
-## 7. Teste o handoff para o segundo ciclo
-
-Quando o primeiro ciclo estiver correto:
-
-```bash
 swf run CASE/workflow.yaml \
   --from 2018-04-15T00:00:00Z \
   --to   2018-04-15T06:00:00Z \
   --step PT6H
 ```
 
-O ponto crítico é comprovar que a análise `00Z` inicializa a previsão e que o produto correto dessa previsão é usado como background da análise `06Z`.
+O `simpleWorkflow` deve apenas reproduzir a sequencia ja validada. Ele nao deve ser usado para descobrir configuracao cientifica.
 
-## 8. Amplie a campanha
+## 7. Amplie a campanha
 
-Só depois do handoff de dois ciclos:
+Depois do handoff 00Z -> 06Z funcionar tanto diretamente quanto pelo `simpleWorkflow`, amplie primeiro para 24 h e depois 48 h.
 
-```bash
-swf run CASE/workflow.yaml
-```
+Nao avance para uma campanha longa antes de validar:
 
-O período padrão vem do bloco `cycle:` em `workflow.yaml`.
+- analises produzidas;
+- backgrounds do forecast;
+- observacoes realmente usadas;
+- logs JEDI/MPAS;
+- horarios dos arquivos;
+- restart depois de uma falha controlada.
