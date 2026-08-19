@@ -14,5 +14,6 @@
   <stream name="diagnostics" type="none" filename_template="diag.$Y-$M-$D_$h.$m.$s.nc"
     output_interval="none" />
   <stream name="restart" type="output" filename_template="restart.$Y-$M-$D_$h.$m.$s.nc"
-    output_interval="none" />
+    output_interval="24:00:00" filename_interval="output_interval"
+    clobber_mode="overwrite" />
 </streams>

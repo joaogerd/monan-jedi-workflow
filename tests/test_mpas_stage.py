@@ -213,3 +213,5 @@ def test_jaci_cycling_templates_pin_scientific_forecast_contract() -> None:
     assert "config_IAU_option = 'off'" in namelist
     assert 'name="da_state"' in streams
     assert 'output_interval="03:00:00"' in streams
+    assert 'name="restart" type="output"' in streams
+    assert 'output_interval="24:00:00"' in streams
