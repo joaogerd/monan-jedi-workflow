@@ -123,6 +123,11 @@ def test_prepare_subsequent_cycle_uses_previous_forecast(tmp_path: Path) -> None
 
     link = run.run_dir / "background/mpasout.2018-04-15_03.00.00.nc"
     assert link.resolve() == source.resolve()
+    assert run.context["analysis_time"] == "2018-04-15T06:00:00Z"
+    assert run.context["window_begin_time"] == "2018-04-15T03:00:00Z"
+    assert run.context["window_end_time"] == "2018-04-15T09:00:00Z"
+    assert run.context["window_length"] == "PT6H"
+    assert run.context["analysis_mpas_file_time"] == "2018-04-15_06.00.00"
 
 
 def test_validate_publishes_analysis_artifact(tmp_path: Path) -> None:
