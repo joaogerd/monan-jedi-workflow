@@ -55,6 +55,7 @@ adapters.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shlex
 import shutil
@@ -81,6 +82,7 @@ _SUBMISSION_NAME = "jedi-submission.json"
 _VALIDATION_NAME = "jedi-validation.json"
 _ARTIFACTS_NAME = "jedi-artifacts.json"
 _SKELETON_NAME = "skeleton.json"
+_ANALYSIS_SEED_NAME = "analysis-seed.json"
 
 
 class JEDIValidationError(RuntimeError):
@@ -328,6 +330,106 @@ def _render_template(
     target.write_text(content, encoding="utf-8")
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
+    """Pre-seed JEDI's analysis output with a complete MPAS state.
+
+    MPAS-Workflow's ``PrepJEDI.csh`` uses this exact contract: copy the full
+    background to the final analysis filename before MPAS-JEDI writes the
+    partial ``analysis`` stream with ``clobber_mode=overwrite``.  This is not a
+    post-processing merge; MPAS I/O updates the selected DA fields in place.
+    """
+    raw = run.config.get("analysis_seed")
+    if raw is None:
+        return None
+    seed = _require_mapping(raw, "jedi.analysis_seed")
+    source = resolve_path(
+        _require_string(seed.get("source"), "jedi.analysis_seed.source"),
+        config_dir=run.config_dir,
+        context=run.context,
+        label="jedi.analysis_seed.source",
+    )
+    if not source.is_file():
+        raise FileNotFoundError(f"JEDI full-state analysis seed does not exist: {source}")
+    target_text = render_text(
+        _require_string(seed.get("target"), "jedi.analysis_seed.target"),
+        run.context,
+        label="jedi.analysis_seed.target",
+    )
+    target = Path(target_text)
+    if not target.is_absolute():
+        target = run.run_dir / target
+
+    required = _require_list(
+        seed.get("required_variables", []),
+        "jedi.analysis_seed.required_variables",
+        non_empty=True,
+    )
+    if any(not isinstance(name, str) or not name for name in required):
+        raise StageConfigurationError(
+            "jedi.analysis_seed.required_variables must contain non-empty strings."
+        )
+    try:
+        from netCDF4 import Dataset
+        with Dataset(source, "r") as dataset:
+            variables = set(dataset.variables)
+            data_model = dataset.data_model
+    except Exception as error:
+        raise StageConfigurationError(
+            f"Cannot inspect JEDI full-state analysis seed {source}: {error}"
+        ) from error
+    missing = sorted(set(required) - variables)
+    if missing:
+        raise StageConfigurationError(
+            "JEDI analysis seed is not a complete declared MPAS state; missing: "
+            + ", ".join(missing)
+        )
+    expected_count = seed.get("expected_variable_count")
+    if expected_count is not None and len(variables) != int(expected_count):
+        raise StageConfigurationError(
+            "JEDI analysis seed variable count mismatch: "
+            f"found {len(variables)}, expected {int(expected_count)}."
+        )
+
+    source_digest = _sha256(source)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    state = "copied"
+    if target.exists():
+        if not target.is_file() or _sha256(target) != source_digest:
+            raise FileExistsError(
+                "JEDI stage refuses to overwrite an existing analysis output that "
+                f"differs from its full-state seed: {target}"
+            )
+        state = "already-seeded"
+    else:
+        temporary = target.with_name(target.name + ".seed.tmp")
+        shutil.copyfile(source, temporary)
+        temporary.replace(target)
+
+    manifest = {
+        "schema_version": 1,
+        "mechanism": "mpas-workflow-preseed-overwrite",
+        "source": str(source),
+        "target": str(target),
+        "sha256": source_digest,
+        "size_bytes": source.stat().st_size,
+        "netcdf_data_model": data_model,
+        "variable_count": len(variables),
+        "required_variables": sorted(required),
+        "state": state,
+        "prepared_at": _timestamp(),
+    }
+    _write_json(run.run_dir / _STAGE_DIR / _ANALYSIS_SEED_NAME, manifest)
+    return manifest
+
+
 def _resolve_background(run: JEDIRun) -> tuple[Path, Path]:
     """Resolve the source/target pair for the analysis background.
 
@@ -559,6 +661,8 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
             target = run.run_dir / target
         _render_template(source, target, run.context)
 
+    analysis_seed = _seed_analysis_output(run)
+
     _render_pbs(run)
     _write_json(
         run.manifest_path,
@@ -572,6 +676,7 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
             "pbs_file": str(run.pbs_path),
             "background_source": str(background_source),
             "background_target": str(background_target),
+            "analysis_seed": analysis_seed,
             "state": "prepared",
         },
     )

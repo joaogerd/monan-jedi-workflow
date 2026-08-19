@@ -24,6 +24,7 @@ Comece pela fronteira de arquitetura e pelos contratos; depois leia a implementa
 7. [Estágio JEDI](developer/jedi-stage.md)
 8. [Plano de validação no JACI](developer/jaci-validation-plan.md)
 9. [Reaproveitamento dos workflows anteriores](developer/legacy-and-reuse-analysis.md)
+10. [Handoff analysis → forecast MPAS](developer/analysis-to-mpas-forecast-handoff.md)
 10. [Política de documentação](developer/documentation-policy.md)
 11. [Architecture Decision Records](developer/adr/README.md)
 

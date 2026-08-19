@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from netCDF4 import Dataset
 
 from monan_jedi_workflow.jedi_stage import (
     JEDIValidationError,
@@ -171,4 +172,54 @@ def test_runtime_skeleton_cannot_silently_change(tmp_path: Path) -> None:
     )
 
     with pytest.raises(StageConfigurationError, match="different skeleton"):
+        prepare_jedi(config, "2018-04-15T00:00:00Z")
+
+
+def test_analysis_output_is_atomically_preseeded_with_full_state(tmp_path: Path) -> None:
+    config, _ = _case(tmp_path)
+    seed = tmp_path / "inputs/full-state.nc"
+    with Dataset(seed, "w", format="NETCDF3_64BIT_DATA") as dataset:
+        dataset.createDimension("nCells", 2)
+        dataset.createVariable("rho", "f4", ("nCells",))[:] = [1.0, 2.0]
+        dataset.createVariable("skintemp", "f4", ("nCells",))[:] = [280.0, 281.0]
+
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    data["jedi"]["analysis_seed"] = {
+        "source": str(seed),
+        "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
+        "required_variables": ["rho", "skintemp"],
+        "expected_variable_count": 2,
+    }
+    (config / "jedi.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    run = prepare_jedi(config, "2018-04-15T00:00:00Z")
+    output = run.run_dir / "Data/states/analysis.2018-04-15_00.00.00.nc"
+    with Dataset(output) as dataset:
+        assert set(dataset.variables) == {"rho", "skintemp"}
+        assert dataset.data_model == "NETCDF3_64BIT_DATA"
+
+    # A second preparation is idempotent and cannot create another submission.
+    prepare_jedi(config, "2018-04-15T00:00:00Z")
+    manifest = json.loads(
+        (run.run_dir / ".monan-jedi-workflow/analysis-seed.json").read_text()
+    )
+    assert manifest["state"] == "already-seeded"
+    assert manifest["size_bytes"] == seed.stat().st_size
+
+
+def test_analysis_seed_rejects_partial_full_state(tmp_path: Path) -> None:
+    config, _ = _case(tmp_path)
+    seed = tmp_path / "inputs/partial.nc"
+    with Dataset(seed, "w") as dataset:
+        dataset.createDimension("nCells", 1)
+        dataset.createVariable("rho", "f4", ("nCells",))
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    data["jedi"]["analysis_seed"] = {
+        "source": str(seed),
+        "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
+        "required_variables": ["rho", "skintemp"],
+    }
+    (config / "jedi.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(StageConfigurationError, match="missing: skintemp"):
         prepare_jedi(config, "2018-04-15T00:00:00Z")

@@ -30,6 +30,27 @@ jedi:
     source: /p/projetos/monan_das/USUARIO/work/CASE/work/mpas/{previous_cycle_id}/history/mpasout.{background_mpas_file_time}.nc
     target: Data/background/2018041500/mpasout.2018-04-14_21.00.00.nc
 
+  # Contrato oficial do MPAS-Workflow (PrepJEDI.csh): o output analysis e
+  # previamente uma copia do estado completo no horario da analise. O writer
+  # MPAS-JEDI, com clobber_mode=overwrite, atualiza somente os campos de DA.
+  analysis_seed:
+    source: "{baseline_root}/Data/background/2018041500/mpasout.{analysis_mpas_file_time}.nc"
+    target: "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"
+    expected_variable_count: 62
+    required_variables:
+      - pressure_p
+      - pressure_base
+      - rho
+      - rho_base
+      - theta
+      - theta_base
+      - u
+      - w
+      - surface_pressure
+      - skintemp
+      - smois
+      - tslb
+
   links:
     - source: "{baseline_root}/Data/covariance"
       target: Data/covariance
