@@ -223,3 +223,36 @@ def test_analysis_seed_rejects_partial_full_state(tmp_path: Path) -> None:
 
     with pytest.raises(StageConfigurationError, match="missing: skintemp"):
         prepare_jedi(config, "2018-04-15T00:00:00Z")
+
+
+def test_analysis_seed_accepts_subsequent_full_state_with_extra_refl10cm(
+    tmp_path: Path,
+) -> None:
+    config, forecast = _case(tmp_path)
+    background = forecast / "20180415T000000Z/mpasout.2018-04-15_03.00.00.nc"
+    background.parent.mkdir(parents=True)
+    background.write_bytes(b"background")
+    seed = tmp_path / "inputs/subsequent-full-state.nc"
+    with Dataset(seed, "w", format="NETCDF3_64BIT_DATA") as dataset:
+        dataset.createDimension("nCells", 1)
+        dataset.createVariable("rho", "f4", ("nCells",))[:] = [1.0]
+        dataset.createVariable("skintemp", "f4", ("nCells",))[:] = [280.0]
+        for index in range(60):
+            dataset.createVariable(f"state_{index:02d}", "f4", ("nCells",))[:] = [index]
+        dataset.createVariable("refl10cm", "f4", ("nCells",))[:] = [0.0]
+
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    data["jedi"]["analysis_seed"] = {
+        "source": str(seed),
+        "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
+        "required_variables": ["rho", "skintemp"],
+    }
+    (config / "jedi.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    run = prepare_jedi(config, "2018-04-15T06:00:00Z")
+    manifest = json.loads(
+        (run.run_dir / ".monan-jedi-workflow/analysis-seed.json").read_text()
+    )
+    assert manifest["variable_count"] == 63
+    with Dataset(manifest["target"]) as output:
+        assert "refl10cm" in output.variables

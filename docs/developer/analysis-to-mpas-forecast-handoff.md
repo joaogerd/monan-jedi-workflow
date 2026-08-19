@@ -43,6 +43,10 @@ Esta branch representa o mesmo mecanismo com `jedi.analysis_seed`. O preparo:
 4. registra `.monan-jedi-workflow/analysis-seed.json`;
 5. é idempotente quando o seed já está materializado.
 
+A completude é definida pelo conjunto declarado de campos obrigatórios, não
+por uma contagem fixa. Assim, um `da_state` de ciclo posterior que acrescente
+um diagnóstico legítimo como `refl10cm` continua sendo uma seed válida.
+
 O ciclo 2018-04-15 00Z foi reexecutado com esse contrato no job JACI
 `369654.pbs-ha`. O output definitivo contém 62 variáveis: as 13 variáveis de DA
 são exatamente iguais à análise parcial validada e as outras 49 são exatamente

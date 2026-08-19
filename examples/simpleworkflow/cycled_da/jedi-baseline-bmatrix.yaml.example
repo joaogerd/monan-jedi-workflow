@@ -36,7 +36,6 @@ jedi:
   analysis_seed:
     source: "{baseline_root}/Data/background/2018041500/mpasout.{analysis_mpas_file_time}.nc"
     target: "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"
-    expected_variable_count: 62
     required_variables:
       - pressure_p
       - pressure_base

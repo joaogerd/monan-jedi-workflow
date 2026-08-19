@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shlex
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -23,6 +24,12 @@ from .stage_config import (
 
 _STAGE_DIR = ".monan-jedi-workflow"
 _MANIFEST_NAME = "mpas-submission.json"
+_DEFAULT_LOG_PATTERNS = (
+    "stdout.log",
+    "stderr.log",
+    "log.atmosphere.*.out",
+    "log.atmosphere.*.err",
+)
 
 
 class MPASValidationError(RuntimeError):
@@ -96,6 +103,39 @@ def _clean_declared_outputs(run_dir: Path, patterns: list[Any]) -> None:
         for path in run_dir.glob(item):
             if path.is_file() or path.is_symlink():
                 path.unlink()
+
+
+def _archive_previous_logs(run: MPASRun) -> Path | None:
+    """Move logs from an earlier execution out of the active runtime.
+
+    This runs only immediately before a real qsub. Scientific products are
+    deliberately outside the supported patterns and are never removed here.
+    """
+    raw_patterns = run.config.get("log_patterns", list(_DEFAULT_LOG_PATTERNS))
+    patterns = _require_list(raw_patterns, "mpas.log_patterns")
+    if any(not isinstance(item, str) or not item for item in patterns):
+        raise StageConfigurationError("mpas.log_patterns must contain non-empty strings.")
+    logs = sorted(
+        {
+            path
+            for pattern in patterns
+            for path in run.run_dir.glob(pattern)
+            if path.is_file() or path.is_symlink()
+        }
+    )
+    if not logs:
+        return None
+
+    archive_root = run.run_dir / _STAGE_DIR / "previous-logs"
+    archive = archive_root / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    suffix = 1
+    while archive.exists():
+        archive = archive_root / f"{archive.name}-{suffix}"
+        suffix += 1
+    archive.mkdir(parents=True)
+    for path in logs:
+        shutil.move(str(path), archive / path.name)
+    return archive
 
 
 def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
@@ -343,6 +383,7 @@ def submit_mpas(
     else:
         if not run.pbs_path.is_file():
             raise FileNotFoundError(f"MPAS PBS file not found: {run.pbs_path}")
+        _archive_previous_logs(run)
         process = subprocess.run(
             ["qsub", str(run.pbs_path)],
             cwd=run.run_dir,

@@ -203,6 +203,52 @@ def test_repeated_submit_does_not_create_duplicate_pbs_job(tmp_path: Path, monke
     assert len(calls) == 1
 
 
+def test_new_submission_archives_previous_logs_without_touching_products(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "case"
+    config.mkdir()
+    executable = config / "mpas_atmosphere"
+    executable.write_text("#!/bin/sh\n", encoding="utf-8")
+    (config / "mpas.yaml").write_text(
+        f"""mpas:
+  lead_hours: 1
+  run_dir: {config}/run/{{cycle_id}}
+  links: [{{source: {executable}, target: mpas_atmosphere}}]
+  pbs:
+    queue: test
+    mpiprocs: 1
+    walltime: '00:10:00'
+    command: [./mpas_atmosphere]
+  validation:
+    log: log.atmosphere.0000.out
+    required_log_markers: [done]
+    required_outputs: [mpasout.nc]
+""",
+        encoding="utf-8",
+    )
+    run = prepare_mpas(config, "2018-04-15T00:00:00Z")
+    stale = run.run_dir / "log.atmosphere.0000.err"
+    stale.write_text("CRITICAL ERROR from failed attempt\n", encoding="utf-8")
+    product = run.run_dir / "mpasout.nc"
+    product.write_bytes(b"scientific state")
+
+    class Result:
+        returncode = 0
+        stdout = "456.jaci\n"
+        stderr = ""
+
+    monkeypatch.setattr(
+        "monan_jedi_workflow.mpas_stage.subprocess.run", lambda *args, **kwargs: Result()
+    )
+    assert submit_mpas(config, "2018-04-15T00:00:00Z") == "456.jaci"
+    assert not stale.exists()
+    archives = list((run.run_dir / ".monan-jedi-workflow/previous-logs").glob("*/log.atmosphere.0000.err"))
+    assert len(archives) == 1
+    assert "failed attempt" in archives[0].read_text(encoding="utf-8")
+    assert product.read_bytes() == b"scientific state"
+
+
 def test_jaci_cycling_templates_pin_scientific_forecast_contract() -> None:
     template_dir = REPOSITORY / "examples/simpleworkflow/cycled_da/templates"
     namelist = (template_dir / "namelist.atmosphere.cycling.in").read_text()
