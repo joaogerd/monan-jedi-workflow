@@ -3,7 +3,7 @@
 Este diretório descreve a **DAG de pesquisa**, não um pacote de dados científicos pronto. O objetivo é tornar explícita e pequena a tradução:
 
 ```text
-Obs2IODA -> JEDI analysis -> MPAS forecast -> next cycle
+Obs2IODA -> JEDI FGAT trajectory/analysis -> MPAS forecast -> next cycle
 ```
 
 Os mesmos comandos de domínio podem ser chamados futuramente por ecFlow ou Cylc.
@@ -33,6 +33,10 @@ cp -a examples/simpleworkflow/cycled_da/templates \
 Edite os caminhos marcados nos arquivos de domínio. O wrapper PREPBUFR continua sendo o wrapper compartilhado em `scripts/obs2ioda/`; ele não é duplicado aqui.
 
 O template variacional preserva os três observers do `baseline_passed.yaml`: Radiosonde, GnssroRefNCEP e SfcCorrected. O PREPBUFR convencional fornece Radiosonde/superfície; portanto o exemplo declara o IODA GNSSRO como entrada externa por ciclo. Isso é deliberado: não removemos ciência do baseline só para fazer o exemplo parecer autocontido.
+
+Para x1.10242, o template materializa `config_dt=1200 s` e usa
+`model.tstep=PT20M`. O preflight exige igualdade porque a implementação
+MPAS-JEDI auditada executa um timestep físico por `OOPS Model::step`.
 
 ## Preflight
 

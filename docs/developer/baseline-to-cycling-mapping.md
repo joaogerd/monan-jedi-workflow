@@ -39,7 +39,7 @@ O template não altera:
 - filtros;
 - DRPCG;
 - `ninner: 10`;
-- `tstep: PT45M`.
+- `tstep: PT20M`, igual ao `config_dt=1200 s` do MPAS x1.10242.
 
 ## Observações e uma lacuna importante
 
@@ -49,4 +49,6 @@ Não retire o observer silenciosamente no arquivo de orquestração.
 
 ## Runtime skeleton
 
-O skeleton deve conter arquivos **fixos** necessários à versão atual, como namelists/streams e tabelas, mas não deve embutir arquivos que variam por ciclo e que o stage precisa linkar (background e observações). Isso evita colisões e torna a proveniência clara.
+O skeleton deve conter apenas assets fixos necessários à versão atual. O
+namelist científico x1.10242 é renderizado de fonte versionada; não pode ser
+herdado silenciosamente do testinput MPAS-JEDI de 480 km.

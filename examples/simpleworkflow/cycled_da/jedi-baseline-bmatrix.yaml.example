@@ -31,9 +31,9 @@ jedi:
     target: Data/background/2018041500/mpasout.2018-04-14_21.00.00.nc
 
   # Contrato oficial do MPAS-Workflow (PrepJEDI.csh): o output analysis e
-  # previamente uma copia do estado completo no horario da analise. O writer
+  # inicializado por uma copia do estado completo no horario da analise. O writer
   # MPAS-JEDI, com clobber_mode=overwrite, atualiza somente os campos de DA.
-  analysis_seed:
+  analysis_base_state:
     source: "{baseline_root}/Data/background/2018041500/mpasout.{analysis_mpas_file_time}.nc"
     target: "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"
     template_fields_target: templateFields.10242.nc

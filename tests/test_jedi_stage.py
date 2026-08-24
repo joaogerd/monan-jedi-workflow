@@ -263,7 +263,7 @@ def test_runtime_skeleton_cannot_silently_change(tmp_path: Path) -> None:
         prepare_jedi(config, "2018-04-15T00:00:00Z")
 
 
-def test_analysis_output_is_atomically_preseeded_with_full_state(tmp_path: Path) -> None:
+def test_analysis_output_is_atomically_initialized_with_full_state(tmp_path: Path) -> None:
     config, _ = _case(tmp_path)
     seed = tmp_path / "inputs/full-state.nc"
     with Dataset(seed, "w", format="NETCDF3_64BIT_DATA") as dataset:
@@ -272,7 +272,7 @@ def test_analysis_output_is_atomically_preseeded_with_full_state(tmp_path: Path)
         dataset.createVariable("skintemp", "f4", ("nCells",))[:] = [280.0, 281.0]
 
     data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
-    data["jedi"]["analysis_seed"] = {
+    data["jedi"]["analysis_base_state"] = {
         "source": str(seed),
         "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
         "required_variables": ["rho", "skintemp"],
@@ -289,20 +289,50 @@ def test_analysis_output_is_atomically_preseeded_with_full_state(tmp_path: Path)
     # A second preparation is idempotent and cannot create another submission.
     prepare_jedi(config, "2018-04-15T00:00:00Z")
     manifest = json.loads(
-        (run.run_dir / ".monan-jedi-workflow/analysis-seed.json").read_text()
+        (run.run_dir / ".monan-jedi-workflow/analysis-output-initialization.json").read_text()
     )
-    assert manifest["state"] == "already-seeded"
+    assert manifest["state"] == "already-initialized"
+    assert manifest["mechanism"] == "mpas-workflow-background-copy-overwrite"
     assert manifest["size_bytes"] == seed.stat().st_size
 
 
-def test_analysis_seed_rejects_partial_full_state(tmp_path: Path) -> None:
+def test_analysis_initialization_rejects_divergent_existing_output(
+    tmp_path: Path,
+) -> None:
+    config, _ = _case(tmp_path)
+    source = tmp_path / "inputs/full-state.nc"
+    with Dataset(source, "w", format="NETCDF3_64BIT_DATA") as dataset:
+        dataset.createDimension("nCells", 1)
+        dataset.createVariable("rho", "f4", ("nCells",))[:] = [1.0]
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    data["jedi"]["analysis_base_state"] = {
+        "source": str(source),
+        "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
+        "required_variables": ["rho"],
+    }
+    (config / "jedi.yaml").write_text(
+        yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
+    )
+    target = (
+        tmp_path
+        / "work/jedi/20180415T000000Z/Data/states/analysis.2018-04-15_00.00.00.nc"
+    )
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"divergent analysis")
+    with pytest.raises(FileExistsError, match="full analysis-time background"):
+        prepare_jedi(config, "2018-04-15T00:00:00Z")
+    assert target.read_bytes() == b"divergent analysis"
+    assert not target.with_name(target.name + ".analysis-init.tmp").exists()
+
+
+def test_analysis_base_state_rejects_partial_full_state(tmp_path: Path) -> None:
     config, _ = _case(tmp_path)
     seed = tmp_path / "inputs/partial.nc"
     with Dataset(seed, "w") as dataset:
         dataset.createDimension("nCells", 1)
         dataset.createVariable("rho", "f4", ("nCells",))
     data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
-    data["jedi"]["analysis_seed"] = {
+    data["jedi"]["analysis_base_state"] = {
         "source": str(seed),
         "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
         "required_variables": ["rho", "skintemp"],
@@ -313,7 +343,49 @@ def test_analysis_seed_rejects_partial_full_state(tmp_path: Path) -> None:
         prepare_jedi(config, "2018-04-15T00:00:00Z")
 
 
-def test_analysis_seed_accepts_subsequent_full_state_with_extra_refl10cm(
+def test_legacy_analysis_seed_alias_warns_and_initializes(tmp_path: Path) -> None:
+    config, _ = _case(tmp_path)
+    source = tmp_path / "inputs/legacy-full-state.nc"
+    with Dataset(source, "w", format="NETCDF3_64BIT_DATA") as dataset:
+        dataset.createDimension("nCells", 1)
+        dataset.createVariable("rho", "f4", ("nCells",))[:] = [1.0]
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    data["jedi"]["analysis_seed"] = {
+        "source": str(source),
+        "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
+        "required_variables": ["rho"],
+    }
+    (config / "jedi.yaml").write_text(
+        yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
+    )
+    with pytest.warns(DeprecationWarning, match="analysis_seed is deprecated"):
+        run = prepare_jedi(config, "2018-04-15T00:00:00Z")
+    assert (
+        run.run_dir
+        / ".monan-jedi-workflow/analysis-output-initialization.json"
+    ).is_file()
+
+
+def test_analysis_base_state_and_legacy_alias_are_mutually_exclusive(
+    tmp_path: Path,
+) -> None:
+    config, _ = _case(tmp_path)
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    value = {
+        "source": "/not/read/because/config-is-invalid.nc",
+        "target": "analysis.nc",
+        "required_variables": ["rho"],
+    }
+    data["jedi"]["analysis_base_state"] = value
+    data["jedi"]["analysis_seed"] = value
+    (config / "jedi.yaml").write_text(
+        yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
+    )
+    with pytest.raises(StageConfigurationError, match="cannot both be specified"):
+        prepare_jedi(config, "2018-04-15T00:00:00Z")
+
+
+def test_analysis_base_state_accepts_subsequent_full_state_with_extra_refl10cm(
     tmp_path: Path,
 ) -> None:
     config, forecast = _case(tmp_path)
@@ -330,7 +402,7 @@ def test_analysis_seed_accepts_subsequent_full_state_with_extra_refl10cm(
         dataset.createVariable("refl10cm", "f4", ("nCells",))[:] = [0.0]
 
     data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
-    data["jedi"]["analysis_seed"] = {
+    data["jedi"]["analysis_base_state"] = {
         "source": str(seed),
         "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
         "required_variables": ["rho", "skintemp"],
@@ -339,14 +411,14 @@ def test_analysis_seed_accepts_subsequent_full_state_with_extra_refl10cm(
 
     run = prepare_jedi(config, "2018-04-15T06:00:00Z")
     manifest = json.loads(
-        (run.run_dir / ".monan-jedi-workflow/analysis-seed.json").read_text()
+        (run.run_dir / ".monan-jedi-workflow/analysis-output-initialization.json").read_text()
     )
     assert manifest["variable_count"] == 63
     with Dataset(manifest["target"]) as output:
         assert "refl10cm" in output.variables
 
 
-def test_prepare_links_template_fields_to_cycle_analysis_seed(
+def test_prepare_links_template_fields_to_cycle_analysis_base_state(
     tmp_path: Path,
 ) -> None:
     config, forecast = _case(tmp_path)
@@ -368,7 +440,7 @@ def test_prepare_links_template_fields_to_cycle_analysis_seed(
     skeleton = Path(data["jedi"]["runtime"]["skeleton"])
     stale = skeleton / "templateFields.10242.nc"
     stale.write_text("stale 00Z template", encoding="utf-8")
-    data["jedi"]["analysis_seed"] = {
+    data["jedi"]["analysis_base_state"] = {
         "source": (
             "{forecast_root}/{previous_cycle_id}/"
             "mpasout.{analysis_mpas_file_time}.nc"
@@ -389,12 +461,12 @@ def test_prepare_links_template_fields_to_cycle_analysis_seed(
         value = str(dataset.variables["xtime"][:].tobytes(), "ascii").strip("\0 ")
     assert value == "2018-04-15_06:00:00"
     manifest = json.loads(
-        (run.run_dir / ".monan-jedi-workflow/analysis-seed.json").read_text()
+        (run.run_dir / ".monan-jedi-workflow/analysis-output-initialization.json").read_text()
     )
     assert manifest["template_fields"]["xtime"] == "2018-04-15_06:00:00"
 
     prepare_jedi(config, "2018-04-15T06:00:00Z")
     manifest = json.loads(
-        (run.run_dir / ".monan-jedi-workflow/analysis-seed.json").read_text()
+        (run.run_dir / ".monan-jedi-workflow/analysis-output-initialization.json").read_text()
     )
     assert manifest["template_fields"]["state"] == "already-linked"

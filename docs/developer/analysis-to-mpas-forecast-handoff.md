@@ -35,22 +35,22 @@ manager; `clobber_mode=overwrite` permite sobrescrever registros, enquanto
 somente `truncate` trunca o arquivo (`mpas_stream_manager.F:3158-3177`). Assim,
 os campos fora do stream de análise permanecem no arquivo.
 
-Esta branch representa o mesmo mecanismo com `jedi.analysis_seed`. O preparo:
+Esta branch representa o mesmo mecanismo com `jedi.analysis_base_state`. O preparo:
 
-1. valida que o seed contém os campos completos declarados;
+1. valida que o estado-base contém os campos completos declarados;
 2. copia para arquivo temporário e faz `replace` atômico;
 3. recusa sobrescrever um output divergente;
-4. registra `.monan-jedi-workflow/analysis-seed.json`;
-5. é idempotente quando o seed já está materializado.
+4. registra `.monan-jedi-workflow/analysis-output-initialization.json`;
+5. é idempotente quando o output já está inicializado.
 
 A completude é definida pelo conjunto declarado de campos obrigatórios, não
 por uma contagem fixa. Assim, um `da_state` de ciclo posterior que acrescente
-um diagnóstico legítimo como `refl10cm` continua sendo uma seed válida.
+um diagnóstico legítimo como `refl10cm` continua sendo um estado-base válido.
 
 O ciclo 2018-04-15 00Z foi reexecutado com esse contrato no job JACI
 `369654.pbs-ha`. O output definitivo contém 62 variáveis: as 13 variáveis de DA
 são exatamente iguais à análise parcial validada e as outras 49 são exatamente
-iguais à seed. Os 62 valores armazenados também são exatamente equivalentes à
+iguais ao estado-base. Os 62 valores armazenados também são exatamente equivalentes à
 prova de conceito anterior. O workflow não introduz merge NetCDF pós-JEDI.
 
 ## Streams
@@ -61,7 +61,7 @@ prova de conceito anterior. O workflow não introduz merge NetCDF pós-JEDI.
 - `background`: visão de campos necessária para leitura/escrita de estados
   background pelo MPAS-JEDI; não substitui o IC standalone.
 - `analysis`: subconjunto escrito pela variacional no arquivo previamente
-  semeado.
+  inicializado a partir do estado MPAS completo no horário da análise.
 - `da_state`/`dastate`: estado de modelo publicado pelo forecast para DA. O
   caso JACI validado usa o immutable stream `da_state` com package `jedi_da`;
   o NCAR workflow também mostra uma variante configurável `dastate` com
@@ -83,5 +83,5 @@ Produtos obrigatórios:
 - `mpasout.2018-04-15_03.00.00.nc`;
 - `mpasout.2018-04-15_06.00.00.nc`.
 
-O primeiro é o background t−3 da análise 06Z; o segundo é o estado completo no
+O primeiro inicializa a trajetória FGAT 03Z–09Z da análise 06Z; o segundo é o estado completo no
 horário da análise seguinte. Nenhum deles é substituído por um restart.

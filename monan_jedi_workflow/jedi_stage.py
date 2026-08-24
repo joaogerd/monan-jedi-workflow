@@ -62,6 +62,7 @@ import shlex
 import shutil
 import subprocess
 import time
+import warnings
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -84,7 +85,7 @@ _SUBMISSION_NAME = "jedi-submission.json"
 _VALIDATION_NAME = "jedi-validation.json"
 _ARTIFACTS_NAME = "jedi-artifacts.json"
 _SKELETON_NAME = "skeleton.json"
-_ANALYSIS_SEED_NAME = "analysis-seed.json"
+_ANALYSIS_INITIALIZATION_NAME = "analysis-output-initialization.json"
 
 
 def _duration_seconds(value: str, label: str) -> int:
@@ -430,7 +431,7 @@ def _link_cycle_template_fields(
     run: JEDIRun,
     *,
     source: Path,
-    seed: dict[str, Any],
+    base_state: dict[str, Any],
     xtimes: list[str],
 ) -> dict[str, Any] | None:
     """Make MPAS ``templateFields`` resolve to the full state at analysis time.
@@ -438,10 +439,10 @@ def _link_cycle_template_fields(
     ``templateFields`` is an MPAS auxiliary initial state, not a cycle-neutral
     static asset.  A runtime skeleton may contain a regular file from the
     reference cycle, so an explicitly declared target is atomically replaced
-    by a symlink to the validated full-state analysis seed.  The seed itself is
-    never modified.
+    by a symlink to the validated full analysis-time background state.  The
+    source state itself is never modified.
     """
-    raw_target = seed.get("template_fields_target")
+    raw_target = base_state.get("template_fields_target")
     if raw_target is None:
         return None
 
@@ -449,16 +450,16 @@ def _link_cycle_template_fields(
     if expected_xtime not in xtimes:
         found = ", ".join(xtimes) if xtimes else "none"
         raise StageConfigurationError(
-            "JEDI templateFields seed does not contain analysis_time "
+            "JEDI templateFields base state does not contain analysis_time "
             f"{expected_xtime}; found: {found}."
         )
 
     target_text = render_text(
         _require_string(
-            raw_target, "jedi.analysis_seed.template_fields_target"
+            raw_target, "jedi.analysis_base_state.template_fields_target"
         ),
         run.context,
-        label="jedi.analysis_seed.template_fields_target",
+        label="jedi.analysis_base_state.template_fields_target",
     )
     target = Path(target_text)
     if not target.is_absolute():
@@ -486,43 +487,69 @@ def _link_cycle_template_fields(
     }
 
 
-def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
-    """Pre-seed JEDI's analysis output with a complete MPAS state.
+def _analysis_base_state_config(run: JEDIRun) -> dict[str, Any] | None:
+    """Return the canonical base-state config, accepting one legacy alias."""
+    canonical = run.config.get("analysis_base_state")
+    legacy = run.config.get("analysis_seed")
+    if canonical is not None and legacy is not None:
+        raise StageConfigurationError(
+            "jedi.analysis_base_state and deprecated jedi.analysis_seed "
+            "cannot both be specified."
+        )
+    if canonical is not None:
+        return _require_mapping(canonical, "jedi.analysis_base_state")
+    if legacy is not None:
+        warnings.warn(
+            "jedi.analysis_seed is deprecated; use jedi.analysis_base_state.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return _require_mapping(legacy, "jedi.analysis_seed")
+    return None
+
+
+def _initialize_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
+    """Initialize JEDI's analysis output from a complete MPAS base state.
 
     MPAS-Workflow's ``PrepJEDI.csh`` uses this exact contract: copy the full
     background to the final analysis filename before MPAS-JEDI writes the
     partial ``analysis`` stream with ``clobber_mode=overwrite``.  This is not a
     post-processing merge; MPAS I/O updates the selected DA fields in place.
     """
-    raw = run.config.get("analysis_seed")
-    if raw is None:
+    base_state = _analysis_base_state_config(run)
+    if base_state is None:
         return None
-    seed = _require_mapping(raw, "jedi.analysis_seed")
     source = resolve_path(
-        _require_string(seed.get("source"), "jedi.analysis_seed.source"),
+        _require_string(
+            base_state.get("source"), "jedi.analysis_base_state.source"
+        ),
         config_dir=run.config_dir,
         context=run.context,
-        label="jedi.analysis_seed.source",
+        label="jedi.analysis_base_state.source",
     )
     if not source.is_file():
-        raise FileNotFoundError(f"JEDI full-state analysis seed does not exist: {source}")
+        raise FileNotFoundError(
+            f"JEDI full analysis-time background state does not exist: {source}"
+        )
     target_text = render_text(
-        _require_string(seed.get("target"), "jedi.analysis_seed.target"),
+        _require_string(
+            base_state.get("target"), "jedi.analysis_base_state.target"
+        ),
         run.context,
-        label="jedi.analysis_seed.target",
+        label="jedi.analysis_base_state.target",
     )
     target = Path(target_text)
     if not target.is_absolute():
         target = run.run_dir / target
 
     required = _require_list(
-        seed.get("required_variables", []),
-        "jedi.analysis_seed.required_variables",
+        base_state.get("required_variables", []),
+        "jedi.analysis_base_state.required_variables",
         non_empty=True,
     )
     if any(not isinstance(name, str) or not name for name in required):
         raise StageConfigurationError(
-            "jedi.analysis_seed.required_variables must contain non-empty strings."
+            "jedi.analysis_base_state.required_variables must contain non-empty strings."
         )
     try:
         from netCDF4 import Dataset
@@ -537,23 +564,23 @@ def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
                 xtimes = [str(value).strip() for value in values.flat]
     except Exception as error:
         raise StageConfigurationError(
-            f"Cannot inspect JEDI full-state analysis seed {source}: {error}"
+            f"Cannot inspect JEDI full analysis-time background state {source}: {error}"
         ) from error
     missing = sorted(set(required) - variables)
     if missing:
         raise StageConfigurationError(
-            "JEDI analysis seed is not a complete declared MPAS state; missing: "
+            "JEDI analysis base state is not a complete declared MPAS state; missing: "
             + ", ".join(missing)
         )
-    expected_count = seed.get("expected_variable_count")
+    expected_count = base_state.get("expected_variable_count")
     if expected_count is not None and len(variables) != int(expected_count):
         raise StageConfigurationError(
-            "JEDI analysis seed variable count mismatch: "
+            "JEDI analysis base state variable count mismatch: "
             f"found {len(variables)}, expected {int(expected_count)}."
         )
 
     template_fields = _link_cycle_template_fields(
-        run, source=source, seed=seed, xtimes=xtimes
+        run, source=source, base_state=base_state, xtimes=xtimes
     )
 
     source_digest = _sha256(source)
@@ -563,17 +590,17 @@ def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
         if not target.is_file() or _sha256(target) != source_digest:
             raise FileExistsError(
                 "JEDI stage refuses to overwrite an existing analysis output that "
-                f"differs from its full-state seed: {target}"
+                f"differs from its full analysis-time background state: {target}"
             )
-        state = "already-seeded"
+        state = "already-initialized"
     else:
-        temporary = target.with_name(target.name + ".seed.tmp")
+        temporary = target.with_name(target.name + ".analysis-init.tmp")
         shutil.copyfile(source, temporary)
         temporary.replace(target)
 
     manifest = {
         "schema_version": 1,
-        "mechanism": "mpas-workflow-preseed-overwrite",
+        "mechanism": "mpas-workflow-background-copy-overwrite",
         "source": str(source),
         "target": str(target),
         "sha256": source_digest,
@@ -586,7 +613,9 @@ def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
     }
     if template_fields is not None:
         manifest["template_fields"] = template_fields
-    _write_json(run.run_dir / _STAGE_DIR / _ANALYSIS_SEED_NAME, manifest)
+    _write_json(
+        run.run_dir / _STAGE_DIR / _ANALYSIS_INITIALIZATION_NAME, manifest
+    )
     return manifest
 
 
@@ -825,7 +854,7 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
         _render_template(source, target, run.context)
 
     trajectory_time = _validate_nonlinear_trajectory_time(run)
-    analysis_seed = _seed_analysis_output(run)
+    analysis_base_state = _initialize_analysis_output(run)
 
     _render_pbs(run)
     _write_json(
@@ -840,7 +869,7 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
             "pbs_file": str(run.pbs_path),
             "background_source": str(background_source),
             "background_target": str(background_target),
-            "analysis_seed": analysis_seed,
+            "analysis_base_state": analysis_base_state,
             "nonlinear_trajectory_time": trajectory_time,
             "state": "prepared",
         },

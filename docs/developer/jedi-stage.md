@@ -49,9 +49,9 @@ Essa proteção existe porque arquivos relativos do MPAS/JEDI (streams, tabelas,
 ## Estados auxiliares dependentes do ciclo
 
 Quando o MPAS-JEDI usa `templateFields.*.nc`, configure
-`jedi.analysis_seed.template_fields_target`. O stage valida que a seed completa
-contém o `xtime` do `analysis_time` e materializa o target como link para essa
-mesma seed. Isso substitui de forma atômica um `templateFields` obsoleto que
+`jedi.analysis_base_state.template_fields_target`. O stage valida que o estado
+MPAS completo contém o `xtime` do `analysis_time` e materializa o target como
+link para esse estado. Isso substitui de forma atômica um `templateFields` obsoleto que
 tenha vindo do skeleton e torna uma segunda preparação idempotente.
 
 Os arquivos científicos da B continuam externos e estáticos. O horário lógico
@@ -76,6 +76,7 @@ Arquivos internos ficam em:
 
 ```text
 RUN/.monan-jedi-workflow/
+  analysis-output-initialization.json
   jedi-submission.json
   jedi-validation.json
   jedi-artifacts.json
@@ -99,6 +100,7 @@ O estágio falha cedo quando:
 - uma entrada não existe;
 - um target real seria sobrescrito;
 - um placeholder é desconhecido;
+- `model.tstep` lógico difere do `config_dt` físico do outer MPAS;
 - o skeleton mudou para um runtime já preparado;
 - `qsub` não retorna Job ID;
 - o log não possui os marcadores requeridos;

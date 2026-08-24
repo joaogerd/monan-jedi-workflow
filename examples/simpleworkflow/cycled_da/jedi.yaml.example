@@ -32,10 +32,10 @@ jedi:
     source: "work/mpas/{previous_cycle_id}/history/mpasout.{background_mpas_file_time}.nc"
     target: "background/mpasout.{background_mpas_file_time}.nc"
 
-  # A mesma seed completa alimenta o output pre-semeado e o templateFields
-  # auxiliar do MPAS no horario da analise. Nao deixe templateFields no
-  # skeleton, pois ele varia a cada ciclo.
-  analysis_seed:
+  # O estado MPAS completo no horario da analise inicializa o output e alimenta
+  # o templateFields auxiliar. Nao deixe templateFields no skeleton, pois ele
+  # varia a cada ciclo.
+  analysis_base_state:
     source: "work/mpas/{previous_cycle_id}/history/mpasout.{analysis_mpas_file_time}.nc"
     target: "Data/states/mpas.3dfgat.{analysis_mpas_file_time}.nc"
     template_fields_target: templateFields.10242.nc

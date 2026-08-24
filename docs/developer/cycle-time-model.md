@@ -11,7 +11,7 @@ analysis(t)
    |
    | background_offset = -3 h
    v
-background(t-3h) ---- FGAT window ----> t+3h
+FGAT initial state(t-3h) -- xb(t) trajectory --> t+3h
    |
    +-- JEDI produz analysis(t)
                    |
@@ -22,9 +22,9 @@ Se o passo entre análises é 6 h:
 
 ```text
 analysis                2018-04-15 00Z
-background              2018-04-14 21Z
+FGAT initial state      2018-04-14 21Z
 next analysis           2018-04-15 06Z
-next background         2018-04-15 03Z
+next FGAT initial state 2018-04-15 03Z
 previous analysis       2018-04-14 18Z
 ```
 
@@ -65,6 +65,11 @@ Cada grupo possui representações ISO, `YYYYMMDDHH` e formatos MPAS com `:` ou 
 5. `background = analysis + background_offset_hours`.
 6. `next_background = next_cycle + background_offset_hours`.
 7. O orquestrador não deve repetir essa aritmética.
+
+O estado em T−3 inicializa, mas não representa sozinho, o background do
+3D-FGAT. O background é a trajetória `xb(t)` integrada pelo MPAS dentro do
+OOPS entre T−3 e T+3. Consulte
+[3D-FGAT background trajectory](3dfgat-background-trajectory.md).
 
 ## FGAT e versões antigas
 

@@ -112,3 +112,14 @@ def test_x1_10242_jedi_namelist_has_validated_scientific_parameters() -> None:
     assert "config_horiz_mixing = '2d_smagorinsky'" in content
     assert "config_visc4_2dsmag = 0.05" in content
     assert "namelists/480km" not in content
+
+
+def test_public_cycling_examples_use_analysis_base_state_terminology() -> None:
+    root = Path(__file__).resolve().parents[1]
+    for name in ("jedi.yaml.example", "jedi-baseline-bmatrix.yaml.example"):
+        content = (
+            root / "examples/simpleworkflow/cycled_da" / name
+        ).read_text(encoding="utf-8")
+        assert "analysis_base_state:" in content
+        assert "analysis_seed:" not in content
+        assert "pre-seed" not in content.lower()

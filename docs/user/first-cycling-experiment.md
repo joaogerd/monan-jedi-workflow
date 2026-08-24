@@ -21,7 +21,7 @@ FASE 3  forecast
         analysis -> MPAS -> background da proxima analise
 
 FASE 4  handoff
-        analise 00Z -> forecast -> background 03Z -> analise 06Z
+        analise 00Z -> forecast -> estado inicial FGAT 03Z -> analise 06Z
 
 FASE 5  orquestracao
         reproduzir exatamente a mesma sequencia com simpleWorkflow
@@ -117,7 +117,9 @@ para reproduzir as contagens do tutorial.
 
 Somente depois das observacoes estarem comprovadas, configure `mpas.yaml` para iniciar a previsao a partir da analise validada.
 
-O objetivo desta fase e responder empiricamente qual configuracao MPAS produz o estado correto de 03Z que sera usado como background da analise 06Z.
+O objetivo desta fase e responder empiricamente qual configuracao MPAS produz
+o estado correto de 03Z que inicializara a trajetória FGAT 03Z–09Z da análise
+06Z.
 
 Nao assuma que `lead_hours: 3` esta cientificamente validado apenas porque aparece no exemplo. Preserve o comportamento do forecast conhecido e valide o produto.
 
@@ -128,11 +130,13 @@ Antes do `simpleWorkflow`, prove diretamente:
 ```text
 JEDI 2018041500
   -> MPAS iniciado pela analise 00Z
-     -> background valido em 03Z
+     -> estado inicial FGAT valido em 03Z
         -> JEDI 2018041506
 ```
 
-O ponto critico e verificar fisicamente que o `jedi-prepare` de 06Z aponta para o produto de 03Z gerado pelo forecast de 00Z.
+O ponto critico e verificar fisicamente que o `jedi-prepare` de 06Z usa o
+produto de 03Z do forecast como estado inicial da trajetória, não como um
+background estático aplicado a todas as observações.
 
 ## 6. Fase 5: use simpleWorkflow
 

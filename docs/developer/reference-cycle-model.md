@@ -14,7 +14,7 @@ Obs2IODA / validated IODA
        |
        +------------------+
                           |
-background for t ---------+--> MPAS-JEDI analysis(t)
+FGAT initial state t-3 ----+--> MPAS-JEDI xb(t) trajectory --> analysis(t)
                                 |
                                 v
                            analysis(t)
@@ -34,7 +34,8 @@ A implementação atual deve conseguir identificar explicitamente:
 
 - executável JEDI;
 - executável MPAS;
-- background;
+- estado inicial da trajetória FGAT;
+- estado-base completo no horário da análise;
 - análise;
 - observações IODA;
 - matriz B;
