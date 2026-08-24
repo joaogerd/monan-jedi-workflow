@@ -46,6 +46,20 @@ Essa proteção existe porque arquivos relativos do MPAS/JEDI (streams, tabelas,
 
 `templates` usa somente `str.format` com o contexto declarado. Não há `eval`, expansão shell ou execução de comandos durante renderização.
 
+## Estados auxiliares dependentes do ciclo
+
+Quando o MPAS-JEDI usa `templateFields.*.nc`, configure
+`jedi.analysis_seed.template_fields_target`. O stage valida que a seed completa
+contém o `xtime` do `analysis_time` e materializa o target como link para essa
+mesma seed. Isso substitui de forma atômica um `templateFields` obsoleto que
+tenha vindo do skeleton e torna uma segunda preparação idempotente.
+
+Os arquivos científicos da B continuam externos e estáticos. O horário lógico
+de um State que lê HDIAG é outra coisa: o campo `date` do YAML deve usar
+`{analysis_time}` para que o `validTime` do FieldSet coincida com o incremento
+do ciclo. Não copie, renomeie nem regenere `mpas.stddev.nc` por causa desse
+metadado lógico.
+
 ## PBS
 
 `prepare` apenas escreve o PBS. `submit` é a primeira operação com efeito no scheduler.

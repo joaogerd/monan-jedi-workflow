@@ -339,6 +339,66 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _link_cycle_template_fields(
+    run: JEDIRun,
+    *,
+    source: Path,
+    seed: dict[str, Any],
+    xtimes: list[str],
+) -> dict[str, Any] | None:
+    """Make MPAS ``templateFields`` resolve to the full state at analysis time.
+
+    ``templateFields`` is an MPAS auxiliary initial state, not a cycle-neutral
+    static asset.  A runtime skeleton may contain a regular file from the
+    reference cycle, so an explicitly declared target is atomically replaced
+    by a symlink to the validated full-state analysis seed.  The seed itself is
+    never modified.
+    """
+    raw_target = seed.get("template_fields_target")
+    if raw_target is None:
+        return None
+
+    expected_xtime = run.context["analysis_mpas_time"]
+    if expected_xtime not in xtimes:
+        found = ", ".join(xtimes) if xtimes else "none"
+        raise StageConfigurationError(
+            "JEDI templateFields seed does not contain analysis_time "
+            f"{expected_xtime}; found: {found}."
+        )
+
+    target_text = render_text(
+        _require_string(
+            raw_target, "jedi.analysis_seed.template_fields_target"
+        ),
+        run.context,
+        label="jedi.analysis_seed.template_fields_target",
+    )
+    target = Path(target_text)
+    if not target.is_absolute():
+        target = run.run_dir / target
+    if target.exists() and target.is_dir():
+        raise IsADirectoryError(
+            f"JEDI templateFields target is a directory: {target}"
+        )
+    if target.is_symlink() and target.resolve() == source.resolve():
+        state = "already-linked"
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(target.name + ".link.tmp")
+        if temporary.exists() or temporary.is_symlink():
+            temporary.unlink()
+        temporary.symlink_to(source)
+        temporary.replace(target)
+        state = "linked"
+
+    return {
+        "source": str(source),
+        "target": str(target),
+        "xtime": expected_xtime,
+        "state": state,
+    }
+
+
 def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
     """Pre-seed JEDI's analysis output with a complete MPAS state.
 
@@ -382,6 +442,12 @@ def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
         with Dataset(source, "r") as dataset:
             variables = set(dataset.variables)
             data_model = dataset.data_model
+            xtimes: list[str] = []
+            if "xtime" in dataset.variables:
+                from netCDF4 import chartostring
+
+                values = chartostring(dataset.variables["xtime"][:])
+                xtimes = [str(value).strip() for value in values.flat]
     except Exception as error:
         raise StageConfigurationError(
             f"Cannot inspect JEDI full-state analysis seed {source}: {error}"
@@ -398,6 +464,10 @@ def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
             "JEDI analysis seed variable count mismatch: "
             f"found {len(variables)}, expected {int(expected_count)}."
         )
+
+    template_fields = _link_cycle_template_fields(
+        run, source=source, seed=seed, xtimes=xtimes
+    )
 
     source_digest = _sha256(source)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -427,6 +497,8 @@ def _seed_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
         "state": state,
         "prepared_at": _timestamp(),
     }
+    if template_fields is not None:
+        manifest["template_fields"] = template_fields
     _write_json(run.run_dir / _STAGE_DIR / _ANALYSIS_SEED_NAME, manifest)
     return manifest
 

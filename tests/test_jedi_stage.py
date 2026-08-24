@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 import yaml
-from netCDF4 import Dataset
+from netCDF4 import Dataset, stringtochar
 
 from monan_jedi_workflow.jedi_stage import (
     JEDIValidationError,
@@ -265,3 +266,57 @@ def test_analysis_seed_accepts_subsequent_full_state_with_extra_refl10cm(
     assert manifest["variable_count"] == 63
     with Dataset(manifest["target"]) as output:
         assert "refl10cm" in output.variables
+
+
+def test_prepare_links_template_fields_to_cycle_analysis_seed(
+    tmp_path: Path,
+) -> None:
+    config, forecast = _case(tmp_path)
+    background = forecast / "20180415T000000Z/mpasout.2018-04-15_03.00.00.nc"
+    background.parent.mkdir(parents=True)
+    background.write_bytes(b"background")
+    seed = forecast / "20180415T000000Z/mpasout.2018-04-15_06.00.00.nc"
+    with Dataset(seed, "w", format="NETCDF3_64BIT_DATA") as dataset:
+        dataset.createDimension("Time", 1)
+        dataset.createDimension("StrLen", 64)
+        dataset.createDimension("nCells", 1)
+        dataset.createVariable("xtime", "S1", ("Time", "StrLen"))[:] = (
+            stringtochar(np.asarray(["2018-04-15_06:00:00"], dtype="S64"))
+        )
+        dataset.createVariable("rho", "f4", ("nCells",))[:] = [1.0]
+        dataset.createVariable("skintemp", "f4", ("nCells",))[:] = [280.0]
+
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    skeleton = Path(data["jedi"]["runtime"]["skeleton"])
+    stale = skeleton / "templateFields.10242.nc"
+    stale.write_text("stale 00Z template", encoding="utf-8")
+    data["jedi"]["analysis_seed"] = {
+        "source": (
+            "{forecast_root}/{previous_cycle_id}/"
+            "mpasout.{analysis_mpas_file_time}.nc"
+        ),
+        "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
+        "template_fields_target": "templateFields.10242.nc",
+        "required_variables": ["rho", "skintemp"],
+    }
+    (config / "jedi.yaml").write_text(
+        yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
+    )
+
+    run = prepare_jedi(config, "2018-04-15T06:00:00Z")
+    template_fields = run.run_dir / "templateFields.10242.nc"
+    assert template_fields.is_symlink()
+    assert template_fields.resolve() == seed.resolve()
+    with Dataset(template_fields) as dataset:
+        value = str(dataset.variables["xtime"][:].tobytes(), "ascii").strip("\0 ")
+    assert value == "2018-04-15_06:00:00"
+    manifest = json.loads(
+        (run.run_dir / ".monan-jedi-workflow/analysis-seed.json").read_text()
+    )
+    assert manifest["template_fields"]["xtime"] == "2018-04-15_06:00:00"
+
+    prepare_jedi(config, "2018-04-15T06:00:00Z")
+    manifest = json.loads(
+        (run.run_dir / ".monan-jedi-workflow/analysis-seed.json").read_text()
+    )
+    assert manifest["template_fields"]["state"] == "already-linked"

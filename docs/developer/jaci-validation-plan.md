@@ -144,6 +144,17 @@ de Radiosonde, 68.951 de GnssroRefNCEP e 138.449 de SfcCorrected. O forecast
 seguinte, 06Z-12Z, ainda não faz parte desta evidência;
 portanto a ciclagem multi-ciclo completa continua pendente.
 
+Os jobs que estabeleceram esses contratos foram:
+
+- `388036.pbs-ha`: falhou porque `templateFields.10242.nc` ainda representava
+  00Z;
+- `388048.pbs-ha`: falhou porque o HDIAG estático foi declarado com
+  `validTime` lógico 00Z;
+- `388054.pbs-ha`: terminou com status zero depois de corrigir os dois horários.
+
+As duas primeiras falhas eram de materialização temporal do runtime, não
+falhas científicas da B.
+
 ## Fase 5 — reproduzir os dois ciclos com simpleWorkflow
 
 Somente depois das chamadas manuais funcionarem:

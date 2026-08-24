@@ -54,7 +54,9 @@ cost function:
     date: '{background_time}'
   background error:
     covariance model: MPASstatic
-    date: '{background_time}'
+    # The covariance files are static, but their logical FieldSet validTime
+    # must match the analysis increment for every cycle.
+    date: '{analysis_time}'
   observations:
     observers:
     - obs space:
