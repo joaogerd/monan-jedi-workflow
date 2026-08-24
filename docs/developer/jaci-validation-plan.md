@@ -116,7 +116,33 @@ Esse é o teste mais importante do handoff.
 
 Confirmar que o background link do ciclo 06Z aponta para o produto 03Z da previsão inicializada pela análise 00Z, e não para um arquivo externo ou background antigo.
 
+O runtime MPAS também possui dois contratos temporais que precisam acompanhar
+o novo ciclo:
+
+- `templateFields.*.nc` deve resolver para um estado MPAS cujo `xtime` seja o
+  horário inicial da geometria. Ele não é um arquivo estático reutilizável de
+  outro ciclo;
+- a data declarada para o arquivo HDIAG no YAML deve ser o horário da análise,
+  embora o conteúdo da B continue estático e não seja regenerado. Uma data
+  lógica antiga produz incompatibilidade entre os `validTime` dos FieldSets.
+
 Depois executar/validar JEDI e forecast do ciclo 06Z.
+
+### Evidência da campanha 2018041506
+
+Em 2026-08-24, a sequência validada chegou a:
+
+```text
+JEDI 00Z -> análise completa 00Z -> MPAS 00Z-06Z
+         -> Obs2IODA operacional 06Z -> JEDI 06Z
+```
+
+O JEDI 06Z terminou com status OOPS zero usando 128 ranks e preservou
+exatamente as 50 variáveis fora do stream `analysis`. O conjunto operacional
+processado foi maior que o tutorial: os ObsSpaces carregaram 2.682 locations
+de Radiosonde, 68.951 de GnssroRefNCEP e 138.449 de SfcCorrected. O forecast
+seguinte, 06Z-12Z, ainda não faz parte desta evidência;
+portanto a ciclagem multi-ciclo completa continua pendente.
 
 ## Fase 5 — reproduzir os dois ciclos com simpleWorkflow
 
