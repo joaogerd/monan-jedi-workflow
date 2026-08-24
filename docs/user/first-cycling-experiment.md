@@ -99,6 +99,20 @@ monan-jedi-workflow obs2ioda-validate CASE --cycle 2018-04-15T00:00:00Z
 
 Depois repita a analise JEDI e compare com a Fase 1.
 
+### Baseline observacional operacional
+
+A validacao do pipeline Obs2IODA compara, em 00Z, as observacoes comuns aos
+produtos do tutorial. Isso valida a conversao, mas nao torna os arquivos GDEX
+identicos ao conjunto reduzido do tutorial (974 locations de sondes, 282 de
+superficie e 20 de GNSSRO).
+
+Os produtos GDEX preservam uma colecao operacional mais completa. Para 06Z,
+eles contem 2.682 locations de sondes, 154.574 de superficie e 69.198 de
+GNSSRO. Esse ciclo estabelece portanto um novo baseline observacional
+operacional. Comparacoes numericas da analise 06Z nao sao uma regressao contra
+a analise tutorial 00Z, e os arquivos nao devem ser artificialmente reduzidos
+para reproduzir as contagens do tutorial.
+
 ## 4. Fase 3: conecte o forecast MPAS
 
 Somente depois das observacoes estarem comprovadas, configure `mpas.yaml` para iniciar a previsao a partir da analise validada.
