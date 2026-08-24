@@ -68,6 +68,7 @@ def test_prepare_mpas_stages_links_templates_and_pbs(tmp_path: Path) -> None:
     assert "2018-04-15_06:00:00" in (run.run_dir / "streams.atmosphere").read_text()
     pbs = run.pbs_path.read_text()
     assert "#PBS -q pesqmini" in pbs
+    assert pbs.count("#PBS -l place=excl") == 1
     assert "mpiexec -n 2 ./mpas_atmosphere" in pbs
 
 
@@ -155,6 +156,9 @@ def test_cycling_contract_renders_128_rank_6h_forecast_and_both_da_states(tmp_pa
     )
     run = prepare_mpas(config, "2018-04-15T00:00:00Z")
     pbs = run.pbs_path.read_text()
+    assert "#PBS -q pesqmidi" in pbs
+    assert "#PBS -l select=1:ncpus=128:mpiprocs=128" in pbs
+    assert pbs.count("#PBS -l place=excl") == 1
     assert "source /path/load_jaci_env.sh" in pbs
     assert "mpiexec -n 128 ./mpas_atmosphere" in pbs
     assert (run.run_dir / "RRTMG_LW_DATA").is_symlink()

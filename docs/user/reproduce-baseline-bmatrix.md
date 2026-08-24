@@ -126,6 +126,7 @@ Antes da submissao, o PBS deve mostrar explicitamente:
 
 ```text
 #PBS -l select=1:ncpus=128:mpiprocs=128
+#PBS -l place=excl
 ...
 mpiexec -n 128 ... mpasjedi_variational.x 3dfgat.bmatrix.yaml
 ```

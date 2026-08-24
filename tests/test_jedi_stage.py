@@ -105,6 +105,10 @@ def test_prepare_first_cycle_uses_external_background(tmp_path: Path) -> None:
         encoding="utf-8"
     ).startswith("analysis: 2018-04-15T00:00:00Z")
     assert run.pbs_path.is_file()
+    pbs = run.pbs_path.read_text(encoding="utf-8")
+    assert "#PBS -q pesqmini" in pbs
+    assert "#PBS -l select=1:ncpus=64:mpiprocs=64" in pbs
+    assert pbs.count("#PBS -l place=excl") == 1
     manifest = json.loads(run.manifest_path.read_text(encoding="utf-8"))
     assert manifest["state"] == "prepared"
 

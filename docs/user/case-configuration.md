@@ -91,3 +91,16 @@ Não coloque nele aritmética científica de horários, regras de malha ou manip
 ## Regra prática
 
 Se uma informação seria necessária para executar uma etapa manualmente sem `simpleWorkflow`, ela pertence ao stage/configuração de domínio. Se ela apenas decide **quando** uma etapa roda, pertence ao orquestrador.
+
+# JACI PBS node exclusivity
+
+As of 20 August 2026, jobs submitted to JACI compute-node queues must request
+exclusive node placement:
+
+```text
+#PBS -l place=excl
+```
+
+The `aux` queue is exempt because it permits shared resources. The workflow
+adds this directive automatically according to the configured PBS queue, so
+case YAML files do not need to declare `place: excl` themselves.

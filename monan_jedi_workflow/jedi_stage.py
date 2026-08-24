@@ -68,6 +68,7 @@ from typing import Any
 
 from .analysis_cycle import analysis_cycle_context
 from .cycle_context import CycleContext, parse_cycle_time
+from .pbs_directives import pbs_header_lines
 from .scheduler import PBSError, query
 from .stage_config import (
     StageConfigurationError,
@@ -550,11 +551,14 @@ def _render_pbs(run: JEDIRun) -> None:
     )
 
     lines = [
-        "#!/usr/bin/env bash",
-        f"#PBS -N {job_name}",
-        f"#PBS -q {queue}",
-        f"#PBS -l select={select}:ncpus={ncpus}:mpiprocs={mpiprocs}",
-        f"#PBS -l walltime={walltime}",
+        *pbs_header_lines(
+            job_name=job_name,
+            queue=queue,
+            select=select,
+            ncpus=ncpus,
+            mpiprocs=mpiprocs,
+            walltime=walltime,
+        ),
         "#PBS -j oe",
         "",
         "set -euo pipefail",
