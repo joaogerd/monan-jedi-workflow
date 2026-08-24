@@ -18,6 +18,7 @@ jedi:
     # GNSSRO não vem do PREPBUFR convencional deste exemplo; é entrada externa.
     gnssro_root: /path/to/validated/gnssro-ioda
     initial_background: /path/to/mpasout.2018-04-14_21.00.00.nc
+    model_tstep: PT20M
 
   run_dir: "work/jedi/{cycle_id}"
 
@@ -58,6 +59,14 @@ jedi:
   templates:
     - source: templates/variational.baseline_passed.yaml.in
       target: variational.yaml
+    - source: templates/namelist.atmosphere.jedi-x1.10242.in
+      target: namelist.atmosphere.outer
+    - source: templates/namelist.atmosphere.jedi-x1.10242.in
+      target: namelist.atmosphere.inner
+
+  nonlinear_trajectory:
+    yaml: variational.yaml
+    outer_namelist: namelist.atmosphere.outer
 
   pbs:
     filename: run_jedi.pbs

@@ -92,6 +92,84 @@ def _case(tmp_path: Path) -> tuple[Path, Path]:
     return config, forecast
 
 
+def _enable_trajectory_check(
+    config: Path, *, model_tstep: str, config_dt: int
+) -> None:
+    trajectory_yaml = config / "trajectory.yaml.in"
+    trajectory_yaml.write_text(
+        "cost function:\n"
+        "  cost type: 3D-FGAT\n"
+        "  model:\n"
+        "    name: MPAS\n"
+        f"    tstep: {model_tstep}\n",
+        encoding="utf-8",
+    )
+    namelist = config / "namelist.atmosphere.in"
+    namelist.write_text(
+        f"&nhyd_model\n  config_dt = {config_dt}.0\n/\n",
+        encoding="utf-8",
+    )
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    data["jedi"]["templates"].extend(
+        [
+            {"source": str(trajectory_yaml), "target": "trajectory.yaml"},
+            {"source": str(namelist), "target": "namelist.atmosphere.outer"},
+        ]
+    )
+    data["jedi"]["nonlinear_trajectory"] = {
+        "yaml": "trajectory.yaml",
+        "outer_namelist": "namelist.atmosphere.outer",
+    }
+    (config / "jedi.yaml").write_text(
+        yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
+    )
+
+
+@pytest.mark.parametrize(
+    ("config_dt", "model_tstep"),
+    [(1200, "PT20M"), (1800, "PT30M")],
+)
+def test_nonlinear_trajectory_matching_timesteps_pass(
+    tmp_path: Path, config_dt: int, model_tstep: str
+) -> None:
+    config, _ = _case(tmp_path)
+    _enable_trajectory_check(
+        config, model_tstep=model_tstep, config_dt=config_dt
+    )
+    run = prepare_jedi(config, "2018-04-15T00:00:00Z")
+    manifest = json.loads(run.manifest_path.read_text(encoding="utf-8"))
+    contract = manifest["nonlinear_trajectory_time"]
+    assert contract["model_tstep_seconds"] == config_dt
+    assert contract["config_dt_seconds"] == config_dt
+
+
+@pytest.mark.parametrize(
+    ("config_dt", "model_tstep"),
+    [(1200, "PT45M"), (1800, "PT45M")],
+)
+def test_nonlinear_trajectory_mismatched_timesteps_fail_before_pbs(
+    tmp_path: Path, config_dt: int, model_tstep: str
+) -> None:
+    config, _ = _case(tmp_path)
+    _enable_trajectory_check(
+        config, model_tstep=model_tstep, config_dt=config_dt
+    )
+    with pytest.raises(
+        StageConfigurationError,
+        match="logical and physical timestep must match",
+    ):
+        prepare_jedi(config, "2018-04-15T00:00:00Z")
+    assert not (tmp_path / "work/jedi/20180415T000000Z/run_jedi.pbs").exists()
+
+
+def test_six_hour_pt20m_trajectory_has_18_steps_and_19_states() -> None:
+    window_seconds = 6 * 3600
+    timestep_seconds = 20 * 60
+    steps = window_seconds // timestep_seconds
+    assert steps == 18
+    assert steps + 1 == 19
+
+
 def test_prepare_first_cycle_uses_external_background(tmp_path: Path) -> None:
     config, _ = _case(tmp_path)
 

@@ -10,7 +10,7 @@ cost function:
     streams_file: "{run_dir}/streams.atmosphere.outer"
   model:
     name: MPAS
-    tstep: PT45M
+    tstep: {model_tstep}
     model variables: &modvars
     - air_temperature
     - water_vapor_mixing_ratio_wrt_moist_air
@@ -73,6 +73,8 @@ cost function:
       obs operator:
         name: VertInterp
         observation alias file: testinput/obsop_name_map.yaml
+      get values:
+        time interpolation: nearest
       obs error:
         covariance model: diagonal
       obs filters:
@@ -96,6 +98,8 @@ cost function:
         name: GnssroRefNCEP
         obs options:
           use_compress: 0
+      get values:
+        time interpolation: nearest
       obs error:
         covariance model: diagonal
       obs filters:
@@ -137,6 +141,8 @@ cost function:
       linear obs operator:
         name: Identity
         observation alias file: testinput/obsop_name_map.yaml
+      get values:
+        time interpolation: nearest
       obs error:
         covariance model: diagonal
       obs filters:

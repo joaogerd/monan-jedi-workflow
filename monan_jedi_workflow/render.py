@@ -102,7 +102,7 @@ def render_yaml(config: ExperimentConfig) -> str:
         f"    streams_file: {_quote(str(outer_streams))}",
         "  model:",
         "    name: MPAS",
-        f"    tstep: {experiment.get('model_tstep', 'PT45M')}",
+        f"    tstep: {experiment.get('model_tstep', 'PT20M')}",
         "    model variables: &modvars",
         *_block_list(model_variables, 4),
         "  analysis variables: &incvars",

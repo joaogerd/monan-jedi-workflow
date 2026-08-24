@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shlex
 import shutil
 import subprocess
@@ -84,6 +85,92 @@ _VALIDATION_NAME = "jedi-validation.json"
 _ARTIFACTS_NAME = "jedi-artifacts.json"
 _SKELETON_NAME = "skeleton.json"
 _ANALYSIS_SEED_NAME = "analysis-seed.json"
+
+
+def _duration_seconds(value: str, label: str) -> int:
+    """Parse the ISO-8601 duration subset used for MPAS model timesteps."""
+    match = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", value)
+    if match is None or not any(match.groups()):
+        raise StageConfigurationError(
+            f"{label} must be an ISO-8601 duration such as PT20M."
+        )
+    hours, minutes, seconds = (int(item or 0) for item in match.groups())
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def _validate_nonlinear_trajectory_time(run: "JEDIRun") -> dict[str, Any] | None:
+    """Require logical OOPS and physical MPAS nonlinear timesteps to match."""
+    raw = run.config.get("nonlinear_trajectory")
+    if raw is None:
+        return None
+    trajectory = _require_mapping(raw, "jedi.nonlinear_trajectory")
+
+    def rendered_runtime_path(key: str) -> Path:
+        label = f"jedi.nonlinear_trajectory.{key}"
+        value = render_text(
+            _require_string(trajectory.get(key), label),
+            run.context,
+            label=label,
+        )
+        path = Path(value)
+        return path if path.is_absolute() else run.run_dir / path
+
+    yaml_path = rendered_runtime_path("yaml")
+    namelist_path = rendered_runtime_path("outer_namelist")
+    if not yaml_path.is_file():
+        raise FileNotFoundError(f"JEDI trajectory YAML does not exist: {yaml_path}")
+    if not namelist_path.is_file():
+        raise FileNotFoundError(
+            f"JEDI outer trajectory namelist does not exist: {namelist_path}"
+        )
+
+    try:
+        import yaml
+
+        document = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        model = document["cost function"]["model"]
+        model_name = model["name"]
+        model_tstep = model["tstep"]
+    except (KeyError, TypeError, yaml.YAMLError) as error:
+        raise StageConfigurationError(
+            f"Cannot read JEDI nonlinear trajectory model from {yaml_path}: {error}"
+        ) from error
+    if model_name != "MPAS":
+        return None
+    if not isinstance(model_tstep, str):
+        raise StageConfigurationError("JEDI MPAS model.tstep must be a string.")
+    model_seconds = _duration_seconds(model_tstep, "JEDI MPAS model.tstep")
+
+    namelist = namelist_path.read_text(encoding="utf-8")
+    match = re.search(
+        r"(?mi)^\s*config_dt\s*=\s*([0-9]+(?:\.[0-9]*)?)\s*,?\s*$",
+        namelist,
+    )
+    if match is None:
+        raise StageConfigurationError(
+            f"Cannot find config_dt in JEDI outer trajectory namelist: {namelist_path}"
+        )
+    config_dt = float(match.group(1))
+    if not config_dt.is_integer():
+        raise StageConfigurationError(
+            f"MPAS config_dt must be an integer number of seconds; found {config_dt}."
+        )
+    config_seconds = int(config_dt)
+    if model_seconds != config_seconds:
+        raise StageConfigurationError(
+            "MPAS-JEDI nonlinear trajectory time mismatch: "
+            f"OOPS model.tstep={model_seconds} s but MPAS config_dt={config_seconds} s. "
+            "This MPAS-JEDI implementation executes one MPAS timestep per "
+            "OOPS Model::step; logical and physical timestep must match."
+        )
+    return {
+        "model": "MPAS",
+        "model_tstep": model_tstep,
+        "model_tstep_seconds": model_seconds,
+        "config_dt_seconds": config_seconds,
+        "yaml": str(yaml_path),
+        "outer_namelist": str(namelist_path),
+    }
 
 
 class JEDIValidationError(RuntimeError):
@@ -737,6 +824,7 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
             target = run.run_dir / target
         _render_template(source, target, run.context)
 
+    trajectory_time = _validate_nonlinear_trajectory_time(run)
     analysis_seed = _seed_analysis_output(run)
 
     _render_pbs(run)
@@ -753,6 +841,7 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
             "background_source": str(background_source),
             "background_target": str(background_target),
             "analysis_seed": analysis_seed,
+            "nonlinear_trajectory_time": trajectory_time,
             "state": "prepared",
         },
     )
