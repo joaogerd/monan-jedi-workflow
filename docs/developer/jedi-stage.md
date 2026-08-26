@@ -34,6 +34,12 @@ Isso codifica a única bifurcação estrutural necessária sem colocar lógica d
 
 ## Runtime skeleton
 
+`jedi-prepare` reads the rendered application YAML and materializes the parent
+directories declared by `obsdataout.engine.obsfile` (and by the main analysis
+`output.filename`) before execution. Runtime skeletons therefore do not need
+to preserve empty output directories. Observation inputs remain read-only:
+parents referenced only by `obsdatain` are never created by this mechanism.
+
 `jedi.runtime.skeleton` é opcional. Quando configurado, representa uma fotografia de runtime **compatível com o executável atual**. O conteúdo é copiado uma única vez para o diretório do ciclo.
 
 Um manifesto registra a origem do skeleton. Se uma execução posterior tentar usar outro skeleton no mesmo `run_dir`, o workflow falha em vez de misturar silenciosamente dois baselines.

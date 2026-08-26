@@ -174,6 +174,129 @@ def _validate_nonlinear_trajectory_time(run: "JEDIRun") -> dict[str, Any] | None
     }
 
 
+def _jedi_application_yaml_path(run: "JEDIRun") -> Path | None:
+    """Resolve the rendered YAML consumed by the JEDI application."""
+    trajectory = run.config.get("nonlinear_trajectory")
+    if trajectory is not None:
+        value = _require_mapping(
+            trajectory, "jedi.nonlinear_trajectory"
+        ).get("yaml")
+        label = "jedi.nonlinear_trajectory.yaml"
+        rendered = render_text(
+            _require_string(value, label), run.context, label=label
+        )
+        path = Path(rendered)
+        return path if path.is_absolute() else run.run_dir / path
+
+    pbs = _require_mapping(run.config.get("pbs"), "jedi.pbs")
+    command = _require_list(pbs.get("command"), "jedi.pbs.command")
+    for index in range(len(command) - 1, -1, -1):
+        value = command[index]
+        if not isinstance(value, str):
+            continue
+        rendered = render_text(
+            value, run.context, label=f"jedi.pbs.command[{index}]"
+        )
+        if Path(rendered).suffix.lower() not in {".yaml", ".yml"}:
+            continue
+        path = Path(rendered)
+        return path if path.is_absolute() else run.run_dir / path
+    return None
+
+
+def _runtime_output_path(run: "JEDIRun", value: Any, label: str) -> Path:
+    """Resolve one application output while refusing external mutations."""
+    if not isinstance(value, str) or not value:
+        raise StageConfigurationError(f"{label} must be a non-empty string.")
+    path = Path(value)
+    if not path.is_absolute():
+        return run.run_dir / path
+    try:
+        path.resolve(strict=False).relative_to(run.run_dir.resolve())
+    except ValueError as error:
+        raise StageConfigurationError(
+            f"{label} absolute path must remain inside the JEDI run_dir: {path}"
+        ) from error
+    return path
+
+
+def _materialize_jedi_output_directories(run: "JEDIRun") -> list[Path]:
+    """Create parents declared for JEDI outputs in the rendered YAML.
+
+    Observation inputs are deliberately ignored. Empty runtime directories
+    therefore need not be carried in a skeleton, while output files themselves
+    remain exclusively owned by the JEDI application.
+    """
+    yaml_path = _jedi_application_yaml_path(run)
+    if yaml_path is None:
+        return []
+    if not yaml_path.is_file():
+        raise FileNotFoundError(
+            f"Rendered JEDI application YAML not found: {yaml_path}"
+        )
+
+    try:
+        import yaml
+
+        document = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as error:
+        raise StageConfigurationError(
+            f"Cannot read rendered JEDI application YAML {yaml_path}: {error}"
+        ) from error
+    root = _require_mapping(document, "rendered JEDI application YAML")
+    raw_cost = root.get("cost function")
+    if raw_cost is None:
+        observers: list[Any] = []
+    else:
+        cost = _require_mapping(raw_cost, "cost function")
+        observations = _require_mapping(
+            cost.get("observations", {}), "cost function.observations"
+        )
+        observers = _require_list(
+            observations.get("observers", []),
+            "cost function.observations.observers",
+        )
+
+    destinations: list[tuple[Any, str]] = []
+    for index, raw_observer in enumerate(observers):
+        observer = _require_mapping(
+            raw_observer, f"cost function.observations.observers[{index}]"
+        )
+        obs_space = _require_mapping(
+            observer.get("obs space"),
+            f"cost function.observations.observers[{index}].obs space",
+        )
+        raw_output = obs_space.get("obsdataout")
+        if raw_output is None:
+            continue
+        output = _require_mapping(
+            raw_output,
+            f"cost function.observations.observers[{index}].obs space.obsdataout",
+        )
+        engine = _require_mapping(
+            output.get("engine"),
+            f"cost function.observations.observers[{index}].obs space.obsdataout.engine",
+        )
+        label = (
+            f"cost function.observations.observers[{index}].obs space."
+            "obsdataout.engine.obsfile"
+        )
+        destinations.append((engine.get("obsfile"), label))
+
+    main_output = root.get("output")
+    if main_output is not None:
+        output = _require_mapping(main_output, "output")
+        destinations.append((output.get("filename"), "output.filename"))
+
+    parents: set[Path] = set()
+    for value, label in destinations:
+        target = _runtime_output_path(run, value, label)
+        parents.add(target.parent)
+    for parent in sorted(parents):
+        parent.mkdir(parents=True, exist_ok=True)
+    return sorted(parents)
+
+
 class JEDIValidationError(RuntimeError):
     """A JEDI run did not satisfy its declared analysis contract."""
 
@@ -853,6 +976,7 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
             target = run.run_dir / target
         _render_template(source, target, run.context)
 
+    _materialize_jedi_output_directories(run)
     trajectory_time = _validate_nonlinear_trajectory_time(run)
     analysis_base_state = _initialize_analysis_output(run)
 

@@ -125,6 +125,40 @@ def _enable_trajectory_check(
     )
 
 
+def _set_application_outputs(
+    config: Path, obsfiles: list[str], *, obsinput: str = "missing/input.nc4"
+) -> None:
+    data = yaml.safe_load((config / "jedi.yaml").read_text(encoding="utf-8"))
+    template = Path(data["jedi"]["templates"][0]["source"])
+    observers = [
+        {
+            "obs space": {
+                "name": f"observer-{index}",
+                "obsdatain": {
+                    "engine": {"type": "H5File", "obsfile": obsinput}
+                },
+                "obsdataout": {
+                    "engine": {"type": "H5File", "obsfile": obsfile}
+                },
+            }
+        }
+        for index, obsfile in enumerate(obsfiles)
+    ]
+    template.write_text(
+        yaml.safe_dump(
+            {
+                "cost function": {
+                    "cost type": "3D-FGAT",
+                    "observations": {"observers": observers},
+                },
+                "output": {"filename": "Data/states/analysis.nc"},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+
 @pytest.mark.parametrize(
     ("config_dt", "model_tstep"),
     [(1200, "PT20M"), (1800, "PT30M")],
@@ -190,6 +224,71 @@ def test_prepare_first_cycle_uses_external_background(tmp_path: Path) -> None:
     assert pbs.count("#PBS -l place=excl") == 1
     manifest = json.loads(run.manifest_path.read_text(encoding="utf-8"))
     assert manifest["state"] == "prepared"
+
+
+def test_prepare_creates_shared_observation_output_parent_only(
+    tmp_path: Path,
+) -> None:
+    config, _ = _case(tmp_path)
+    _set_application_outputs(
+        config, ["Data/os/a.nc4", "Data/os/b.nc4"]
+    )
+
+    run = prepare_jedi(config, "2018-04-15T00:00:00Z")
+
+    assert (run.run_dir / "Data/os").is_dir()
+    assert not (run.run_dir / "Data/os/a.nc4").exists()
+    assert not (run.run_dir / "Data/os/b.nc4").exists()
+    assert not (run.run_dir / "missing").exists()
+
+
+def test_prepare_creates_distinct_observation_output_parents_idempotently(
+    tmp_path: Path,
+) -> None:
+    config, _ = _case(tmp_path)
+    _set_application_outputs(
+        config,
+        ["Data/os/radiosonde/a.nc4", "Data/os/gnssro/b.nc4"],
+    )
+    run = prepare_jedi(config, "2018-04-15T00:00:00Z")
+    existing = run.run_dir / "Data/os/radiosonde/a.nc4"
+    existing.write_text("application output", encoding="utf-8")
+
+    prepare_jedi(config, "2018-04-15T00:00:00Z")
+
+    assert existing.read_text(encoding="utf-8") == "application output"
+    assert (run.run_dir / "Data/os/gnssro").is_dir()
+    assert not (run.run_dir / "Data/os/gnssro/b.nc4").exists()
+
+
+def test_prepare_accepts_absolute_output_path_inside_runtime(
+    tmp_path: Path,
+) -> None:
+    config, _ = _case(tmp_path)
+    absolute = (
+        tmp_path
+        / "work/jedi/20180415T000000Z/Data/os/absolute/a.nc4"
+    )
+    _set_application_outputs(config, [str(absolute)])
+
+    prepare_jedi(config, "2018-04-15T00:00:00Z")
+
+    assert absolute.parent.is_dir()
+    assert not absolute.exists()
+
+
+def test_prepare_rejects_absolute_output_path_outside_runtime(
+    tmp_path: Path,
+) -> None:
+    config, _ = _case(tmp_path)
+    external = tmp_path / "external/a.nc4"
+    _set_application_outputs(config, [str(external)])
+
+    with pytest.raises(
+        StageConfigurationError, match="must remain inside the JEDI run_dir"
+    ):
+        prepare_jedi(config, "2018-04-15T00:00:00Z")
+    assert not external.parent.exists()
 
 
 def test_prepare_subsequent_cycle_uses_previous_forecast(tmp_path: Path) -> None:
