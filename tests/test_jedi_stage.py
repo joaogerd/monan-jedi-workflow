@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import yaml
-from netCDF4 import Dataset, stringtochar
+from netCDF4 import Dataset
 
 from monan_jedi_workflow.jedi_stage import (
     JEDIValidationError,
@@ -430,9 +430,10 @@ def test_prepare_links_template_fields_to_cycle_analysis_base_state(
         dataset.createDimension("Time", 1)
         dataset.createDimension("StrLen", 64)
         dataset.createDimension("nCells", 1)
-        dataset.createVariable("xtime", "S1", ("Time", "StrLen"))[:] = (
-            stringtochar(np.asarray(["2018-04-15_06:00:00"], dtype="S64"))
-        )
+        xtime = np.full((1, 64), b" ", dtype="S1")
+        value = np.frombuffer(b"2018-04-15_06:00:00", dtype="S1")
+        xtime[0, : value.size] = value
+        dataset.createVariable("xtime", "S1", ("Time", "StrLen"))[:] = xtime
         dataset.createVariable("rho", "f4", ("nCells",))[:] = [1.0]
         dataset.createVariable("skintemp", "f4", ("nCells",))[:] = [280.0]
 
