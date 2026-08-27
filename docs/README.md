@@ -25,8 +25,9 @@ Comece pela fronteira de arquitetura e pelos contratos; depois leia a implementa
 8. [Plano de validação no JACI](developer/jaci-validation-plan.md)
 9. [Reaproveitamento dos workflows anteriores](developer/legacy-and-reuse-analysis.md)
 10. [Handoff analysis → forecast MPAS](developer/analysis-to-mpas-forecast-handoff.md)
-10. [Política de documentação](developer/documentation-policy.md)
-11. [Architecture Decision Records](developer/adr/README.md)
+11. [Campanha corrected validada 2018-04-15 00Z–18Z](developer/corrected-cycling-campaign-20180415.md)
+12. [Política de documentação](developer/documentation-policy.md)
+13. [Architecture Decision Records](developer/adr/README.md)
 
 A documentação de desenvolvedor pode e deve ser detalhada. Ela registra contratos, invariantes, efeitos colaterais e motivos das decisões.
 

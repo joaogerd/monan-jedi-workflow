@@ -1,0 +1,104 @@
+# Reference metadata only. This file is not an operational case or submit plan.
+schema_version: 1
+campaign:
+  id: corrected-cycling-20180415-00z-through-18z
+  description: validated corrected cycling campaign from analysis 00Z through analysis 18Z
+  workflow_revision: d59a151e03290594a31253f0b093c28173b3440c
+  branch: agent/cycled-da-simpleworkflow
+  validation_state: validated
+  terminal_analysis_time: '2018-04-15T18:00:00Z'
+  excluded_next_leg: '2018-04-15T18:00:00Z/2018-04-16T00:00:00Z'
+
+analysis_cycles:
+  - time: '2018-04-15T00:00:00Z'
+    job_id: 391531.pbs-ha
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi-fgat-corrected/20180415T000000Z
+    validation_state: validated
+    analysis:
+      path: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi-fgat-corrected/20180415T000000Z/Data/states/mpas.3dvar.2018-04-15_00.00.00.nc
+      sha256: be54bfac20356b524a260593a064d7dd27259982077b2b107d6b35c20f3eb321
+  - time: '2018-04-15T06:00:00Z'
+    job_id: 394916.pbs-ha
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi-fgat-corrected/20180415T060000Z
+    validation_state: validated
+    analysis:
+      path: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi-fgat-corrected/20180415T060000Z/Data/states/mpas.3dvar.2018-04-15_06.00.00.nc
+      sha256: c898fd851bc20794aab660c194fe536abec93d42afd6da4bbe139b253e65201f
+  - time: '2018-04-15T12:00:00Z'
+    job_id: 397938.pbs-ha
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi-fgat-corrected/20180415T120000Z
+    validation_state: validated
+    analysis:
+      path: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi-fgat-corrected/20180415T120000Z/Data/states/mpas.3dvar.2018-04-15_12.00.00.nc
+      sha256: 3d6a526782c331175b17401fe233074353c0a360d298c2ed21ea602ec8568400
+  - time: '2018-04-15T18:00:00Z'
+    job_id: 398258.pbs-ha
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi-fgat-corrected/20180415T180000Z
+    validation_state: validated
+    terminal: true
+    analysis:
+      path: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi-fgat-corrected/20180415T180000Z/Data/states/mpas.3dvar.2018-04-15_18.00.00.nc
+      sha256: 71879efa4069a43da44b6ab7c5ae5e028057572411f84a51307b0700e5fe09f0
+
+forecast_legs:
+  - start: '2018-04-15T00:00:00Z'
+    end: '2018-04-15T06:00:00Z'
+    job_id: 394389.pbs-ha
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T000000Z
+    validation_state: validated
+    products:
+      - role: trajectory_initial_state
+        valid_time: '2018-04-15T03:00:00Z'
+        path: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T000000Z/mpasout.2018-04-15_03.00.00.nc
+        sha256: d00b332e76ac83a8fff1d6f49c63f31f79785dc6cb259dd736395fbe9b8756c6
+      - role: analysis_base_state
+        valid_time: '2018-04-15T06:00:00Z'
+        path: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T000000Z/mpasout.2018-04-15_06.00.00.nc
+        sha256: d67f6750bc580429a335acf5301d52404d750bcce2e1241d0859d5470208d177
+  - start: '2018-04-15T06:00:00Z'
+    end: '2018-04-15T12:00:00Z'
+    job_id: 395095.pbs-ha
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T060000Z
+    validation_state: validated
+    products:
+      - role: trajectory_initial_state
+        valid_time: '2018-04-15T09:00:00Z'
+        path: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T060000Z/mpasout.2018-04-15_09.00.00.nc
+        sha256: 6ac16130d54d418178a3bc84bfe228afb8da921b9c4bbfe47052cc0d6b8e63a0
+      - role: analysis_base_state
+        valid_time: '2018-04-15T12:00:00Z'
+        path: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T060000Z/mpasout.2018-04-15_12.00.00.nc
+        sha256: 9e3e17068babcae830bbd6f75ab50afb5ad9aa63a0e49f9a66c6b71523b4ea4a
+  - start: '2018-04-15T12:00:00Z'
+    end: '2018-04-15T18:00:00Z'
+    job_id: 398188.pbs-ha
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T120000Z
+    validation_state: validated
+    products:
+      - role: trajectory_initial_state
+        valid_time: '2018-04-15T15:00:00Z'
+        path: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T120000Z/mpasout.2018-04-15_15.00.00.nc
+        sha256: cd3d9df4c67aa30d6e348f1a25de5295cb56c2b69714e2d6870ecada821d44d4
+      - role: analysis_base_state
+        valid_time: '2018-04-15T18:00:00Z'
+        path: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas-fgat-corrected/20180415T120000Z/mpasout.2018-04-15_18.00.00.nc
+        sha256: d64d5fa8cad152832280502da31ebbe59510e4e840f7db3bc98003fb0cf2cfdc
+
+obs2ioda_cycles:
+  - time: '2018-04-15T06:00:00Z'
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/obs2ioda/20180415T060000Z
+    validation_state: validated
+  - time: '2018-04-15T12:00:00Z'
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/obs2ioda/20180415T120000Z
+    validation_state: validated
+  - time: '2018-04-15T18:00:00Z'
+    runtime: /p/projetos/monan_das/joao.gerd/work/CASE/work/obs2ioda/20180415T180000Z
+    validation_state: validated
+
+excluded_attempts:
+  - stage: jedi
+    cycle: '2018-04-15T06:00:00Z'
+    job_id: 394656.pbs-ha
+    exit_status: 143
+    classification: operational_failure_not_scientific_result
+    cause: missing parent directory for rendered obsdataout destinations
