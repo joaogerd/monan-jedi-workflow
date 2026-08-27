@@ -357,6 +357,21 @@ campaign ledger.
 The machine-readable summary is reference metadata only. It does not submit
 jobs, replace case configuration, or override runtime manifests.
 
+## Clean replay orchestration status
+
+The domain-stage contracts are validated, including the isolated Obs2IODA
+runtime and its scoped runtime-linker checks. A clean multi-cycle replay is not
+yet supported by the reference orchestrator. The current dry-run incorrectly
+includes Obs2IODA00 and MPAS18→00, expands independent DAGs for each cycle, and
+still uses the older example scientific contract.
+
+A faithful replay requires explicit cross-cycle dependencies, first-cycle and
+terminal-cycle conditionals, and clean namespace/case materialization. This is
+a limitation of the simpleWorkflow reference orchestration, not of the JEDI,
+MPAS, or Obs2IODA domain stages. The orchestration work is tracked separately
+in [issue #52](https://github.com/joaogerd/monan-jedi-workflow/issues/52)
+and is outside the scope of this validated campaign and PR.
+
 ## Orchestration boundary
 
 `monan-jedi-workflow` owns domain-stage mechanics and contracts: materialized
