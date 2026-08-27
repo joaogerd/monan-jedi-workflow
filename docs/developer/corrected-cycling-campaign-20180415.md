@@ -265,9 +265,13 @@ result. Commit `d59a151e03290594a31253f0b093c28173b3440c` made
 ### Obs2IODA RPATH
 
 `obs2ioda_v3` retains an obsolete RPATH into an older `monan-jedi-mpas`
-build. Conversions used an explicit loader path after `ldd` showed zero missing
-dependencies. This remains an operational debt; no JEDI runtime inherited the
-workaround and no rebuild was performed during the campaign.
+build. Campaign conversions used an explicit loader path after `ldd` showed
+zero missing dependencies. The workflow now supports a configurable,
+Obs2IODA-scoped library path and repeats the linker audit in both doctor and
+run, so operator-side setup is no longer required and JEDI/MPAS do not inherit
+it. The published ELF still needs a relocatable install RPATH in a future
+build; that structural build debt is distinct from the resolved workflow
+runtime contract.
 
 ### Jb diagnostics
 
@@ -313,7 +317,8 @@ A corrected cycling campaign is accepted when:
 | Provenance | PASS |
 | Tests and clean tree at consolidation | PASS |
 
-The open RPATH and Jb diagnostic questions are non-blocking technical debts;
+The published ELF RPATH build debt and the Jb diagnostic question are
+non-blocking technical debts;
 they do not invalidate the evidence above.
 
 ## Reproducibility workflow
@@ -370,4 +375,3 @@ restartable state, `xtime`, model timestep and clock semantics,
 behavior, diagnostics required by JEDI, and analysis-output restartability.
 This campaign is evidence for those compatibility boundaries, not a complete
 MONAN-JEDI specification.
-

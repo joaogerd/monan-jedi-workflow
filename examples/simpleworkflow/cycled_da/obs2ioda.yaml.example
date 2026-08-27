@@ -8,6 +8,8 @@ obs2ioda:
   variables:
     workflow_root: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow
     obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
+    obs2ioda_library_root: /p/projetos/monan_das/USUARIO/work/monan-jedi/obs2ioda/build/src
+    libfabric_library_root: /opt/cray/libfabric/1.22.0/lib64
     prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
 
     # Ajuste à coleção real. O exemplo usa um diretório por ciclo apenas para
@@ -16,6 +18,16 @@ obs2ioda:
     prepbufr_input: "{prepbufr_root}/{cycle_yyyymmddhh}/prepbufr.bufr"
 
   work_dir: "work/obs/{cycle_yyyymmddhh}"
+
+  # Applied only to Obs2IODA child processes. Doctor and run both execute ldd
+  # with this environment and fail before conversion if a library is missing.
+  runtime:
+    library_paths:
+      - "{obs2ioda_library_root}"
+      - "{obs2ioda_library_root}/cxx"
+      - "{libfabric_library_root}"
+    dependency_checks:
+      - "{obs2ioda_executable}"
 
   inspection:
     argv: [ncdump, -h, "{output}"]

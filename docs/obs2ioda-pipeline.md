@@ -22,7 +22,7 @@ A sequência esperada é:
 
 ```text
 obs2ioda-doctor
-  → confirma que conversores e inspecionador estão disponíveis
+  → confirma ferramentas e dependências do runtime linker
 
 obs2ioda-prepare
   → resolve caminhos, confirma entradas e grava o plano imutável do ciclo
@@ -42,6 +42,19 @@ O arquivo fica no diretório do caso ou experimento. A sintaxe concreta de cada 
 obs2ioda:
   # Um diretório isolado para cada ciclo.
   work_dir: build/obs2ioda/{cycle_id}
+
+  # Caminhos de bibliotecas são configuráveis por site e aplicados somente aos
+  # processos filhos deste stage. O ambiente global e os stages JEDI/MPAS não
+  # são modificados.
+  runtime:
+    library_paths:
+      - /site/obs2ioda/build/src
+      - /site/obs2ioda/build/src/cxx
+      - /site/libfabric/lib64
+    dependency_checks:
+      - /site/bin/obs2ioda_v3
+    linker_command: ldd
+    timeout_seconds: 30
 
   # Para arquivos IODA em NetCDF4/HDF5, ncdump costuma ser adequado.
   # O comando recebe o arquivo resolvido no placeholder {output}.
@@ -119,6 +132,40 @@ build/obs2ioda/<cycle-id>/
 ```
 
 O manifesto registra os argumentos efetivamente usados, a assinatura do plano, entradas, produtos, tentativas e, quando habilitado, hashes SHA-256.
+
+## Contrato de dependências compartilhadas
+
+`runtime.library_paths` é materializado como um `LD_LIBRARY_PATH` prefixado
+somente no ambiente dos probes, conversores e inspetores Obs2IODA. O processo
+do workflow não altera `os.environ`; por isso essa configuração não alcança
+PBS, JEDI ou MPAS. Os paths podem usar as mesmas variáveis e placeholders do
+restante do caso e não dependem de um ciclo específico.
+
+Cada item de `runtime.dependency_checks` identifica um ELF que deve ser
+auditado. `obs2ioda-doctor` executa o `linker_command` (por padrão, `ldd`) no
+ambiente materializado e registra o executável, as bibliotecas resolvidas e as
+bibliotecas ausentes em `obs2ioda-doctor.json`. Qualquer `not found` torna o
+doctor inválido. `obs2ioda-run` repete a verificação imediatamente antes dos
+conversores, grava o resultado no manifesto e falha com
+`failed-runtime-dependencies` antes de criar produtos quando a resolução não é
+completa. Assim, o erro é diagnosticado antes de chegar a `error while loading
+shared libraries`.
+
+Um executável instalado corretamente pode usar `$ORIGIN` no seu RPATH e não
+precisar de `library_paths`. Binários de build tree ou dependências
+deliberadamente fornecidas pelo ambiente do site devem declará-los no caso. A
+configuração é local ao Obs2IODA; não se deve exportar `LD_LIBRARY_PATH`
+globalmente.
+
+No binário JACI auditado, o ELF contém `DT_RPATH`, não `DT_RUNPATH`, e aponta
+para uma build tree antiga `monan-jedi-mpas/obs2ioda`. A build atual produz
+`libv3.so` em `build/src` e `libobs2ioda_cxx.so` em `build/src/cxx`;
+`libfabric.so.1` chega transitivamente pela pilha paralela e é fornecida pelo
+site. O CMake do Obs2IODA define um `INSTALL_RPATH` relocável baseado em
+`$ORIGIN`, mas o executável publicado foi copiado da build tree, não de um
+layout instalado com suas bibliotecas. Por isso a solução operacional é o
+runtime local ao stage; publicar um bundle instalado e relocável continua
+sendo a correção estrutural de build recomendada.
 
 ## Reuso e correção
 
