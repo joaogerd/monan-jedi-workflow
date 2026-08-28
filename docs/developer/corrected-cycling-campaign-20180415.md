@@ -37,7 +37,7 @@ External forecast legs:
 Obs2IODA conversions were formally validated at 06Z, 12Z, and 18Z. The 00Z
 analysis used its already established initial/baseline observation inputs.
 
-## Corrected cycling graph
+## Corrected cycling workflow
 
 ```text
 corrected JEDI00 analysis
@@ -362,7 +362,7 @@ jobs, replace case configuration, or override runtime manifests.
 The domain-stage contracts are validated, including the isolated Obs2IODA
 runtime and its scoped runtime-linker checks. A clean multi-cycle replay is not
 yet supported by the reference orchestrator. The current dry-run incorrectly
-includes Obs2IODA00 and MPAS18→00, expands independent DAGs for each cycle, and
+includes Obs2IODA00 and MPAS18→00, expands independent per-cycle workflows, and
 still uses the older example scientific contract.
 
 A faithful replay requires explicit cross-cycle dependencies, first-cycle and
