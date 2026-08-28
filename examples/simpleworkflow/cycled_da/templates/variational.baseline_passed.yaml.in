@@ -1,0 +1,171 @@
+# Cycle-aware template derived conservatively from reference/baseline_passed.yaml.
+# Keep scientific changes separate from cycle/path parameterization.
+cost function:
+  cost type: 3D-FGAT
+  time window:
+    begin: '{window_begin_time}'
+    length: {window_length}
+  geometry:
+    nml_file: "{run_dir}/namelist.atmosphere.outer"
+    streams_file: "{run_dir}/streams.atmosphere.outer"
+  model:
+    name: MPAS
+    tstep: {model_tstep}
+    model variables: &modvars
+    - air_temperature
+    - water_vapor_mixing_ratio_wrt_moist_air
+    - eastward_wind
+    - northward_wind
+    - air_pressure_at_surface
+    - air_potential_temperature
+    - dry_air_density
+    - u
+    - water_vapor_mixing_ratio_wrt_dry_air
+    - air_pressure
+    - landmask
+    - seaice_fraction
+    - snowc
+    - skin_temperature_at_surface
+    - ivgtyp
+    - isltyp
+    - cloud_liquid_water
+    - cloud_liquid_ice
+    - rain_water
+    - snow_water
+    - graupel
+    - pressure_p
+    - snowh
+    - vegetation_area_fraction
+    - eastward_wind_at_10m
+    - northward_wind_at_10m
+    - lai
+    - smois
+    - tslb
+    - w
+  analysis variables: &incvars
+  - air_temperature
+  - water_vapor_mixing_ratio_wrt_moist_air
+  - eastward_wind
+  - northward_wind
+  - air_pressure_at_surface
+  background:
+    state variables: *modvars
+    filename: "{run_dir}/background/mpasout.{background_mpas_file_time}.nc"
+    date: '{background_time}'
+  background error:
+    covariance model: MPASstatic
+    # The covariance files are static, but their logical FieldSet validTime
+    # must match the analysis increment for every cycle.
+    date: '{analysis_time}'
+  observations:
+    observers:
+    - obs space:
+        name: Radiosonde
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: Data/ufo/testinput_tier_1/sondes_obs_{analysis_yyyymmddhh}_m.nc4
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: Data/os/obsout_3dfgat_sondes.nc4
+        simulated variables: [airTemperature, windEastward, windNorthward, specificHumidity]
+      obs operator:
+        name: VertInterp
+        observation alias file: testinput/obsop_name_map.yaml
+      get values:
+        time interpolation: nearest
+      obs error:
+        covariance model: diagonal
+      obs filters:
+      - filter: PreQC
+        maxvalue: 3
+      - filter: Background Check
+        apply at iterations: 0,1,2
+        threshold: 3
+    - obs space:
+        name: GnssroRefNCEP
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: Data/ufo/testinput_tier_1/gnssro_obs_{analysis_yyyymmddhh}_s.nc4
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: Data/os/obsout_3dfgat_gnssroref.nc4
+        simulated variables: [atmosphericRefractivity]
+      obs operator:
+        name: GnssroRefNCEP
+        obs options:
+          use_compress: 0
+      get values:
+        time interpolation: nearest
+      obs error:
+        covariance model: diagonal
+      obs filters:
+      - filter: Domain Check
+        where:
+        - variable:
+            name: MetaData/height
+          minvalue: 0
+          maxvalue: 30000
+        - variable:
+            name: MetaData/earthRadiusCurvature
+          minvalue: 6250000
+          maxvalue: 6450000
+        - variable:
+            name: MetaData/geoidUndulation
+          minvalue: -200
+          maxvalue: 200
+      - filter: Background Check
+        apply at iterations: 0,1
+        threshold: 3
+      - filter: ROobserror
+        apply at iterations: 0,1
+        variable: refractivity
+        errmodel: NCEP
+    - obs space:
+        name: SfcCorrected
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: Data/ufo/testinput_tier_1/sfc_obs_{analysis_yyyymmddhh}_m.nc4
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: Data/os/obsout_3dfgat_sfc.nc4
+        simulated variables: [stationPressure]
+      obs operator:
+        name: SfcCorrected
+        correction scheme to use: UKMO
+      linear obs operator:
+        name: Identity
+        observation alias file: testinput/obsop_name_map.yaml
+      get values:
+        time interpolation: nearest
+      obs error:
+        covariance model: diagonal
+      obs filters:
+      - filter: PreQC
+        maxvalue: 3
+      - filter: Difference Check
+        apply at iterations: 0,1
+        reference: MetaData/stationElevation
+        value: GeoVaLs/height_above_mean_sea_level_at_surface
+        threshold: 500
+      - filter: Background Check
+        apply at iterations: 0,1
+        threshold: 3
+output:
+  filename: "Data/states/mpas.3dfgat.$Y-$M-$D_$h.$m.$s.nc"
+  stream name: analysis
+variational:
+  minimizer:
+    algorithm: DRPCG
+  iterations:
+  - geometry:
+      nml_file: "{run_dir}/namelist.atmosphere.inner"
+      streams_file: "{run_dir}/streams.atmosphere.inner"
+    ninner: '10'
+    gradient norm reduction: 1e-10
+    test: 'on'

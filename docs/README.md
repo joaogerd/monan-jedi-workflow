@@ -1,55 +1,38 @@
 # Documentação do MONAN-JEDI Workflow
 
-Esta documentação descreve o fluxo operacional do workflow MONAN-JEDI para o experimento `3dfgat_mpastatic_x1.10242_2018041500` e seus componentes reutilizáveis.
+A documentação é separada por público para evitar que o caminho simples do usuário seja soterrado por detalhes de implementação.
 
-O objetivo é registrar, de forma clara e reproduzível, o que entra no processo, o que sai, qual a ordem correta de execução e por que cada etapa é necessária.
+## Para usar o workflow
 
-## Documentos disponíveis
+1. [Primeiro experimento cíclico](user/first-cycling-experiment.md)
+2. [Configuração de um caso](user/case-configuration.md)
+3. [Status e restart](user/restart-and-status.md)
+4. [Troubleshooting](user/troubleshooting.md)
 
-1. [Workflow 3D-FGAT + MPASstatic](workflow-3dfgat-mpastatic.md)
-2. [Configuração do experimento](configuracao-experimento.md)
-3. [Preparação do runtime](preparacao-runtime.md)
-4. [Renderização do YAML e do PBS](renderizacao-yaml-pbs.md)
-5. [Execução PBS no JACI](execucao-pbs-jaci.md)
-6. [Entradas e saídas](entradas-e-saidas.md)
-7. [Diagnóstico e logs](diagnostico-e-logs.md)
-8. [Pipeline operacional Obs2IODA](obs2ioda-pipeline.md)
-9. [Obs2IODA com PREPBUFR no JACI](obs2ioda-prepbufr.md)
+Esses documentos devem permanecer curtos, com comandos copiáveis e foco em tarefas.
 
-## Fluxo resumido
+## Para desenvolver o workflow
 
-A ordem correta para o baseline de assimilação é:
+Comece pela fronteira de arquitetura e pelos contratos; depois leia a implementação específica do JEDI.
 
-```bash
-python3 -m py_compile monan_jedi_workflow/*.py
+1. [Arquitetura de orquestração](developer/orchestration.md)
+2. [Contratos das etapas de domínio](developer/stage-contracts.md)
+3. [Portabilidade simpleWorkflow → ecFlow/Cylc](developer/orchestrator-portability.md)
+4. [Modelo temporal do ciclo](developer/cycle-time-model.md)
+5. [Modelo conceitual de Cycling DA](developer/reference-cycle-model.md)
+6. [Mapeamento do baseline que passou para o ciclo](developer/baseline-to-cycling-mapping.md)
+7. [Estágio JEDI](developer/jedi-stage.md)
+8. [Plano de validação no JACI](developer/jaci-validation-plan.md)
+9. [Reaproveitamento dos workflows anteriores](developer/legacy-and-reuse-analysis.md)
+10. [Handoff analysis → forecast MPAS](developer/analysis-to-mpas-forecast-handoff.md)
+11. [Campanha corrected validada 2018-04-15 00Z–18Z](developer/corrected-cycling-campaign-20180415.md)
+12. [Política de documentação](developer/documentation-policy.md)
+13. [Architecture Decision Records](developer/adr/README.md)
 
-python3 -m monan_jedi_workflow.cli validate-config \
-  configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
+A documentação de desenvolvedor pode e deve ser detalhada. Ela registra contratos, invariantes, efeitos colaterais e motivos das decisões.
 
-python3 -m monan_jedi_workflow.cli prepare-runtime \
-  configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
+## Documentos técnicos anteriores
 
-python3 -m monan_jedi_workflow.cli render-yaml \
-  configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
+Os documentos existentes sobre baseline estático, Obs2IODA, WPS, MPAS e investigação histórica continuam úteis. Quando houver conflito entre um texto antigo e a nova documentação de arquitetura, considere como fonte de verdade o baseline atual validado e os ADRs aceitos.
 
-python3 -m monan_jedi_workflow.cli render-pbs \
-  configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
-
-python3 -m monan_jedi_workflow.cli submit --wait \
-  configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
-
-python3 -m monan_jedi_workflow.cli validate-run \
-  configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
-```
-
-O Obs2IODA pode ser preparado e validado independentemente por ciclo antes de integrá-lo a esse caso. Consulte os documentos específicos para o contrato de conversão e para o comportamento testado com PREPBUFR no JACI.
-
-## Conceito central
-
-O YAML do JEDI não é suficiente para executar o MPAS-JEDI. A aplicação também depende do diretório de execução, pois o MPAS resolve vários arquivos de forma relativa, incluindo arquivos de stream, tabelas físicas, arquivos estáticos, decomposição de malha, `templateFields` e listas de streams.
-
-Por isso, este workflow separa o processo em três responsabilidades principais:
-
-- os arquivos YAML em `configs/` descrevem o experimento;
-- o comando `prepare-runtime` monta o diretório real de execução;
-- os comandos `render-yaml`, `render-pbs`, `submit --wait` e `validate-run` produzem, executam e validam o caso.
+O documento [Etapas cíclicas de domínio](cycle-stage-configuration.md) resume a relação entre MPAS, Obs2IODA, JEDI e o `simpleWorkflow`.

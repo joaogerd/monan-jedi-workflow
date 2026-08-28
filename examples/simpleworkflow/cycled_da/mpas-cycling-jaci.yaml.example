@@ -1,0 +1,58 @@
+# Primeiro forecast de cycling validável no JACI: analysis 00Z -> da_state 03Z/06Z.
+mpas:
+  lead_hours: 6
+  run_dir: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas/{cycle_id}
+  forecast_contract:
+    run_hours: 6
+    da_state_interval_hours: 3
+    mpi_ranks: 128
+    partition: x1.10242.graph.info.part.128
+    do_restart: false
+    do_DAcycling: true
+    IAU: 'off'
+  clean_patterns: ["mpasout.*.nc", "restart.*.nc", "log.atmosphere.*.out"]
+  link_directories:
+    - source: /p/projetos/monan_das/joao.gerd/work/CASE/runtime-skeleton
+      include: &physics_tables
+        [CAM_ABS_DATA.DBL, CAM_AEROPT_DATA.DBL, GENPARM.TBL, LANDUSE.TBL,
+         OZONE_DAT.TBL, OZONE_LAT.TBL, OZONE_PLEV.TBL, RRTMG_LW_DATA,
+         RRTMG_LW_DATA.DBL, RRTMG_SW_DATA, RRTMG_SW_DATA.DBL, SOILPARM.TBL,
+         VEGPARM.TBL]
+  links:
+    # Deve ser um estado MPAS completo pré-semeado antes da variacional.
+    - source: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi/{cycle_id}/Data/states/mpas.3dvar.{mpas_file_time}.nc
+      target: "mpas.analysis-full.{mpas_file_time}.nc"
+    - source: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/bin/mpas_atmosphere
+      target: mpas_atmosphere
+    - source: /p/projetos/monan_das/joao.gerd/manual-tests/baseline_bmatrix/x1.10242.invariant.nc
+      target: x1.10242.invariant.nc
+    - source: /p/projetos/monan_das/joao.gerd/manual-tests/baseline_bmatrix/x1.10242.graph.info.part.128
+      target: x1.10242.graph.info.part.128
+  templates:
+    - source: templates/namelist.atmosphere.cycling.in
+      target: namelist.atmosphere
+    - source: templates/streams.atmosphere.cycling.in
+      target: streams.atmosphere
+  pbs:
+    filename: run_mpas.pbs
+    job_name: "mpas_cycling_{cycle_yyyymmddhh}"
+    queue: pesqmidi
+    select: 1
+    ncpus: 128
+    mpiprocs: 128
+    walltime: "02:00:00"
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    setup:
+      - /p/projetos/monan_das/joao.gerd/projects/mpas-bmatrix-global/scripts/load_jaci_env.sh
+    command: ["./mpas_atmosphere"]
+    environment:
+      OMP_NUM_THREADS: "1"
+      FI_CXI_RX_MATCH_MODE: hybrid
+      GFORTRAN_CONVERT_UNIT: "big_endian:101-200"
+      F_UFMTENDIAN: big
+  validation:
+    log: log.atmosphere.0000.out
+    required_log_markers: ["Finished running the atmosphere core"]
+    required_outputs:
+      - "mpasout.{mpas_t_plus_3_file_time}.nc"
+      - "mpasout.{mpas_valid_file_time}.nc"

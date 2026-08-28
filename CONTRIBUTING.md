@@ -1,81 +1,104 @@
 # Contributing
 
-Este repositório deve evoluir sempre em passos pequenos, revisáveis e testáveis. A prioridade é preservar a reprodutibilidade do baseline MPAS-JEDI antes de generalizar o workflow.
+O objetivo deste projeto não é apenas produzir código que funcione; é produzir um workflow científico que outra pessoa consiga **usar, compreender, depurar e transferir para operação**.
+
+## Regras arquiteturais
+
+1. `monan-jedi-workflow` implementa lógica de domínio, não o workflow completo de produção.
+2. Nenhum módulo de domínio deve depender de `simpleWorkflow`, ecFlow ou Cylc.
+3. Etapas cíclicas devem possuir contratos explícitos e, quando aplicável, operações separadas de preparação, execução/submissão, espera e validação.
+4. Término do scheduler não substitui validação científica.
+5. A matriz B é um artefato externo à campanha cíclica.
+6. No estágio JEDI, `cycle_time` representa o horário da análise.
+7. Não esconda `qsub`, MPI ou outra ação cara dentro de um comando que pareça somente validar/preparar.
+
+Consulte `docs/developer/adr/` antes de alterar uma dessas decisões.
 
 ## Fluxo de desenvolvimento
-
-1. Atualize a branch `main` local.
-2. Crie uma branch curta e descritiva.
-3. Faça uma mudança pequena por PR.
-4. Rode os testes antes de abrir o PR.
-5. Abra o PR contra `main`.
-6. Faça merge somente depois que o CI passar.
-
-Exemplo:
 
 ```bash
 git switch main
 git pull --ff-only
-git switch -c docs/minha-mudanca
+git switch -c feature/minha-mudanca
 python -m pytest
 ```
 
+Mudanças devem ser pequenas o suficiente para revisão, mas completas o suficiente para deixar documentação e testes consistentes.
+
+## Definition of Done
+
+Uma mudança que altera comportamento público só está pronta quando inclui, conforme aplicável:
+
+- implementação;
+- testes de sucesso;
+- testes dos principais modos de falha;
+- atualização da CLI/`--help`;
+- documentação curta para o usuário;
+- documentação detalhada para o desenvolvedor;
+- docstrings públicas;
+- exemplo/template;
+- ADR quando uma decisão arquitetural nova foi tomada;
+- comportamento de reexecução/restart documentado e testado.
+
+Não deixe documentação para uma etapa futura da feature.
+
+## Padrão de documentação no código
+
+Módulos importantes devem explicar:
+
+- responsabilidade;
+- o que deliberadamente não fazem;
+- modelo conceitual;
+- entradas e saídas;
+- invariantes;
+- efeitos colaterais;
+- idempotência/restart;
+- decisões não óbvias;
+- principais falhas esperadas.
+
+Comentários inline devem explicar principalmente **por que** uma escolha existe. Não escreva comentários que apenas traduzem a próxima linha de Python para português/inglês.
+
+## Contratos de filesystem
+
+Arquivos produzidos entre etapas devem ter nomes/paths determinísticos e ser validados antes de consumo. Manifests pequenos em JSON são preferíveis quando ajudam a publicar semanticamente produtos (`analysis`, `background`, etc.) sem obrigar outro componente a interpretar logs.
+
+Não versione NetCDF/HDF5/GRIB/BUFR grandes, diretórios de runtime ou logs científicos.
+
+## Segurança de reexecução
+
+Uma etapa deve declarar claramente se é idempotente. Em particular:
+
+- links simbólicos válidos podem ser reutilizados;
+- arquivos reais de usuário não devem ser sobrescritos silenciosamente;
+- submissões PBS existentes devem ser reutilizadas por padrão;
+- reenvio precisa ser explícito (`--resubmit` quando suportado);
+- diretórios já preparados não podem misturar silenciosamente assets de baselines incompatíveis.
+
 ## Testes
 
-A suíte local deve ser executada com:
+Suíte principal:
 
 ```bash
 python -m pytest
 ```
 
-O GitHub Actions executa os testes automaticamente em pull requests para `main` e em pushes para `main`, usando Python 3.10, 3.11 e 3.12.
+Quando alterar CLI, modelos temporais ou contratos de stage, inclua testes unitários que não dependam do JACI. Testes reais no JACI complementam, mas não substituem, os testes locais de contrato.
 
-## Configuração de experimentos
+## PRs
 
-O baseline atual usa configuração dividida em arquivos YAML dentro de `configs/experiments/` e fragmentos reutilizáveis dentro de `configs/fragments/jedi/`.
-
-Use seletores compactos nos experimentos quando a configuração for compartilhada:
-
-```yaml
-variables:
-  use: mpas_3dfgat_core
-```
-
-```yaml
-observations:
-  use:
-    - radiosonde
-    - gnssro_ref_ncep
-    - sfc_corrected
-```
-
-Evite duplicar listas longas de variáveis ou observadores dentro de cada experimento. Prefira criar ou reutilizar fragmentos versionados.
-
-## Segurança operacional
-
-Este workflow não deve submeter jobs automaticamente.
-
-Comandos como `validate-config`, `render-yaml` e `render-pbs` são seguros porque apenas validam ou renderizam arquivos. Qualquer chamada a `qsub`, `mpiexec`, `mpirun` ou execução real do `mpasjedi_variational.x` deve ser uma ação manual e explícita.
-
-## Dados e saídas
-
-Não versione dados grandes, saídas de modelo, logs ou diretórios gerados. Em especial, não commite arquivos `*.nc`, `*.nc4`, `*.grib`, `*.bufr`, `build/`, `runtime/`, `scratch/` ou `logs/`.
-
-## Estilo dos PRs
-
-Prefira títulos no formato:
+Títulos recomendados:
 
 ```text
-tipo: descrição curta
+feat: add cycle-aware JEDI stage
+test: cover analysis/forecast handoff
+docs: document orchestration boundary
+fix: preserve validated runtime assets
 ```
 
-Exemplos:
+O corpo do PR deve registrar:
 
-```text
-config: add new observer fragment
-test: cover rendered YAML structure
-docs: document runtime preparation
-ci: update pytest workflow
-```
-
-Mantenha o corpo do PR objetivo, com resumo, notas de segurança operacional e indicação clara do que foi ou não testado.
+- o que mudou;
+- por que mudou;
+- impacto para usuário/desenvolvedor;
+- testes executados;
+- o que ainda requer validação no JACI.

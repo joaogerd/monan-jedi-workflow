@@ -1,0 +1,94 @@
+# Contrato de análise cíclica.
+#
+# IMPORTANTE: parta do baseline ATUAL validado. O template fornecido neste
+# exemplo foi derivado do baseline_passed.yaml versionado no repositório e
+# preserva seus observers/operadores/filtros.
+
+jedi:
+  cycle:
+    step_hours: 6
+    background_offset_hours: -3
+    window_hours: 6
+    first_cycle: "2018-04-15T00:00:00Z"
+
+  variables:
+    current_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
+    bmatrix_root: /path/to/published/bmatrix
+    obs_root: work/obs
+    # GNSSRO não vem do PREPBUFR convencional deste exemplo; é entrada externa.
+    gnssro_root: /path/to/validated/gnssro-ioda
+    initial_background: /path/to/mpasout.2018-04-14_21.00.00.nc
+    model_tstep: PT20M
+
+  run_dir: "work/jedi/{cycle_id}"
+
+  # O skeleton deve conter apenas assets fixos compatíveis com a compilação
+  # atual. Remova dele backgrounds/observações/outputs dependentes do ciclo.
+  runtime:
+    skeleton: /path/to/current/3dfgat/runtime-skeleton
+
+  background:
+    initial_source: "{initial_background}"
+    source: "work/mpas/{previous_cycle_id}/history/mpasout.{background_mpas_file_time}.nc"
+    target: "background/mpasout.{background_mpas_file_time}.nc"
+
+  # O estado MPAS completo no horario da analise inicializa o output e alimenta
+  # o templateFields auxiliar. Nao deixe templateFields no skeleton, pois ele
+  # varia a cada ciclo.
+  analysis_base_state:
+    source: "work/mpas/{previous_cycle_id}/history/mpasout.{analysis_mpas_file_time}.nc"
+    target: "Data/states/mpas.3dfgat.{analysis_mpas_file_time}.nc"
+    template_fields_target: templateFields.10242.nc
+    required_variables: [rho, theta, u, qv, surface_pressure, skintemp, refl10cm]
+
+  links:
+    - source: "{bmatrix_root}"
+      target: B_Matrix
+
+    # PREPBUFR convencional produzido pelo stage Obs2IODA.
+    - source: "{obs_root}/{analysis_yyyymmddhh}/sondes_obs_{analysis_yyyymmddhh}.h5"
+      target: "Data/ufo/testinput_tier_1/sondes_obs_{analysis_yyyymmddhh}_m.nc4"
+    - source: "{obs_root}/{analysis_yyyymmddhh}/sfc_obs_{analysis_yyyymmddhh}.h5"
+      target: "Data/ufo/testinput_tier_1/sfc_obs_{analysis_yyyymmddhh}_m.nc4"
+
+    # O baseline_passed usa GnssroRefNCEP. Mantemos esse observer em vez de
+    # alterar a ciência apenas para simplificar o exemplo.
+    - source: "{gnssro_root}/gnssro_obs_{analysis_yyyymmddhh}_s.nc4"
+      target: "Data/ufo/testinput_tier_1/gnssro_obs_{analysis_yyyymmddhh}_s.nc4"
+
+  templates:
+    - source: templates/variational.baseline_passed.yaml.in
+      target: variational.yaml
+    - source: templates/namelist.atmosphere.jedi-x1.10242.in
+      target: namelist.atmosphere.outer
+    - source: templates/namelist.atmosphere.jedi-x1.10242.in
+      target: namelist.atmosphere.inner
+
+  nonlinear_trajectory:
+    yaml: variational.yaml
+    outer_namelist: namelist.atmosphere.outer
+
+  pbs:
+    filename: run_jedi.pbs
+    job_name: "jedi_{analysis_yyyymmddhh}"
+    queue: pesqmini
+    select: 1
+    ncpus: 64
+    mpiprocs: 64
+    walltime: "00:30:00"
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    command:
+      - "{current_install}/bin/mpasjedi_variational.x"
+      - variational.yaml
+    environment:
+      OMP_NUM_THREADS: "1"
+      FI_CXI_RX_MATCH_MODE: hybrid
+
+  validation:
+    # Confirme este marcador no log da compilação atual antes da campanha.
+    log: jedi.stdout.log
+    required_log_markers:
+      - OOPS Ending
+    required_outputs:
+      - role: analysis
+        path: "Data/states/mpas.3dfgat.{analysis_mpas_file_time}.nc"

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import ExperimentConfig, require_key
+from .pbs_directives import pbs_header_lines
 from .runtime import get_rendered_dir, get_runtime_dir
 
 
@@ -101,7 +102,7 @@ def render_yaml(config: ExperimentConfig) -> str:
         f"    streams_file: {_quote(str(outer_streams))}",
         "  model:",
         "    name: MPAS",
-        f"    tstep: {experiment.get('model_tstep', 'PT45M')}",
+        f"    tstep: {experiment.get('model_tstep', 'PT20M')}",
         "    model variables: &modvars",
         *_block_list(model_variables, 4),
         "  analysis variables: &incvars",
@@ -235,11 +236,18 @@ def render_pbs(config: ExperimentConfig) -> str:
     if exports_block:
         exports_block += "\n\n"
 
-    return f"""#!/usr/bin/env bash
-#PBS -N {job_name}
-#PBS -q {queue}
-#PBS -l select={select}:ncpus={ncpus}:mpiprocs={mpiprocs}
-#PBS -l walltime={walltime}
+    header = "\n".join(
+        pbs_header_lines(
+            job_name=str(job_name),
+            queue=str(queue),
+            select=select,
+            ncpus=ncpus,
+            mpiprocs=mpiprocs,
+            walltime=str(walltime),
+        )
+    )
+
+    return f"""{header}
 #PBS -j oe
 #PBS -o {pbs_log_dir}
 

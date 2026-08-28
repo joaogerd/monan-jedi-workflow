@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import shlex
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from .cycle_context import CycleContext, parse_cycle_time
+from .pbs_directives import pbs_header_lines
 from .scheduler import PBSError, query
 from .stage_config import (
     StageConfigurationError,
@@ -23,6 +25,12 @@ from .stage_config import (
 
 _STAGE_DIR = ".monan-jedi-workflow"
 _MANIFEST_NAME = "mpas-submission.json"
+_DEFAULT_LOG_PATTERNS = (
+    "stdout.log",
+    "stderr.log",
+    "log.atmosphere.*.out",
+    "log.atmosphere.*.err",
+)
 
 
 class MPASValidationError(RuntimeError):
@@ -98,6 +106,39 @@ def _clean_declared_outputs(run_dir: Path, patterns: list[Any]) -> None:
                 path.unlink()
 
 
+def _archive_previous_logs(run: MPASRun) -> Path | None:
+    """Move logs from an earlier execution out of the active runtime.
+
+    This runs only immediately before a real qsub. Scientific products are
+    deliberately outside the supported patterns and are never removed here.
+    """
+    raw_patterns = run.config.get("log_patterns", list(_DEFAULT_LOG_PATTERNS))
+    patterns = _require_list(raw_patterns, "mpas.log_patterns")
+    if any(not isinstance(item, str) or not item for item in patterns):
+        raise StageConfigurationError("mpas.log_patterns must contain non-empty strings.")
+    logs = sorted(
+        {
+            path
+            for pattern in patterns
+            for path in run.run_dir.glob(pattern)
+            if path.is_file() or path.is_symlink()
+        }
+    )
+    if not logs:
+        return None
+
+    archive_root = run.run_dir / _STAGE_DIR / "previous-logs"
+    archive = archive_root / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    suffix = 1
+    while archive.exists():
+        archive = archive_root / f"{archive.name}-{suffix}"
+        suffix += 1
+    archive.mkdir(parents=True)
+    for path in logs:
+        shutil.move(str(path), archive / path.name)
+    return archive
+
+
 def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
     """Load ``mpas.yaml`` and resolve a concrete execution layout for one cycle."""
     config_dir = config_dir.resolve()
@@ -107,6 +148,34 @@ def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
     if lead_hours < 0:
         raise StageConfigurationError("mpas.lead_hours must not be negative.")
     context = cycle_render_context(cycle, lead_hours=lead_hours)
+    intermediate = cycle.value + timedelta(hours=3)
+    context = {
+        **context,
+        "mpas_t_plus_3_file_time": intermediate.strftime("%Y-%m-%d_%H.%M.%S"),
+    }
+
+    contract = _require_mapping(config.get("forecast_contract", {}), "mpas.forecast_contract")
+    if contract:
+        expected = {
+            "run_hours": 6,
+            "da_state_interval_hours": 3,
+            "mpi_ranks": 128,
+            "partition": "x1.10242.graph.info.part.128",
+            "do_restart": False,
+            "do_DAcycling": True,
+            "IAU": "off",
+        }
+        differences = [
+            f"{key}={contract.get(key)!r} (expected {value!r})"
+            for key, value in expected.items()
+            if contract.get(key) != value
+        ]
+        if lead_hours != 6:
+            differences.append(f"lead_hours={lead_hours!r} (expected 6)")
+        if differences:
+            raise StageConfigurationError(
+                "MPAS cycling forecast contract mismatch: " + "; ".join(differences)
+            )
 
     run_dir_value = config.get("run_dir")
     if not isinstance(run_dir_value, str) or not run_dir_value:
@@ -120,6 +189,10 @@ def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
     context = {**context, "run_dir": str(run_dir)}
 
     pbs = _require_mapping(config.get("pbs"), "mpas.pbs")
+    if contract and int(pbs.get("mpiprocs", pbs.get("ncpus", 1))) != int(contract["mpi_ranks"]):
+        raise StageConfigurationError(
+            "mpas.pbs.mpiprocs must match mpas.forecast_contract.mpi_ranks."
+        )
     pbs_name = pbs.get("filename", "run_mpas.pbs")
     pbs_path = run_dir / render_text(pbs_name, context, label="mpas.pbs.filename")
     return MPASRun(
@@ -153,6 +226,13 @@ def _render_pbs(run: MPASRun) -> None:
         exports.append(
             f"export {name}={shlex.quote(render_text(value, run.context, label=f'mpas.pbs.environment.{name}'))}"
         )
+    setup = _require_list(pbs.get("setup", []), "mpas.pbs.setup")
+    if any(not isinstance(item, str) or not item for item in setup):
+        raise StageConfigurationError("mpas.pbs.setup must contain non-empty script paths.")
+    setup_lines = [
+        "source " + shlex.quote(render_text(item, run.context, label="mpas.pbs.setup item"))
+        for item in setup
+    ]
 
     job_name = render_text(
         pbs.get("job_name", "mpas_{cycle_id}"), run.context, label="mpas.pbs.job_name"
@@ -165,15 +245,19 @@ def _render_pbs(run: MPASRun) -> None:
 
     run.pbs_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        "#!/usr/bin/env bash",
-        f"#PBS -N {job_name}",
-        f"#PBS -q {queue}",
-        f"#PBS -l select={select}:ncpus={ncpus}:mpiprocs={mpiprocs}",
-        f"#PBS -l walltime={walltime}",
+        *pbs_header_lines(
+            job_name=job_name,
+            queue=queue,
+            select=select,
+            ncpus=ncpus,
+            mpiprocs=mpiprocs,
+            walltime=walltime,
+        ),
         "#PBS -j oe",
         "",
         "set -euo pipefail",
         f"cd {shlex.quote(str(run.run_dir))}",
+        *setup_lines,
         *exports,
         "ulimit -s unlimited || true",
         f"{shlex.quote(launcher)} -n {mpiprocs} {rendered_command} > {shlex.quote(stdout)} 2> {shlex.quote(stderr)}",
@@ -188,6 +272,39 @@ def prepare_mpas(config_dir: Path, cycle_time: str) -> MPASRun:
     run = load_mpas_run(config_dir, cycle_time)
     run.run_dir.mkdir(parents=True, exist_ok=True)
     _clean_declared_outputs(run.run_dir, run.config.get("clean_patterns", []))
+
+    for index, value in enumerate(
+        _require_list(run.config.get("link_directories", []), "mpas.link_directories")
+    ):
+        if isinstance(value, dict):
+            directory = _require_mapping(value, f"mpas.link_directories[{index}]")
+            source_value = directory.get("source")
+            include = _require_list(
+                directory.get("include", []),
+                f"mpas.link_directories[{index}].include",
+                non_empty=True,
+            )
+            if any(not isinstance(name, str) or not name or Path(name).name != name for name in include):
+                raise StageConfigurationError(
+                    f"mpas.link_directories[{index}].include must contain plain filenames."
+                )
+        else:
+            source_value = value
+            include = None
+        source_dir = resolve_path(
+            source_value,
+            config_dir=run.config_dir,
+            context=run.context,
+            label=f"mpas.link_directories[{index}]",
+        )
+        if not source_dir.is_dir():
+            raise FileNotFoundError(f"MPAS asset directory does not exist: {source_dir}")
+        sources = (source_dir / name for name in include) if include is not None else source_dir.iterdir()
+        for source in sorted(sources):
+            if source.is_file():
+                _safe_link(source, run.run_dir / source.name)
+            elif include is not None:
+                raise FileNotFoundError(f"MPAS declared runtime asset does not exist: {source}")
 
     for index, raw_entry in enumerate(_require_list(run.config.get("links", []), "mpas.links")):
         entry = _require_mapping(raw_entry, f"mpas.links[{index}]")
@@ -270,6 +387,7 @@ def submit_mpas(
     else:
         if not run.pbs_path.is_file():
             raise FileNotFoundError(f"MPAS PBS file not found: {run.pbs_path}")
+        _archive_previous_logs(run)
         process = subprocess.run(
             ["qsub", str(run.pbs_path)],
             cwd=run.run_dir,

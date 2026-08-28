@@ -53,6 +53,17 @@ class ToolCheck:
     executable: bool
 
 
+@dataclass(frozen=True)
+class RuntimeLinkerCheck:
+    executable: str
+    resolved_executable: str | None
+    returncode: int | None
+    resolved_libraries: list[dict[str, Any]]
+    missing_libraries: list[str]
+    valid: bool
+    problem: str | None = None
+
+
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -128,6 +139,151 @@ def _provenance_options(config: dict[str, Any]) -> dict[str, bool]:
     if not isinstance(sha256, bool):
         raise StageConfigurationError("obs2ioda.provenance.sha256 must be a boolean.")
     return {"sha256": sha256}
+
+
+def _render_runtime(run: Obs2IODARun) -> dict[str, Any]:
+    raw = _require_mapping(run.config.get("runtime", {}), "obs2ioda.runtime")
+    library_paths = _require_list(
+        raw.get("library_paths", []), "obs2ioda.runtime.library_paths"
+    )
+    dependency_checks = _require_list(
+        raw.get("dependency_checks", []), "obs2ioda.runtime.dependency_checks"
+    )
+    if any(not isinstance(item, str) or not item for item in library_paths):
+        raise StageConfigurationError(
+            "obs2ioda.runtime.library_paths must contain non-empty strings."
+        )
+    if any(not isinstance(item, str) or not item for item in dependency_checks):
+        raise StageConfigurationError(
+            "obs2ioda.runtime.dependency_checks must contain non-empty strings."
+        )
+    rendered_paths = [
+        str(
+            resolve_path(
+                item,
+                config_dir=run.config_dir,
+                context=run.context,
+                label="obs2ioda.runtime.library_paths item",
+            )
+        )
+        for item in library_paths
+    ]
+    return {
+        "library_paths": rendered_paths,
+        "dependency_checks": [
+            render_text(item, run.context, label="obs2ioda.runtime.dependency_checks item")
+            for item in dependency_checks
+        ],
+        "linker_command": render_text(
+            _require_string(
+                raw.get("linker_command", "ldd"), "obs2ioda.runtime.linker_command"
+            ),
+            run.context,
+            label="obs2ioda.runtime.linker_command",
+        ),
+        "timeout_seconds": _timeout(
+            raw.get("timeout_seconds"), "obs2ioda.runtime.timeout_seconds", 30
+        ),
+    }
+
+
+def _runtime_environment(runtime: dict[str, Any]) -> dict[str, str]:
+    """Build an environment used only by Obs2IODA child processes."""
+    environment = os.environ.copy()
+    configured = [str(item) for item in runtime.get("library_paths", [])]
+    inherited = environment.get("LD_LIBRARY_PATH", "").split(os.pathsep)
+    paths = list(dict.fromkeys(item for item in configured + inherited if item))
+    if paths:
+        environment["LD_LIBRARY_PATH"] = os.pathsep.join(paths)
+    return environment
+
+
+def _parse_ldd(output: str) -> tuple[list[dict[str, Any]], list[str]]:
+    resolved: list[dict[str, Any]] = []
+    missing: list[str] = []
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if "=>" in line:
+            name, target = (part.strip() for part in line.split("=>", 1))
+            target_path = target.split(" (", 1)[0].strip()
+            found = target_path != "not found"
+            resolved.append(
+                {"library": name, "path": target_path if found else None, "found": found}
+            )
+            if not found:
+                missing.append(name)
+        else:
+            target_path = line.split(" (", 1)[0].strip()
+            resolved.append(
+                {"library": Path(target_path).name, "path": target_path, "found": True}
+            )
+    return resolved, missing
+
+
+def _check_runtime_dependencies(
+    runtime: dict[str, Any], *, cwd: Path, logs_dir: Path, label: str
+) -> list[RuntimeLinkerCheck]:
+    checks: list[RuntimeLinkerCheck] = []
+    environment = _runtime_environment(runtime)
+    linker = _tool_check(str(runtime.get("linker_command", "ldd")))
+    for index, executable_text in enumerate(runtime.get("dependency_checks", []), start=1):
+        executable = _tool_check(str(executable_text))
+        if not linker.executable:
+            checks.append(
+                RuntimeLinkerCheck(
+                    str(executable_text), executable.resolved_path, None, [], [], False,
+                    f"runtime linker command unavailable: {linker.command}",
+                )
+            )
+            continue
+        if not executable.executable:
+            checks.append(
+                RuntimeLinkerCheck(
+                    str(executable_text), executable.resolved_path, None, [], [], False,
+                    "runtime dependency executable unavailable",
+                )
+            )
+            continue
+        try:
+            process = subprocess.run(
+                [str(linker.resolved_path), str(executable.resolved_path)],
+                cwd=cwd,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=_timeout(
+                    runtime.get("timeout_seconds"), "obs2ioda runtime timeout", 30
+                ),
+            )
+        except subprocess.TimeoutExpired as error:
+            (logs_dir / f"{label}-linker-{index}.stdout.log").write_text(
+                error.stdout or "", encoding="utf-8"
+            )
+            (logs_dir / f"{label}-linker-{index}.stderr.log").write_text(
+                error.stderr or "", encoding="utf-8"
+            )
+            checks.append(
+                RuntimeLinkerCheck(
+                    str(executable_text), executable.resolved_path, None, [], [], False,
+                    "runtime linker check timeout",
+                )
+            )
+            continue
+        (logs_dir / f"{label}-linker-{index}.stdout.log").write_text(process.stdout, encoding="utf-8")
+        (logs_dir / f"{label}-linker-{index}.stderr.log").write_text(process.stderr, encoding="utf-8")
+        resolved, missing = _parse_ldd(process.stdout + "\n" + process.stderr)
+        valid = process.returncode == 0 and not missing
+        checks.append(
+            RuntimeLinkerCheck(
+                str(executable_text), executable.resolved_path, process.returncode,
+                resolved, missing, valid,
+                None if valid else "unresolved runtime linker dependencies",
+            )
+        )
+    return checks
 
 
 def load_obs2ioda_run(config_dir: Path, cycle_time: str) -> Obs2IODARun:
@@ -220,6 +376,7 @@ def _build_plan(run: Obs2IODARun) -> dict[str, Any]:
         "converters": converters,
         "probes": probes,
         "provenance": _provenance_options(run.config),
+        "runtime": _render_runtime(run),
     }
     plan["plan_sha256"] = _config_sha256(plan)
     return plan
@@ -253,7 +410,7 @@ def _run_probe(run: Obs2IODARun, probe: dict[str, Any], logs_dir: Path) -> dict[
     if not tool.executable:
         return {**record, "valid": False, "problem": "probe executable unavailable"}
     try:
-        process = subprocess.run(probe["argv"], cwd=run.work_dir, text=True, capture_output=True, check=False, timeout=probe["timeout_seconds"])
+        process = subprocess.run(probe["argv"], cwd=run.work_dir, env=_runtime_environment(_render_runtime(run)), text=True, capture_output=True, check=False, timeout=probe["timeout_seconds"])
     except subprocess.TimeoutExpired as error:
         stdout_path.write_text(error.stdout or "", encoding="utf-8")
         stderr_path.write_text(error.stderr or "", encoding="utf-8")
@@ -273,6 +430,13 @@ def doctor_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
     logs_dir.mkdir(parents=True, exist_ok=True)
     checks: list[dict[str, Any]] = []
     problems: list[str] = []
+    linker_checks = _check_runtime_dependencies(
+        plan["runtime"], cwd=run.work_dir, logs_dir=logs_dir, label="doctor"
+    )
+    for check in linker_checks:
+        if not check.valid:
+            detail = ", ".join(check.missing_libraries) or check.problem or "unknown error"
+            problems.append(f"runtime dependencies unavailable for {check.executable}: {detail}")
     for converter in plan["converters"]:
         tool = _tool_check(converter["argv"][0])
         checks.append({"role": f"converter:{converter['name']}", **tool.__dict__})
@@ -285,7 +449,7 @@ def doctor_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
                 problems.append(f"inspection executable unavailable: {inspector.command}")
     probes = [_run_probe(run, probe, logs_dir) for probe in plan["probes"]]
     problems.extend(f"probe failed: {probe['name']}" for probe in probes if not probe["valid"])
-    report = {"schema_version": 2, "checked_at": _timestamp(), "cycle_time": run.cycle.cycle_time, "cycle_id": run.cycle.cycle_id, "plan_sha256": plan["plan_sha256"], "checks": checks, "probes": probes, "valid": not problems, "problems": problems}
+    report = {"schema_version": 3, "checked_at": _timestamp(), "cycle_time": run.cycle.cycle_time, "cycle_id": run.cycle.cycle_id, "plan_sha256": plan["plan_sha256"], "checks": checks, "runtime": {"library_paths": plan["runtime"]["library_paths"], "linker_checks": [check.__dict__ for check in linker_checks]}, "probes": probes, "valid": not problems, "problems": problems}
     report_path = run.work_dir / ".monan-jedi-workflow" / "obs2ioda-doctor.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -329,6 +493,21 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
     include_sha256 = bool(_require_mapping(manifest.get("provenance", {}), "obs2ioda manifest provenance").get("sha256", False))
     logs_dir = run.work_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
+    runtime = _require_mapping(manifest.get("runtime", {}), "obs2ioda manifest runtime")
+    linker_checks = _check_runtime_dependencies(
+        runtime, cwd=run.work_dir, logs_dir=logs_dir, label="run"
+    )
+    failed_linker_checks = [check for check in linker_checks if not check.valid]
+    manifest["runtime_dependency_checks"] = [check.__dict__ for check in linker_checks]
+    if failed_linker_checks:
+        manifest["state"] = "failed-runtime-dependencies"
+        _write_manifest(run, manifest)
+        details = "; ".join(
+            f"{check.executable}: {', '.join(check.missing_libraries) or check.problem}"
+            for check in failed_linker_checks
+        )
+        raise Obs2IODADoctorError("Obs2IODA runtime dependency check failed: " + details)
+    child_environment = _runtime_environment(runtime)
     for converter in converters:
         converter = _require_mapping(converter, "obs2ioda manifest converter")
         name = _require_string(converter.get("name"), "obs2ioda manifest converter name")
@@ -343,7 +522,7 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
         stderr_path = logs_dir / f"{name}.attempt-{attempt}.stderr.log"
         started_at = _timestamp()
         try:
-            process = subprocess.run(converter["argv"], cwd=run.work_dir, text=True, capture_output=True, check=False, timeout=_timeout(converter.get("timeout_seconds"), f"{name}.timeout_seconds", 900))
+            process = subprocess.run(converter["argv"], cwd=run.work_dir, env=child_environment, text=True, capture_output=True, check=False, timeout=_timeout(converter.get("timeout_seconds"), f"{name}.timeout_seconds", 900))
         except subprocess.TimeoutExpired as error:
             stdout_path.write_text(error.stdout or "", encoding="utf-8")
             stderr_path.write_text(error.stderr or "", encoding="utf-8")
@@ -378,6 +557,9 @@ def validate_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
     converters = _require_list(manifest.get("converters"), "obs2ioda manifest converters", non_empty=True)
     logs_dir = run.work_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
+    child_environment = _runtime_environment(
+        _require_mapping(manifest.get("runtime", {}), "obs2ioda manifest runtime")
+    )
     records: list[dict[str, Any]] = []
     problems: list[str] = []
     for converter in converters:
@@ -395,7 +577,7 @@ def validate_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
             stdout_path = logs_dir / f"{name}.inspect-{index + 1}.stdout.log"
             stderr_path = logs_dir / f"{name}.inspect-{index + 1}.stderr.log"
             try:
-                process = subprocess.run(inspection["argv"], cwd=run.work_dir, text=True, capture_output=True, check=False, timeout=inspection["timeout_seconds"])
+                process = subprocess.run(inspection["argv"], cwd=run.work_dir, env=child_environment, text=True, capture_output=True, check=False, timeout=inspection["timeout_seconds"])
                 stdout_path.write_text(process.stdout, encoding="utf-8")
                 stderr_path.write_text(process.stderr, encoding="utf-8")
                 missing = [marker for marker in inspection["required_header_markers"] if marker not in process.stdout + "\n" + process.stderr]
