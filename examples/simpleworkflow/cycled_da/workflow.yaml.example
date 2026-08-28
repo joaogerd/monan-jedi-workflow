@@ -1,4 +1,4 @@
-# DAG de referência da pesquisa.
+# Workflow de referência da pesquisa.
 #
 # O arquivo contém somente orquestração. As regras científicas/runtime vivem
 # nos arquivos de domínio do CASE. Os mesmos comandos poderão ser chamados por

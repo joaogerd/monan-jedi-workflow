@@ -13,7 +13,7 @@ monan-jedi-workflow cycle-doctor CASE --cycle TIME \
 
 ## `simpleWorkflow` não aparece no doctor
 
-Isso é aviso, não falha do domínio. Os comandos `monan-jedi-workflow ...` continuam funcionando manualmente. Instale `simpleWorkflow` quando quiser executar a DAG de pesquisa.
+Isso é aviso, não falha do domínio. Os comandos `monan-jedi-workflow ...` continuam funcionando manualmente. Instale `simpleWorkflow` quando quiser executar o workflow de pesquisa.
 
 ## Background não existe
 

@@ -4,11 +4,11 @@
 
 ## Contexto
 
-A matriz B possui uma campanha própria de produção e validação. Misturar esse cálculo com a campanha de assimilação amplia a DAG e permite que um ciclo regenere inadvertidamente um componente científico que deveria permanecer fixo.
+A matriz B possui uma campanha própria de produção e validação. Misturar esse cálculo com a campanha de assimilação amplia o workflow e permite que um ciclo regenere inadvertidamente um componente científico que deveria permanecer fixo.
 
 ## Decisão
 
-O ciclo de assimilação consome uma matriz B previamente produzida, validada e identificável. A produção da B permanece fora da DAG de cycling.
+O ciclo de assimilação consome uma matriz B previamente produzida, validada e identificável. A produção da B permanece fora do workflow de cycling.
 
 ## Consequências
 

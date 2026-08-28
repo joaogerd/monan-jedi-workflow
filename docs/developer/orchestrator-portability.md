@@ -2,11 +2,11 @@
 
 ## Objetivo
 
-A DAG executada com `simpleWorkflow` durante a pesquisa deve poder ser reproduzida no ecFlow usado pela operação do INPE ou em Cylc sem portar a lógica científica dos stages.
+O workflow executado com `simpleWorkflow` durante a pesquisa deve poder ser reproduzido no ecFlow usado pela operação do INPE ou em Cylc sem portar a lógica científica dos stages.
 
 O que é transferido é a **dependência entre tarefas**, não a implementação de cada tarefa.
 
-## DAG de referência
+## Workflow de referência
 
 ```text
 obs_doctor
@@ -40,7 +40,7 @@ A pesquisa usa um YAML explícito:
     - "{cycle_time}"
 ```
 
-O arquivo completo em `examples/simpleworkflow/cycled_da/` é a implementação executável de referência da DAG.
+O arquivo completo em `examples/simpleworkflow/cycled_da/` é a implementação executável de referência do workflow.
 
 ## ecFlow
 
@@ -81,7 +81,7 @@ Essas regras pertencem ao domínio e já são testadas no pacote.
 
 ## Cylc
 
-O mesmo princípio se aplica a um grafo Cylc. A configuração Cylc deve expressar dependências e calendário; os scripts continuam chamando os mesmos comandos públicos.
+O mesmo princípio se aplica a uma configuração Cylc. Ela deve expressar dependências e calendário; os scripts continuam chamando os mesmos comandos públicos.
 
 ## O que pode mudar entre orquestradores
 

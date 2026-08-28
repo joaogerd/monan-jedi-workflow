@@ -88,7 +88,7 @@ Nesta fase mantenha inalterados:
 
 Troque apenas as observacoes convencionais pelo output do Obs2IODA. O baseline usa tambem `GnssroRefNCEP`; GNSSRO continua sendo uma entrada separada enquanto nao houver um produtor definido no workflow.
 
-Teste os comandos diretamente antes de qualquer DAG:
+Teste os comandos diretamente antes de qualquer workflow orquestrado:
 
 ```bash
 monan-jedi-workflow obs2ioda-doctor CASE --cycle 2018-04-15T00:00:00Z

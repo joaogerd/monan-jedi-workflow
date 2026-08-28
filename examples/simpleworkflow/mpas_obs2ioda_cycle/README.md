@@ -8,7 +8,7 @@ Para análise -> forecast -> próximo ciclo, use:
 examples/simpleworkflow/cycled_da/
 ```
 
-A DAG deste exemplo reduzido continua útil para validar MPAS e Obs2IODA independentemente do JEDI.
+O workflow deste exemplo reduzido continua útil para validar MPAS e Obs2IODA independentemente do JEDI.
 
 ## Pré-requisitos
 

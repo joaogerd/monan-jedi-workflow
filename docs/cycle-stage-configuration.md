@@ -39,9 +39,9 @@ mpas-validate CONFIG_DIR --cycle TIME
 
 Configuração: `mpas.yaml`.
 
-## DAG de referência
+## Workflow de referência
 
-Para simplicidade e portabilidade, a DAG inicial executa um ciclo completo antes de avançar ao próximo:
+Para simplicidade e portabilidade, o workflow inicial executa um ciclo completo antes de avançar ao próximo:
 
 ```text
 obs_doctor
@@ -78,7 +78,7 @@ RUN/.monan-jedi-workflow/
   jedi-artifacts.json
 ```
 
-O `simpleWorkflow` mantém separadamente o estado da DAG. Não confunda estado de orquestração com validação científica do domínio.
+O `simpleWorkflow` mantém separadamente o estado da orquestração do workflow. Não confunda estado de orquestração com validação científica do domínio.
 
 ## Operação futura
 

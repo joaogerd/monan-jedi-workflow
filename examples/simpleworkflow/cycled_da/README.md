@@ -1,6 +1,6 @@
 # Cycling DA de referência com simpleWorkflow
 
-Este diretório descreve a **DAG de pesquisa**, não um pacote de dados científicos pronto. O objetivo é tornar explícita e pequena a tradução:
+Este diretório descreve o **workflow de pesquisa**, não um pacote de dados científicos pronto. O objetivo é tornar explícita e pequena a tradução:
 
 ```text
 Obs2IODA -> JEDI FGAT trajectory/analysis -> MPAS forecast -> next cycle
@@ -11,7 +11,7 @@ Os mesmos comandos de domínio podem ser chamados futuramente por ecFlow ou Cylc
 ## Arquivos
 
 ```text
-workflow.yaml.example  DAG, período e contratos de artefatos
+workflow.yaml.example  workflow, período e contratos de artefatos
 obs2ioda.yaml.example  PREPBUFR -> IODA em layout previsível
 jedi.yaml.example      contrato cycle-aware da análise
 mpas.yaml.example      handoff análise -> forecast/background
@@ -66,7 +66,7 @@ Valide o handoff entre os dois ciclos antes de ampliar o período.
 
 ## Restart
 
-A DAG declara manifests e produtos científicos essenciais como artifacts do `simpleWorkflow`. Assim, um sucesso anterior só é reutilizado quando os outputs declarados continuam presentes.
+O workflow declara manifests e produtos científicos essenciais como artifacts do `simpleWorkflow`. Assim, um sucesso anterior só é reutilizado quando os outputs declarados continuam presentes.
 
 Isso complementa — não substitui — os manifests internos dos stages em `.monan-jedi-workflow/`.
 

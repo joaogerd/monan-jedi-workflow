@@ -4,7 +4,7 @@ O objetivo deste projeto não é apenas produzir código que funcione; é produz
 
 ## Regras arquiteturais
 
-1. `monan-jedi-workflow` implementa lógica de domínio, não a DAG completa.
+1. `monan-jedi-workflow` implementa lógica de domínio, não o workflow completo de produção.
 2. Nenhum módulo de domínio deve depender de `simpleWorkflow`, ecFlow ou Cylc.
 3. Etapas cíclicas devem possuir contratos explícitos e, quando aplicável, operações separadas de preparação, execução/submissão, espera e validação.
 4. Término do scheduler não substitui validação científica.

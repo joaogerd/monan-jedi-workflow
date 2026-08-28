@@ -36,7 +36,7 @@ monan-jedi-workflow jedi-wait     CASE --cycle 2018-04-15T00:00:00Z
 monan-jedi-workflow jedi-validate CASE --cycle 2018-04-15T00:00:00Z
 ```
 
-Esses comandos não executam a DAG completa. Isso é intencional.
+Esses comandos não executam o workflow completo. Isso é intencional.
 
 ## Instalação
 
@@ -92,7 +92,7 @@ examples/simpleworkflow/cycled_da/
 
 ## Matriz B
 
-A geração da B não faz parte da DAG de cycling. O ciclo consome uma B previamente construída e validada. Isso permite que `MPAS-BMatrix` e a campanha de assimilação evoluam independentemente e preserva a identidade da B usada em cada experimento.
+A geração da B não faz parte do workflow de cycling. O ciclo consome uma B previamente construída e validada. Isso permite que `MPAS-BMatrix` e a campanha de assimilação evoluam independentemente e preserva a identidade da B usada em cada experimento.
 
 ## Documentação
 

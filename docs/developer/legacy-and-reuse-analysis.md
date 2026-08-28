@@ -41,7 +41,7 @@ Não reaproveitar Bash como arquitetura principal.
 Minerar seletivamente:
 
 - doctor;
-- DAG/plan;
+- workflow/plan;
 - manifests;
 - modelo temporal;
 - estratégia de testes;
@@ -78,7 +78,7 @@ A branch de desenvolvimento do cycling remove esse teste órfão em vez de impor
 
 Usar:
 
-- DAG;
+- workflow e dependências entre etapas;
 - expansão de ciclos;
 - estado/restart;
 - logs por tentativa;

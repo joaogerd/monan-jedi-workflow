@@ -15,6 +15,6 @@ A unidade pública de integração é uma etapa cycle-aware chamável por CLI e 
 ## Consequências
 
 - pesquisa e operação podem usar orquestradores diferentes;
-- a DAG pode ser reexpressa sem reimplementar runtime científico;
+- o workflow e suas dependências podem ser reexpressos sem reimplementar runtime científico;
 - cada etapa precisa de contrato mais explícito;
-- não haverá um motor de DAG escondido dentro do pacote de domínio.
+- não haverá um motor de workflow escondido dentro do pacote de domínio.

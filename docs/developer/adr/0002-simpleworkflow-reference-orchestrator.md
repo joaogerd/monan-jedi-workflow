@@ -14,7 +14,7 @@ Ele não será importado pelo pacote `monan_jedi_workflow` nem será requisito p
 
 ## Consequências
 
-- a pesquisa ganha DAG, ciclos, restart e proveniência;
+- a pesquisa ganha dependências explícitas entre etapas, ciclos, restart e proveniência;
 - o workflow continua inspecionável e pequeno;
-- exemplos `workflow.yaml` funcionam como especificação executável da DAG;
+- exemplos `workflow.yaml` funcionam como especificação executável do workflow;
 - a futura tradução para ecFlow/Cylc atua somente na camada de orquestração.

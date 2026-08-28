@@ -2,7 +2,7 @@
 
 ## Decisão central
 
-O `monan-jedi-workflow` é uma biblioteca/CLI de **domínio**. Ele conhece MPAS, JEDI, Obs2IODA, contratos de runtime e validação. Ele não é o dono da DAG de produção.
+O `monan-jedi-workflow` é uma biblioteca/CLI de **domínio**. Ele conhece MPAS, JEDI, Obs2IODA, contratos de runtime e validação. Ele não é o dono do workflow completo de produção.
 
 A orquestração pertence a uma camada externa:
 
@@ -17,9 +17,15 @@ A orquestração pertence a uma camada externa:
         pesquisa       operação      alternativa
 ```
 
-`simpleWorkflow` é a implementação de referência para pesquisa porque fornece DAG, ciclos, estado, restart, logs e proveniência sem exigir a infraestrutura de um gerenciador operacional de centro inteiro.
+`simpleWorkflow` é a implementação de referência para pesquisa porque fornece dependências entre tarefas, ciclos, estado, restart, logs e proveniência sem exigir a infraestrutura de um gerenciador operacional de centro inteiro.
 
-No INPE, a operação pode reproduzir a mesma DAG em ecFlow. Essa migração não deve exigir reimplementar lógica científica ou scripts de runtime.
+No INPE, a operação pode reproduzir o mesmo workflow em ecFlow. Essa migração não deve exigir reimplementar lógica científica ou scripts de runtime.
+
+## Terminologia: workflow e DAG
+
+Nesta documentação, **workflow** é o termo principal para o processo científico: etapas, dependências, ciclos e regras de execução.
+
+Em ciência da computação, esse conjunto de etapas e dependências pode ser representado internamente como um **DAG** (*Directed Acyclic Graph*, ou grafo direcionado acíclico). Nesse modelo, cada etapa é um nó e cada dependência é uma ligação direcionada. O termo DAG fica reservado a detalhes técnicos da estrutura de dados ou do algoritmo de orquestração; usuários do workflow não precisam conhecer esse conceito para configurar ou executar uma campanha.
 
 ## Fronteira de responsabilidades
 
@@ -75,7 +81,7 @@ Não faça:
 
 - importar `simpleWorkflow` dentro de módulos científicos;
 - chamar ecFlow dentro de `jedi_stage.py`;
-- codificar a DAG completa em `cycle-run` dentro do pacote de domínio;
+- codificar o workflow completo em `cycle-run` dentro do pacote de domínio;
 - esconder `qsub` dentro de um comando de preparação;
 - considerar retorno do PBS como substituto da validação científica.
 
