@@ -1,7 +1,7 @@
 """Materialize a clean corrected 00Z->18Z replay case for simpleWorkflow.
 
 The materializer intentionally reuses only configuration/static assets and the
-declared first-cycle starting inputs.  Forecasts, analyses and IODA products
+declared first-cycle starting inputs. Forecasts, analyses and IODA products
 for 06/12/18 are generated inside the new replay namespace.
 """
 
@@ -243,6 +243,13 @@ def _patch_mpas(source_case: Path, destination: Path, replay_root: Path) -> None
     pbs = mpas.get("pbs")
     if not isinstance(pbs, dict) or int(pbs.get("mpiprocs", 0)) != 128:
         raise StageConfigurationError("corrected replay requires MPAS pbs.mpiprocs=128")
+
+    # The replay must not inherit an environment bootstrap script from a historical
+    # case. The current JACI execution contract is the same as the validated JEDI
+    # jobs: explicit PBS environment variables plus the executable's linked runtime.
+    # If a future site requires a setup script, it must be added deliberately to the
+    # materialized case and validated there rather than copied invisibly from history.
+    pbs["setup"] = []
 
     mpas["run_dir"] = str(replay_root / "mpas/{cycle_id}")
 
