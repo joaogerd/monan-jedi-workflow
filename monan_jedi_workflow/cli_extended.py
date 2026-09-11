@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from . import cli as legacy
+from .corrected_replay import materialize_corrected_replay
 from .init_stage import prepare_mpas_init, submit_mpas_init, validate_mpas_init, wait_mpas_init
 from .netcdf_compare import main as compare_netcdf_main
 from .validation_gate import require_valid_manifest
@@ -14,7 +15,7 @@ from .wps_stage import prepare_wps, run_wps, validate_wps
 _NEW = {
     "wps-prepare", "wps-run", "wps-validate",
     "mpas-init-prepare", "mpas-init-submit", "mpas-init-wait", "mpas-init-validate",
-    "compare-netcdf", "validation-gate",
+    "compare-netcdf", "validation-gate", "materialize-corrected-replay",
 }
 
 
@@ -42,6 +43,16 @@ def _parser() -> argparse.ArgumentParser:
         help="require one stage validation manifest to contain valid=true",
     )
     gate.add_argument("manifest", type=Path)
+    replay = sub.add_parser(
+        "materialize-corrected-replay",
+        help="create a clean 2018-04-15 00Z->18Z simpleWorkflow replay case",
+    )
+    replay.add_argument("--initial-jedi-case", required=True, type=Path)
+    replay.add_argument("--cycling-jedi-case", required=True, type=Path)
+    replay.add_argument("--mpas-case", required=True, type=Path)
+    replay.add_argument("--obs2ioda-config", required=True, type=Path)
+    replay.add_argument("--workflow-template", required=True, type=Path)
+    replay.add_argument("--destination", required=True, type=Path)
     return parser
 
 
@@ -70,4 +81,14 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "validation-gate":
         require_valid_manifest(args.manifest)
         print(f"[OK] validation manifest accepted: {args.manifest}")
+    elif args.command == "materialize-corrected-replay":
+        path = materialize_corrected_replay(
+            initial_jedi_case=args.initial_jedi_case,
+            cycling_jedi_case=args.cycling_jedi_case,
+            mpas_case=args.mpas_case,
+            obs2ioda_config=args.obs2ioda_config,
+            workflow_template=args.workflow_template,
+            destination=args.destination,
+        )
+        print(f"[OK] materialized corrected replay case: {path}")
     return 0
