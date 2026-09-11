@@ -108,6 +108,7 @@ def _mpas_case(root: Path) -> Path:
                 "ncpus": 128,
                 "mpiprocs": 128,
                 "walltime": "02:00:00",
+                "setup": ["/old/stale/load_jaci_env.sh"],
                 "command": ["./mpas_atmosphere"],
             },
             "validation": {
@@ -187,6 +188,7 @@ def test_materialize_corrected_replay_isolated_namespace(tmp_path: Path) -> None
 
     mpas_data = yaml.safe_load((destination / "mpas.yaml").read_text())["mpas"]
     assert mpas_data["run_dir"] == str(replay_root / "mpas/{cycle_id}")
+    assert mpas_data["pbs"]["setup"] == []
     analysis = next(item for item in mpas_data["links"] if item["target"].startswith("mpas.analysis-full"))
     assert str(replay_root / "jedi") in analysis["source"]
 
