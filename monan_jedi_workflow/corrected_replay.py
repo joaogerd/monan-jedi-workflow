@@ -232,10 +232,12 @@ def _patch_jedi(destination: Path, replay_root: Path) -> None:
 def _absolutize_case_path(value: Any, source_case: Path) -> Any:
     if not isinstance(value, str) or not value:
         return value
-    if "{" in value:
-        return value
     path = Path(value)
-    return str(path if path.is_absolute() else (source_case / path).resolve())
+    if path.is_absolute():
+        return str(path)
+    # Path treats workflow placeholders such as {cycle_id} as ordinary path text,
+    # so relative templated sources can still be anchored safely to the source case.
+    return str((source_case.resolve() / path).resolve(strict=False))
 
 
 def _patch_mpas(source_case: Path, destination: Path, replay_root: Path) -> None:
@@ -283,7 +285,7 @@ def _patch_mpas(source_case: Path, destination: Path, replay_root: Path) -> None
     for index, entry in enumerate(directories):
         if isinstance(entry, dict):
             entry["source"] = _absolutize_case_path(entry.get("source"), source_case)
-        elif isinstance(entry, str) and "{" not in entry:
+        elif isinstance(entry, str):
             directories[index] = _absolutize_case_path(entry, source_case)
 
     analysis_link_found = False
@@ -348,10 +350,11 @@ def materialize_corrected_replay(
         raise FileExistsError(f"replay destination already exists: {destination}")
 
     inputs = _initial_inputs(initial_jedi_case.resolve())
-    _copy_clean_case(cycling_jedi_case.resolve(), destination)
-    replay_root = destination / "work"
 
     try:
+        _copy_clean_case(cycling_jedi_case.resolve(), destination)
+        replay_root = destination / "work"
+
         _patch_jedi(destination, replay_root)
         _patch_mpas(mpas_case.resolve(), destination, replay_root)
         _patch_obs(obs2ioda_config.resolve(), destination, replay_root)
