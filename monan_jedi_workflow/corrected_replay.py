@@ -173,6 +173,27 @@ def _patch_jedi(destination: Path, replay_root: Path) -> None:
     )
     base["target"] = "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"
 
+    # The validated reference campaign has a known state-schema transition:
+    # 00Z starts with 62 variables, while cycling MPAS states contain the
+    # additional refl10cm diagnostic and therefore have 63 variables.
+    prior_expected_count = base.get("expected_variable_count")
+    allowed_existing_counts = (
+        None,
+        62,
+        {"first_cycle": 62, "cycling": 63},
+    )
+    if prior_expected_count not in allowed_existing_counts:
+        raise StageConfigurationError(
+            "corrected replay expected the validated JEDI state-count "
+            "contract (62 at first cycle, 63 while cycling); found "
+            f"{prior_expected_count!r}"
+        )
+
+    base["expected_variable_count"] = {
+        "first_cycle": 62,
+        "cycling": 63,
+    }
+
     found = set()
     links = jedi.get("links", [])
     if not isinstance(links, list):

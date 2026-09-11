@@ -184,6 +184,10 @@ def test_materialize_corrected_replay_isolated_namespace(tmp_path: Path) -> None
     assert jedi["run_dir"] == str(replay_root / "jedi/{cycle_id}")
     assert str(replay_root) in jedi["background"]["source"]
     assert str(replay_root) in jedi["analysis_base_state"]["source"]
+    assert jedi["analysis_base_state"]["expected_variable_count"] == {
+        "first_cycle": 62,
+        "cycling": 63,
+    }
     assert all("/old/" not in str(item.get("source", "")) for item in jedi["links"])
 
     mpas_data = yaml.safe_load((destination / "mpas.yaml").read_text())["mpas"]

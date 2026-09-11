@@ -696,11 +696,57 @@ def _initialize_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
             + ", ".join(missing)
         )
     expected_count = base_state.get("expected_variable_count")
-    if expected_count is not None and len(variables) != int(expected_count):
-        raise StageConfigurationError(
-            "JEDI analysis base state variable count mismatch: "
-            f"found {len(variables)}, expected {int(expected_count)}."
-        )
+    resolved_expected_count: int | None = None
+    expected_count_rule = "not-declared"
+
+    if expected_count is not None:
+        if isinstance(expected_count, dict):
+            key = "first_cycle" if run.is_first_cycle else "cycling"
+            if key not in expected_count:
+                raise StageConfigurationError(
+                    "jedi.analysis_base_state.expected_variable_count mapping "
+                    f"must define {key!r}."
+                )
+            raw_expected_count = expected_count[key]
+            expected_count_rule = key
+        else:
+            raw_expected_count = expected_count
+            expected_count_rule = "scalar"
+
+        try:
+            resolved_expected_count = int(raw_expected_count)
+        except (TypeError, ValueError) as error:
+            raise StageConfigurationError(
+                "jedi.analysis_base_state.expected_variable_count must be "
+                "an integer or a mapping with first_cycle/cycling integers."
+            ) from error
+
+        if resolved_expected_count < 1:
+            raise StageConfigurationError(
+                "jedi.analysis_base_state.expected_variable_count must be positive."
+            )
+
+        if len(variables) != resolved_expected_count:
+            # Backward compatibility for the corrected 2018-04-15 replay that
+            # was already materialized with the 00Z scalar contract (62).
+            # Later MPAS cycling states contain exactly one additional
+            # diagnostic field, refl10cm, yielding 63 variables.
+            legacy_refl10cm_variant = (
+                not run.is_first_cycle
+                and expected_count_rule == "scalar"
+                and len(variables) == resolved_expected_count + 1
+                and "refl10cm" in variables
+            )
+
+            if legacy_refl10cm_variant:
+                resolved_expected_count = len(variables)
+                expected_count_rule = "legacy-cycling-refl10cm"
+            else:
+                raise StageConfigurationError(
+                    "JEDI analysis base state variable count mismatch: "
+                    f"found {len(variables)}, expected "
+                    f"{resolved_expected_count}."
+                )
 
     template_fields = _link_cycle_template_fields(
         run, source=source, base_state=base_state, xtimes=xtimes
@@ -734,6 +780,9 @@ def _initialize_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
         "state": state,
         "prepared_at": _timestamp(),
     }
+    if resolved_expected_count is not None:
+        manifest["expected_variable_count"] = resolved_expected_count
+        manifest["expected_variable_count_rule"] = expected_count_rule
     if template_fields is not None:
         manifest["template_fields"] = template_fields
     _write_json(
