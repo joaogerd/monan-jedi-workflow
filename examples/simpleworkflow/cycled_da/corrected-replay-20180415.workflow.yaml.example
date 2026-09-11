@@ -1,0 +1,478 @@
+# Corrected multi-cycle reference replay: analysis 00Z through analysis 18Z.
+#
+# This workflow is intentionally UNROLLED and has no top-level `cycle:` block.
+# All tasks therefore live in one simpleWorkflow engine and cross-cycle
+# dependencies are real DAG edges rather than chronological CLI iteration.
+#
+# The experiment_dir must point to a NEW case namespace. Immutable/exogenous
+# inputs may be shared with the validated reference campaign, but none of the
+# reference JEDI/MPAS/IODA products may be reused as replay intermediates.
+
+workflow:
+  name: monan_jedi_corrected_replay_20180415_00z_18z
+
+context:
+  experiment_dir: /p/projetos/monan_das/USUARIO/work/CASE/cases/reference-replay-20180415
+
+# ---------------------------------------------------------------------------
+# JEDI 00Z -- first-cycle observations/background are declared starting inputs
+# of the case. There is deliberately no Obs2IODA00 task in this replay.
+# ---------------------------------------------------------------------------
+tasks:
+  - name: jedi00_prepare
+    argv: [monan-jedi-workflow, jedi-prepare, "{experiment_dir}", --cycle, "2018-04-15T00:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/jedi.yaml"
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T000000Z/run_jedi.pbs"
+        - "{experiment_dir}/work/jedi/20180415T000000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi00_submit
+    depends_on: [jedi00_prepare]
+    argv: [monan-jedi-workflow, jedi-submit, "{experiment_dir}", --cycle, "2018-04-15T00:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T000000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi00_wait
+    depends_on: [jedi00_submit]
+    argv: [monan-jedi-workflow, jedi-wait, "{experiment_dir}", --cycle, "2018-04-15T00:00:00Z", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T000000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi00_validate
+    depends_on: [jedi00_wait]
+    argv: [monan-jedi-workflow, jedi-validate, "{experiment_dir}", --cycle, "2018-04-15T00:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T000000Z/.monan-jedi-workflow/jedi-validation.json"
+        - "{experiment_dir}/work/jedi/20180415T000000Z/.monan-jedi-workflow/jedi-artifacts.json"
+        - "{experiment_dir}/work/jedi/20180415T000000Z/Data/states/mpas.3dvar.2018-04-15_00.00.00.nc"
+
+  - name: jedi00_gate
+    depends_on: [jedi00_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/jedi/20180415T000000Z/.monan-jedi-workflow/jedi-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T000000Z/.monan-jedi-workflow/jedi-validation.json"
+
+  # -------------------------------------------------------------------------
+  # Two branches after validated JEDI00: MPAS00->06 and Obs2IODA06.
+  # -------------------------------------------------------------------------
+  - name: mpas00_prepare
+    depends_on: [jedi00_gate]
+    argv: [monan-jedi-workflow, mpas-prepare, "{experiment_dir}", --cycle, "2018-04-15T00:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/mpas.yaml"
+        - "{experiment_dir}/work/jedi/20180415T000000Z/Data/states/mpas.3dvar.2018-04-15_00.00.00.nc"
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T000000Z/run_mpas.pbs"
+        - "{experiment_dir}/work/mpas/20180415T000000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas00_submit
+    depends_on: [mpas00_prepare]
+    argv: [monan-jedi-workflow, mpas-submit, "{experiment_dir}", --cycle, "2018-04-15T00:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T000000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas00_wait
+    depends_on: [mpas00_submit]
+    argv: [monan-jedi-workflow, mpas-wait, "{experiment_dir}", --cycle, "2018-04-15T00:00:00Z", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T000000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas00_validate
+    depends_on: [mpas00_wait]
+    argv: [monan-jedi-workflow, mpas-validate, "{experiment_dir}", --cycle, "2018-04-15T00:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T000000Z/.monan-jedi-workflow/mpas-validation.json"
+        - "{experiment_dir}/work/mpas/20180415T000000Z/mpasout.2018-04-15_03.00.00.nc"
+        - "{experiment_dir}/work/mpas/20180415T000000Z/mpasout.2018-04-15_06.00.00.nc"
+
+  - name: mpas00_gate
+    depends_on: [mpas00_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/mpas/20180415T000000Z/.monan-jedi-workflow/mpas-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T000000Z/.monan-jedi-workflow/mpas-validation.json"
+
+  - name: obs06_doctor
+    depends_on: [jedi00_gate]
+    argv: [monan-jedi-workflow, obs2ioda-doctor, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/obs2ioda.yaml"
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041506/.monan-jedi-workflow/obs2ioda-doctor.json"
+
+  - name: obs06_prepare
+    depends_on: [obs06_doctor]
+    argv: [monan-jedi-workflow, obs2ioda-prepare, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041506/.monan-jedi-workflow/obs2ioda.json"
+
+  - name: obs06_run
+    depends_on: [obs06_prepare]
+    argv: [monan-jedi-workflow, obs2ioda-run, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041506/sondes_obs_2018041506.h5"
+        - "{experiment_dir}/work/obs/2018041506/sfc_obs_2018041506.h5"
+        - "{experiment_dir}/work/obs/2018041506/gnssro_obs_2018041506.h5"
+
+  - name: obs06_validate
+    depends_on: [obs06_run]
+    argv: [monan-jedi-workflow, obs2ioda-validate, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041506/.monan-jedi-workflow/obs2ioda-validation.json"
+        - "{experiment_dir}/work/obs/2018041506/sondes_obs_2018041506.h5"
+        - "{experiment_dir}/work/obs/2018041506/sfc_obs_2018041506.h5"
+        - "{experiment_dir}/work/obs/2018041506/gnssro_obs_2018041506.h5"
+
+  - name: obs06_gate
+    depends_on: [obs06_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/obs/2018041506/.monan-jedi-workflow/obs2ioda-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041506/.monan-jedi-workflow/obs2ioda-validation.json"
+
+  # -------------------------------------------------------------------------
+  # JEDI06 depends on BOTH validated MPAS00->06 and validated Obs2IODA06.
+  # -------------------------------------------------------------------------
+  - name: jedi06_prepare
+    depends_on: [mpas00_gate, obs06_gate]
+    argv: [monan-jedi-workflow, jedi-prepare, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/jedi.yaml"
+        - "{experiment_dir}/work/mpas/20180415T000000Z/mpasout.2018-04-15_03.00.00.nc"
+        - "{experiment_dir}/work/mpas/20180415T000000Z/mpasout.2018-04-15_06.00.00.nc"
+        - "{experiment_dir}/work/obs/2018041506/sondes_obs_2018041506.h5"
+        - "{experiment_dir}/work/obs/2018041506/sfc_obs_2018041506.h5"
+        - "{experiment_dir}/work/obs/2018041506/gnssro_obs_2018041506.h5"
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T060000Z/run_jedi.pbs"
+        - "{experiment_dir}/work/jedi/20180415T060000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi06_submit
+    depends_on: [jedi06_prepare]
+    argv: [monan-jedi-workflow, jedi-submit, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T060000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi06_wait
+    depends_on: [jedi06_submit]
+    argv: [monan-jedi-workflow, jedi-wait, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T060000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi06_validate
+    depends_on: [jedi06_wait]
+    argv: [monan-jedi-workflow, jedi-validate, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T060000Z/.monan-jedi-workflow/jedi-validation.json"
+        - "{experiment_dir}/work/jedi/20180415T060000Z/.monan-jedi-workflow/jedi-artifacts.json"
+        - "{experiment_dir}/work/jedi/20180415T060000Z/Data/states/mpas.3dvar.2018-04-15_06.00.00.nc"
+
+  - name: jedi06_gate
+    depends_on: [jedi06_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/jedi/20180415T060000Z/.monan-jedi-workflow/jedi-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T060000Z/.monan-jedi-workflow/jedi-validation.json"
+
+  # -------------------------------------------------------------------------
+  # Branches after JEDI06: MPAS06->12 and Obs2IODA12.
+  # -------------------------------------------------------------------------
+  - name: mpas06_prepare
+    depends_on: [jedi06_gate]
+    argv: [monan-jedi-workflow, mpas-prepare, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/mpas.yaml"
+        - "{experiment_dir}/work/jedi/20180415T060000Z/Data/states/mpas.3dvar.2018-04-15_06.00.00.nc"
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T060000Z/run_mpas.pbs"
+        - "{experiment_dir}/work/mpas/20180415T060000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas06_submit
+    depends_on: [mpas06_prepare]
+    argv: [monan-jedi-workflow, mpas-submit, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T060000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas06_wait
+    depends_on: [mpas06_submit]
+    argv: [monan-jedi-workflow, mpas-wait, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T060000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas06_validate
+    depends_on: [mpas06_wait]
+    argv: [monan-jedi-workflow, mpas-validate, "{experiment_dir}", --cycle, "2018-04-15T06:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T060000Z/.monan-jedi-workflow/mpas-validation.json"
+        - "{experiment_dir}/work/mpas/20180415T060000Z/mpasout.2018-04-15_09.00.00.nc"
+        - "{experiment_dir}/work/mpas/20180415T060000Z/mpasout.2018-04-15_12.00.00.nc"
+
+  - name: mpas06_gate
+    depends_on: [mpas06_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/mpas/20180415T060000Z/.monan-jedi-workflow/mpas-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T060000Z/.monan-jedi-workflow/mpas-validation.json"
+
+  - name: obs12_doctor
+    depends_on: [jedi06_gate]
+    argv: [monan-jedi-workflow, obs2ioda-doctor, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/obs2ioda.yaml"
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041512/.monan-jedi-workflow/obs2ioda-doctor.json"
+
+  - name: obs12_prepare
+    depends_on: [obs12_doctor]
+    argv: [monan-jedi-workflow, obs2ioda-prepare, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041512/.monan-jedi-workflow/obs2ioda.json"
+
+  - name: obs12_run
+    depends_on: [obs12_prepare]
+    argv: [monan-jedi-workflow, obs2ioda-run, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041512/sondes_obs_2018041512.h5"
+        - "{experiment_dir}/work/obs/2018041512/sfc_obs_2018041512.h5"
+        - "{experiment_dir}/work/obs/2018041512/gnssro_obs_2018041512.h5"
+
+  - name: obs12_validate
+    depends_on: [obs12_run]
+    argv: [monan-jedi-workflow, obs2ioda-validate, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041512/.monan-jedi-workflow/obs2ioda-validation.json"
+        - "{experiment_dir}/work/obs/2018041512/sondes_obs_2018041512.h5"
+        - "{experiment_dir}/work/obs/2018041512/sfc_obs_2018041512.h5"
+        - "{experiment_dir}/work/obs/2018041512/gnssro_obs_2018041512.h5"
+
+  - name: obs12_gate
+    depends_on: [obs12_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/obs/2018041512/.monan-jedi-workflow/obs2ioda-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041512/.monan-jedi-workflow/obs2ioda-validation.json"
+
+  - name: jedi12_prepare
+    depends_on: [mpas06_gate, obs12_gate]
+    argv: [monan-jedi-workflow, jedi-prepare, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/jedi.yaml"
+        - "{experiment_dir}/work/mpas/20180415T060000Z/mpasout.2018-04-15_09.00.00.nc"
+        - "{experiment_dir}/work/mpas/20180415T060000Z/mpasout.2018-04-15_12.00.00.nc"
+        - "{experiment_dir}/work/obs/2018041512/sondes_obs_2018041512.h5"
+        - "{experiment_dir}/work/obs/2018041512/sfc_obs_2018041512.h5"
+        - "{experiment_dir}/work/obs/2018041512/gnssro_obs_2018041512.h5"
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T120000Z/run_jedi.pbs"
+        - "{experiment_dir}/work/jedi/20180415T120000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi12_submit
+    depends_on: [jedi12_prepare]
+    argv: [monan-jedi-workflow, jedi-submit, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T120000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi12_wait
+    depends_on: [jedi12_submit]
+    argv: [monan-jedi-workflow, jedi-wait, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T120000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi12_validate
+    depends_on: [jedi12_wait]
+    argv: [monan-jedi-workflow, jedi-validate, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T120000Z/.monan-jedi-workflow/jedi-validation.json"
+        - "{experiment_dir}/work/jedi/20180415T120000Z/.monan-jedi-workflow/jedi-artifacts.json"
+        - "{experiment_dir}/work/jedi/20180415T120000Z/Data/states/mpas.3dvar.2018-04-15_12.00.00.nc"
+
+  - name: jedi12_gate
+    depends_on: [jedi12_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/jedi/20180415T120000Z/.monan-jedi-workflow/jedi-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T120000Z/.monan-jedi-workflow/jedi-validation.json"
+
+  # -------------------------------------------------------------------------
+  # Branches after JEDI12: MPAS12->18 and Obs2IODA18.
+  # -------------------------------------------------------------------------
+  - name: mpas12_prepare
+    depends_on: [jedi12_gate]
+    argv: [monan-jedi-workflow, mpas-prepare, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/mpas.yaml"
+        - "{experiment_dir}/work/jedi/20180415T120000Z/Data/states/mpas.3dvar.2018-04-15_12.00.00.nc"
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T120000Z/run_mpas.pbs"
+        - "{experiment_dir}/work/mpas/20180415T120000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas12_submit
+    depends_on: [mpas12_prepare]
+    argv: [monan-jedi-workflow, mpas-submit, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T120000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas12_wait
+    depends_on: [mpas12_submit]
+    argv: [monan-jedi-workflow, mpas-wait, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T120000Z/.monan-jedi-workflow/mpas-submission.json"
+
+  - name: mpas12_validate
+    depends_on: [mpas12_wait]
+    argv: [monan-jedi-workflow, mpas-validate, "{experiment_dir}", --cycle, "2018-04-15T12:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T120000Z/.monan-jedi-workflow/mpas-validation.json"
+        - "{experiment_dir}/work/mpas/20180415T120000Z/mpasout.2018-04-15_15.00.00.nc"
+        - "{experiment_dir}/work/mpas/20180415T120000Z/mpasout.2018-04-15_18.00.00.nc"
+
+  - name: mpas12_gate
+    depends_on: [mpas12_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/mpas/20180415T120000Z/.monan-jedi-workflow/mpas-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/mpas/20180415T120000Z/.monan-jedi-workflow/mpas-validation.json"
+
+  - name: obs18_doctor
+    depends_on: [jedi12_gate]
+    argv: [monan-jedi-workflow, obs2ioda-doctor, "{experiment_dir}", --cycle, "2018-04-15T18:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/obs2ioda.yaml"
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041518/.monan-jedi-workflow/obs2ioda-doctor.json"
+
+  - name: obs18_prepare
+    depends_on: [obs18_doctor]
+    argv: [monan-jedi-workflow, obs2ioda-prepare, "{experiment_dir}", --cycle, "2018-04-15T18:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041518/.monan-jedi-workflow/obs2ioda.json"
+
+  - name: obs18_run
+    depends_on: [obs18_prepare]
+    argv: [monan-jedi-workflow, obs2ioda-run, "{experiment_dir}", --cycle, "2018-04-15T18:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041518/sondes_obs_2018041518.h5"
+        - "{experiment_dir}/work/obs/2018041518/sfc_obs_2018041518.h5"
+        - "{experiment_dir}/work/obs/2018041518/gnssro_obs_2018041518.h5"
+
+  - name: obs18_validate
+    depends_on: [obs18_run]
+    argv: [monan-jedi-workflow, obs2ioda-validate, "{experiment_dir}", --cycle, "2018-04-15T18:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041518/.monan-jedi-workflow/obs2ioda-validation.json"
+        - "{experiment_dir}/work/obs/2018041518/sondes_obs_2018041518.h5"
+        - "{experiment_dir}/work/obs/2018041518/sfc_obs_2018041518.h5"
+        - "{experiment_dir}/work/obs/2018041518/gnssro_obs_2018041518.h5"
+
+  - name: obs18_gate
+    depends_on: [obs18_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/obs/2018041518/.monan-jedi-workflow/obs2ioda-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/obs/2018041518/.monan-jedi-workflow/obs2ioda-validation.json"
+
+  # -------------------------------------------------------------------------
+  # Terminal analysis. No MPAS18->00 task exists in this reference scope.
+  # -------------------------------------------------------------------------
+  - name: jedi18_prepare
+    depends_on: [mpas12_gate, obs18_gate]
+    argv: [monan-jedi-workflow, jedi-prepare, "{experiment_dir}", --cycle, "2018-04-15T18:00:00Z"]
+    inputs:
+      required:
+        - "{experiment_dir}/jedi.yaml"
+        - "{experiment_dir}/work/mpas/20180415T120000Z/mpasout.2018-04-15_15.00.00.nc"
+        - "{experiment_dir}/work/mpas/20180415T120000Z/mpasout.2018-04-15_18.00.00.nc"
+        - "{experiment_dir}/work/obs/2018041518/sondes_obs_2018041518.h5"
+        - "{experiment_dir}/work/obs/2018041518/sfc_obs_2018041518.h5"
+        - "{experiment_dir}/work/obs/2018041518/gnssro_obs_2018041518.h5"
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T180000Z/run_jedi.pbs"
+        - "{experiment_dir}/work/jedi/20180415T180000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi18_submit
+    depends_on: [jedi18_prepare]
+    argv: [monan-jedi-workflow, jedi-submit, "{experiment_dir}", --cycle, "2018-04-15T18:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T180000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi18_wait
+    depends_on: [jedi18_submit]
+    argv: [monan-jedi-workflow, jedi-wait, "{experiment_dir}", --cycle, "2018-04-15T18:00:00Z", --poll-seconds, "30"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T180000Z/.monan-jedi-workflow/jedi-submission.json"
+
+  - name: jedi18_validate
+    depends_on: [jedi18_wait]
+    argv: [monan-jedi-workflow, jedi-validate, "{experiment_dir}", --cycle, "2018-04-15T18:00:00Z"]
+    outputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T180000Z/.monan-jedi-workflow/jedi-validation.json"
+        - "{experiment_dir}/work/jedi/20180415T180000Z/.monan-jedi-workflow/jedi-artifacts.json"
+        - "{experiment_dir}/work/jedi/20180415T180000Z/Data/states/mpas.3dvar.2018-04-15_18.00.00.nc"
+
+  - name: jedi18_gate
+    depends_on: [jedi18_validate]
+    argv: [monan-jedi-workflow, validation-gate, "{experiment_dir}/work/jedi/20180415T180000Z/.monan-jedi-workflow/jedi-validation.json"]
+    input_fingerprint: sha256
+    inputs:
+      required:
+        - "{experiment_dir}/work/jedi/20180415T180000Z/.monan-jedi-workflow/jedi-validation.json"
