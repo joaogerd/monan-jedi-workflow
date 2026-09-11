@@ -8,12 +8,13 @@ from pathlib import Path
 from . import cli as legacy
 from .init_stage import prepare_mpas_init, submit_mpas_init, validate_mpas_init, wait_mpas_init
 from .netcdf_compare import main as compare_netcdf_main
+from .validation_gate import require_valid_manifest
 from .wps_stage import prepare_wps, run_wps, validate_wps
 
 _NEW = {
     "wps-prepare", "wps-run", "wps-validate",
     "mpas-init-prepare", "mpas-init-submit", "mpas-init-wait", "mpas-init-validate",
-    "compare-netcdf",
+    "compare-netcdf", "validation-gate",
 }
 
 
@@ -36,6 +37,11 @@ def _parser() -> argparse.ArgumentParser:
     submit.add_argument("--wait", action="store_true")
     submit.add_argument("--resubmit", action="store_true")
     submit.add_argument("--poll-seconds", type=int, default=30)
+    gate = sub.add_parser(
+        "validation-gate",
+        help="require one stage validation manifest to contain valid=true",
+    )
+    gate.add_argument("manifest", type=Path)
     return parser
 
 
@@ -61,4 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         wait_mpas_init(args.config_dir, args.cycle, poll_seconds=args.poll_seconds)
     elif args.command == "mpas-init-validate":
         validate_mpas_init(args.config_dir, args.cycle)
+    elif args.command == "validation-gate":
+        require_valid_manifest(args.manifest)
+        print(f"[OK] validation manifest accepted: {args.manifest}")
     return 0
