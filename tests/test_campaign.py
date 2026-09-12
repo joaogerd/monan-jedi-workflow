@@ -84,6 +84,31 @@ def test_load_campaign_spec_resolves_profile_environment_and_duration(
     assert spec.swf_command == ("swf",)
 
 
+def test_load_campaign_spec_accepts_unquoted_yaml_timestamps(tmp_path: Path) -> None:
+    config = tmp_path / "campaign.yaml"
+    config.write_text(
+        f"""campaign:
+  name: timestamp-test
+  start: 2018-04-15T00:00:00Z
+  end: 2018-04-18T00:00:00Z
+  destination: {tmp_path / 'run'}
+
+profile:
+  initial_jedi_case: {tmp_path / 'initial'}
+  cycling_jedi_case: {tmp_path / 'cycling'}
+  mpas_case: {tmp_path / 'mpas'}
+  obs2ioda_config: {tmp_path / 'obs2ioda.yaml'}
+""",
+        encoding="utf-8",
+    )
+
+    spec = load_campaign_spec(config)
+
+    assert spec.start_cycle == "2018-04-15T00:00:00Z"
+    assert spec.end_cycle == "2018-04-18T00:00:00Z"
+    assert spec.duration_hours == 72
+
+
 def test_preflight_reports_missing_observation_before_execution(
     tmp_path: Path, monkeypatch,
 ) -> None:
