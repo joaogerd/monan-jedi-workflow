@@ -7,6 +7,13 @@ import sys
 from pathlib import Path
 
 from . import cli as legacy
+from .campaign import (
+    check_campaign,
+    create_campaign,
+    run_campaign,
+    status_campaign,
+    tui_campaign,
+)
 from .corrected_campaign import materialize_corrected_campaign
 from .corrected_replay import materialize_corrected_replay
 from .init_stage import (
@@ -31,6 +38,7 @@ _NEW = {
     "validation-gate",
     "materialize-corrected-replay",
     "materialize-corrected-campaign",
+    "campaign",
 }
 
 
@@ -79,24 +87,39 @@ def _parser() -> argparse.ArgumentParser:
     replay.add_argument("--workflow-template", required=True, type=Path)
     replay.add_argument("--destination", required=True, type=Path)
 
-    campaign = sub.add_parser(
+    materialize = sub.add_parser(
         "materialize-corrected-campaign",
         help=(
-            "create a clean multi-day corrected campaign beginning at the "
-            "validated 2018-04-15 00Z first cycle"
+            "developer command: create a clean multi-day corrected campaign "
+            "beginning at the validated 2018-04-15 00Z first cycle"
         ),
     )
-    campaign.add_argument("--initial-jedi-case", required=True, type=Path)
-    campaign.add_argument("--cycling-jedi-case", required=True, type=Path)
-    campaign.add_argument("--mpas-case", required=True, type=Path)
-    campaign.add_argument("--obs2ioda-config", required=True, type=Path)
-    campaign.add_argument(
+    materialize.add_argument("--initial-jedi-case", required=True, type=Path)
+    materialize.add_argument("--cycling-jedi-case", required=True, type=Path)
+    materialize.add_argument("--mpas-case", required=True, type=Path)
+    materialize.add_argument("--obs2ioda-config", required=True, type=Path)
+    materialize.add_argument(
         "--start-cycle",
         default="2018-04-15T00:00:00Z",
         help="first analysis cycle; currently fixed to the validated 2018-04-15 00Z",
     )
-    campaign.add_argument("--end-cycle", required=True)
-    campaign.add_argument("--destination", required=True, type=Path)
+    materialize.add_argument("--end-cycle", required=True)
+    materialize.add_argument("--destination", required=True, type=Path)
+
+    campaign = sub.add_parser(
+        "campaign",
+        help="check, create, run, resume and monitor a campaign from one YAML file",
+    )
+    campaign_sub = campaign.add_subparsers(dest="campaign_command", required=True)
+    for action, help_text in (
+        ("check", "verify all campaign inputs without submitting work"),
+        ("create", "preflight and materialize the campaign without running it"),
+        ("run", "preflight, create if needed, and run or resume the campaign"),
+        ("status", "show simpleWorkflow status for an existing campaign"),
+        ("tui", "open the interactive simpleWorkflow monitor for a campaign"),
+    ):
+        item = campaign_sub.add_parser(action, help=help_text)
+        item.add_argument("config", type=Path, help="campaign YAML file")
     return parser
 
 
@@ -152,4 +175,16 @@ def main(argv: list[str] | None = None) -> int:
             destination=args.destination,
         )
         print(f"[OK] materialized corrected campaign: {path}")
+    elif args.command == "campaign":
+        if args.campaign_command == "check":
+            report = check_campaign(args.config)
+            return 0 if report.valid else 2
+        if args.campaign_command == "create":
+            create_campaign(args.config)
+        elif args.campaign_command == "run":
+            return run_campaign(args.config)
+        elif args.campaign_command == "status":
+            return status_campaign(args.config)
+        elif args.campaign_command == "tui":
+            return tui_campaign(args.config)
     return 0
