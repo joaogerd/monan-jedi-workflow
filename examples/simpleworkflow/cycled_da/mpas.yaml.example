@@ -1,0 +1,53 @@
+# Forecast iniciado pela análise do mesmo ciclo.
+#
+# Este template usa 3 h como integração mínima para materializar o background
+# t+3 requerido pela configuração FGAT de referência (análises a cada 6 h,
+# background t-3). Se o baseline atual exige uma integração mais longa com
+# saída intermediária, preserve o comportamento cientificamente validado e
+# ajuste este contrato antes de produção.
+
+mpas:
+  lead_hours: 3
+  run_dir: "work/mpas/{cycle_id}"
+
+  clean_patterns:
+    - "history/mpasout.*.nc"
+
+  links:
+    # A análise produzida/validada pelo stage JEDI deste mesmo ciclo.
+    - source: "work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{mpas_file_time}.nc"
+      target: init.nc
+
+    - source: /path/to/current/atmosphere_model
+      target: atmosphere_model
+    - source: /path/to/current/x1.10242.invariant.nc
+      target: x1.10242.invariant.nc
+    - source: /path/to/current/x1.10242.graph.info.part.64
+      target: x1.10242.graph.info.part.64
+
+  templates:
+    - source: /path/to/current/namelist.atmosphere.in
+      target: namelist.atmosphere
+    - source: /path/to/current/streams.atmosphere.in
+      target: streams.atmosphere
+
+  pbs:
+    filename: run_mpas.pbs
+    job_name: "mpas_{cycle_yyyymmddhh}"
+    queue: pesqmini
+    select: 1
+    ncpus: 64
+    mpiprocs: 64
+    walltime: "01:00:00"
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    command: ["./atmosphere_model"]
+    environment:
+      OMP_NUM_THREADS: "1"
+      FI_CXI_RX_MATCH_MODE: hybrid
+
+  validation:
+    log: stdout.log
+    required_log_markers:
+      - MPAS Atmosphere Model
+    required_outputs:
+      - "history/mpasout.{mpas_valid_file_time}.nc"

@@ -1,0 +1,94 @@
+# Primeiro teste no JACI: reproduzir o baseline_bmatrix conhecido.
+#
+# ESTE ARQUIVO NAO E AINDA UM CASO DE CICLAGEM COMPLETO.
+# O objetivo e somente provar que o stage JEDI reproduz a analise 2018041500
+# usando exatamente o mesmo YAML, background, observacoes, B e paralelismo do
+# baseline que ja funciona manualmente.
+#
+# IMPORTANTE: o baseline_bmatrix validado usa 128 MPI ranks. A B local foi
+# produzida/validada nesse layout (NICAS/VBAL np128). Nao reduza para np64
+# enquanto o YAML usar "read local nicas" / "read local sampling".
+
+jedi:
+  cycle:
+    step_hours: 6
+    background_offset_hours: -3
+    window_hours: 6
+    first_cycle: "2018-04-15T00:00:00Z"
+
+  variables:
+    current_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
+    baseline_root: /p/projetos/monan_das/USUARIO/manual-tests/baseline_bmatrix
+
+  run_dir: /p/projetos/monan_das/USUARIO/work/CASE/work/jedi/{cycle_id}
+
+  runtime:
+    skeleton: /p/projetos/monan_das/USUARIO/work/CASE/runtime-skeleton
+
+  background:
+    initial_source: "{baseline_root}/Data/background/2018041500/mpasout.2018-04-14_21.00.00.nc"
+    source: /p/projetos/monan_das/USUARIO/work/CASE/work/mpas/{previous_cycle_id}/history/mpasout.{background_mpas_file_time}.nc
+    target: Data/background/2018041500/mpasout.2018-04-14_21.00.00.nc
+
+  # Contrato oficial do MPAS-Workflow (PrepJEDI.csh): o output analysis e
+  # inicializado por uma copia do estado completo no horario da analise. O writer
+  # MPAS-JEDI, com clobber_mode=overwrite, atualiza somente os campos de DA.
+  analysis_base_state:
+    source: "{baseline_root}/Data/background/2018041500/mpasout.{analysis_mpas_file_time}.nc"
+    target: "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"
+    template_fields_target: templateFields.10242.nc
+    required_variables:
+      - pressure_p
+      - pressure_base
+      - rho
+      - rho_base
+      - theta
+      - theta_base
+      - u
+      - w
+      - surface_pressure
+      - skintemp
+      - smois
+      - tslb
+
+  links:
+    - source: "{baseline_root}/Data/covariance"
+      target: Data/covariance
+
+    - source: "{baseline_root}/Data/ufo/sondes_obs_2018041500_m.nc4"
+      target: Data/ufo/sondes_obs_2018041500_m.nc4
+    - source: "{baseline_root}/Data/ufo/gnssro_obs_2018041500_s.nc4"
+      target: Data/ufo/gnssro_obs_2018041500_s.nc4
+    - source: "{baseline_root}/Data/ufo/sfc_obs_2018041500_m.nc4"
+      target: Data/ufo/sfc_obs_2018041500_m.nc4
+
+  templates:
+    - source: "{baseline_root}/variants/3dfgat.bmatrix.yaml"
+      target: 3dfgat.bmatrix.yaml
+
+  pbs:
+    filename: run_jedi.pbs
+    job_name: jedi_2018041500
+    queue: pesqmini
+    select: 1
+    ncpus: 128
+    mpiprocs: 128
+    walltime: "00:30:00"
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    command:
+      - "{current_install}/bin/mpasjedi_variational.x"
+      - 3dfgat.bmatrix.yaml
+    environment:
+      OMP_NUM_THREADS: "1"
+      FI_CXI_RX_MATCH_MODE: hybrid
+      GFORTRAN_CONVERT_UNIT: "big_endian:101-200"
+
+  validation:
+    log: jedi.stdout.log
+    required_log_markers:
+      - "with status = 0"
+      - OOPS Ending
+
+    required_outputs:
+      - role: analysis
+        path: "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"

@@ -1,125 +1,128 @@
 # MONAN-JEDI Workflow
 
-Workflow mínimo, controlado e Python-first para executar experimentos MPAS-JEDI no ambiente MONAN/JACI.
+Workflow Python-first para executar e validar etapas do MONAN/MPAS-JEDI sem acoplar a ciência a um orquestrador específico.
 
-A primeira meta deste repositório é reproduzir um caso já validado:
-
-- 3D-FGAT;
-- MPAS-JEDI;
-- malha `x1.10242`;
-- ciclo `2018041500`;
-- execução `np64`;
-- covariância `MPASstatic`;
-- observações `Radiosonde`, `GnssroRefNCEP` e `SfcCorrected`.
-
-Este repositório não é uma continuação direta do workflow anterior. Ele foi reiniciado para evitar mistura entre engenharia reversa, testes temporários e configuração operacional.
-
-## Princípios
-
-1. Começar por um caso validado.
-2. Manter o workflow pequeno e explícito.
-3. Usar Python para renderização e validação.
-4. Evitar shell complexo.
-5. Não submeter jobs automaticamente.
-6. Validar runtime, YAML e PBS antes de qualquer execução.
-7. Não versionar dados grandes, saídas, logs ou diretórios `build/`.
-
-## Estrutura
+O projeto separa duas responsabilidades:
 
 ```text
-configs/
-  experiments/
-    3dfgat_mpastatic_x1.10242_2018041500/
-  fragments/
-    jedi/
-      observers/
-      variables/
+monan-jedi-workflow                 orquestrador
+-------------------                 -----------
+como preparar/executar              quando executar
+como validar                        dependências
+inputs/outputs do domínio           ciclos, restart, estado
 
-monan_jedi_workflow/
-  Código Python do workflow.
-
-docs/
-  Documentação técnica e operacional.
-
-tests/
-  Testes unitários e testes de regressão do renderer/CLI.
+                                    simpleWorkflow (pesquisa)
+                                    ecFlow (operação INPE)
+                                    Cylc (possível alternativa)
 ```
 
-## Instalação local
+A regra principal é simples: **as etapas de domínio devem funcionar sozinhas pela CLI**. `simpleWorkflow`, ecFlow ou Cylc apenas organizam essas mesmas etapas.
+
+## Estado atual
+
+O repositório possui estágios cycle-aware para:
+
+- MPAS;
+- Obs2IODA;
+- MPAS-JEDI (análise);
+- preparação WPS/condição inicial MPAS já existente no fluxo de dados.
+
+A nova interface JEDI é:
+
+```bash
+monan-jedi-workflow jedi-prepare  CASE --cycle 2018-04-15T00:00:00Z
+monan-jedi-workflow jedi-submit   CASE --cycle 2018-04-15T00:00:00Z
+monan-jedi-workflow jedi-wait     CASE --cycle 2018-04-15T00:00:00Z
+monan-jedi-workflow jedi-validate CASE --cycle 2018-04-15T00:00:00Z
+```
+
+Esses comandos não executam o workflow completo. Isso é intencional.
+
+## Instalação
 
 ```bash
 python -m pip install --upgrade pip
-python -m pip install -e . pytest
+python -m pip install -e .
 ```
 
-## Testes
+Para desenvolvimento:
 
 ```bash
+python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-O repositório possui CI com GitHub Actions. A suíte roda automaticamente em pull requests para `main` e em pushes para `main`, usando Python 3.10, 3.11 e 3.12.
+## Primeiro ciclo
 
-## Configuração por fragmentos
-
-O experimento baseline fica em:
+Um caso cíclico contém, no mínimo:
 
 ```text
-configs/experiments/3dfgat_mpastatic_x1.10242_2018041500/
+CASE/
+  jedi.yaml
+  mpas.yaml
+  obs2ioda.yaml
+  workflow.yaml
 ```
 
-As listas longas de variáveis e observadores são reutilizadas a partir de fragmentos versionados em:
+Antes de executar:
+
+```bash
+monan-jedi-workflow cycle-doctor CASE \
+  --cycle 2018-04-15T00:00:00Z
+```
+
+Com `simpleWorkflow` instalado:
+
+```bash
+swf plan CASE/workflow.yaml
+
+swf run CASE/workflow.yaml \
+  --cycle-time 2018-04-15T00:00:00Z
+
+swf status CASE/workflow.yaml
+```
+
+O exemplo de referência está em:
 
 ```text
-configs/fragments/jedi/variables/
-configs/fragments/jedi/observers/
+examples/simpleworkflow/cycled_da/
 ```
 
-Assim, o experimento usa seletores compactos.
+> Os arquivos científicos do exemplo são templates. Caminhos, nomes de outputs, YAML variacional, namelists, streams e arquivos de malha devem ser ajustados ao **baseline atual validado** antes da primeira execução no JACI.
 
-Exemplo de `variables.yaml`:
+## Matriz B
 
-```yaml
-variables:
-  use: mpas_3dfgat_core
-```
+A geração da B não faz parte do workflow de cycling. O ciclo consome uma B previamente construída e validada. Isso permite que `MPAS-BMatrix` e a campanha de assimilação evoluam independentemente e preserva a identidade da B usada em cada experimento.
 
-Exemplo de `observations.yaml`:
+## Documentação
 
-```yaml
-observations:
-  use:
-    - radiosonde
-    - gnssro_ref_ncep
-    - sfc_corrected
-```
+### Usuário
 
-Durante o carregamento da configuração, esses seletores são resolvidos para a estrutura expandida usada pelo validador e pelo renderer. Isso mantém o YAML final explícito, mas evita duplicação dentro dos experimentos.
+Comece por:
 
-## Comandos seguros
+- [Primeiro experimento cíclico](docs/user/first-cycling-experiment.md)
+- [Configuração de um caso](docs/user/case-configuration.md)
+- [Status e restart](docs/user/restart-and-status.md)
+- [Troubleshooting](docs/user/troubleshooting.md)
 
-Validar a configuração do baseline:
+A documentação de usuário é propositalmente curta e orientada a tarefas.
 
-```bash
-monan-jedi-workflow validate-config configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
-```
+### Desenvolvedor
 
-Renderizar o YAML do MPAS-JEDI:
+A documentação interna registra arquitetura, contratos e decisões:
 
-```bash
-monan-jedi-workflow render-yaml configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
-```
+- [Orquestração](docs/developer/orchestration.md)
+- [Modelo temporal](docs/developer/cycle-time-model.md)
+- [Estágio JEDI](docs/developer/jedi-stage.md)
+- [Modelo conceitual do ciclo](docs/developer/reference-cycle-model.md)
+- [Reaproveitamento de workflows anteriores](docs/developer/legacy-and-reuse-analysis.md)
+- [Política de documentação](docs/developer/documentation-policy.md)
+- [ADRs](docs/developer/adr/README.md)
 
-Renderizar o script PBS:
+## Baseline estático anterior
 
-```bash
-monan-jedi-workflow render-pbs configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
-```
+Os comandos anteriores (`validate-config`, `prepare-runtime`, `render-yaml`, `render-pbs`, `submit`, `wait`, `validate-run`) continuam disponíveis para reproduzir e depurar o baseline estático. O caminho cíclico novo não remove essa interface; ele acrescenta stages explícitos por ciclo.
 
-Esses comandos não submetem jobs. A submissão via `qsub` deve continuar sendo uma ação manual e explícita.
+## Segurança operacional
 
-## Primeiro alvo operacional
-
-O primeiro alvo é reproduzir o baseline 3DFGAT + MPASstatic que já foi validado manualmente no JACI.
-
-Generalizações, suporte SABER/BUMP e múltiplos ciclos serão adicionados somente depois que o caso mínimo estiver versionado, validado e reproduzível.
+Preparação e renderização não submetem jobs implicitamente. A primeira operação que chama `qsub` é sempre um comando de submissão explícito (`*-submit`). Término no PBS e sucesso científico são estados diferentes: use sempre `*-validate`.

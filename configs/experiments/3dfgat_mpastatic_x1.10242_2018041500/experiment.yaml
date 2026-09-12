@@ -21,7 +21,7 @@ method:
   covariance_model: MPASstatic
   covariance_date: '2018-04-14T21:00:00Z'
   model_name: MPAS
-  model_tstep: PT45M
+  model_tstep: PT20M
   minimizer: DRPCG
   ninner: 10
   gradient_norm_reduction: 1.0e-10

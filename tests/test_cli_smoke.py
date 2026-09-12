@@ -51,7 +51,9 @@ def test_render_pbs_cli_writes_executable_script(monkeypatch, tmp_path, capsys):
     assert rendered.exists()
     assert rendered.stat().st_mode & 0o111
     assert "[OK] rendered PBS:" in captured.out
-    assert "mpasjedi_variational.x" in rendered.read_text()
+    content = rendered.read_text()
+    assert "mpasjedi_variational.x" in content
+    assert content.count("#PBS -l place=excl") == 1
 
 
 def test_render_pbs_cli_avoids_legacy_workflow_environment_source(

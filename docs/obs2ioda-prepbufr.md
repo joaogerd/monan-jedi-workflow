@@ -25,6 +25,13 @@ A execução testada é baseada no diretório corrente:
 
 O executável é chamado sem argumentos e procura o nome fixo `./prepbufr.bufr`. Os produtos IODA são escritos no mesmo diretório. O wrapper `scripts/obs2ioda/run_prepbufr.sh` cria ou verifica esse link de forma segura.
 
+Para GPSRO, o mesmo executável precisa receber um basename local como
+`gdas.gpsro.t00z.20180415.bufr`; um caminho absoluto termina com sucesso sem
+produzir o IODA esperado. O wrapper `scripts/obs2ioda/run_gpsro.sh` cria ou
+verifica esse link no diretório do ciclo e passa somente o basename ao
+conversor. O produto é `gnssro_obs_<YYYYMMDDHH>.h5` e contém os grupos
+`MetaData`, `ObsValue` e `ObsError`; esse produto não contém `PreQC`.
+
 ## Evidência de validação no JACI
 
 ### Tutorial NCAR: 2018-04-15 00 UTC

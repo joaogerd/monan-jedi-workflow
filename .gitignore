@@ -25,6 +25,12 @@ logs/
 *.grb
 *.bufr
 
+# Local generated/install and validation runtimes
+*.egg-info/
+examples/simpleworkflow/cycled_da/CASE/
+validation/**/work/
+validation/cycled-da-2018041500/mpas.yaml
+
 # Local/editor
 .DS_Store
 .vscode/
