@@ -727,26 +727,10 @@ def _initialize_analysis_output(run: JEDIRun) -> dict[str, Any] | None:
             )
 
         if len(variables) != resolved_expected_count:
-            # Backward compatibility for the corrected 2018-04-15 replay that
-            # was already materialized with the 00Z scalar contract (62).
-            # Later MPAS cycling states contain exactly one additional
-            # diagnostic field, refl10cm, yielding 63 variables.
-            legacy_refl10cm_variant = (
-                not run.is_first_cycle
-                and expected_count_rule == "scalar"
-                and len(variables) == resolved_expected_count + 1
-                and "refl10cm" in variables
+            raise StageConfigurationError(
+                "JEDI analysis base state variable count mismatch: "
+                f"found {len(variables)}, expected {resolved_expected_count}."
             )
-
-            if legacy_refl10cm_variant:
-                resolved_expected_count = len(variables)
-                expected_count_rule = "legacy-cycling-refl10cm"
-            else:
-                raise StageConfigurationError(
-                    "JEDI analysis base state variable count mismatch: "
-                    f"found {len(variables)}, expected "
-                    f"{resolved_expected_count}."
-                )
 
     template_fields = _link_cycle_template_fields(
         run, source=source, base_state=base_state, xtimes=xtimes
