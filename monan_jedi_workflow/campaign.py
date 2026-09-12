@@ -14,7 +14,7 @@ import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -103,6 +103,10 @@ def _expand_env(value: Any, *, label: str) -> Any:
 
 def _required_string(mapping: dict[str, Any], key: str, label: str) -> str:
     value = mapping.get(key)
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     if not isinstance(value, str) or not value.strip():
         raise StageConfigurationError(f"{label}.{key} must be a non-empty string")
     return value.strip()
@@ -206,7 +210,6 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     if not swf_command:
         raise StageConfigurationError("execution.swf_command cannot be empty")
 
-    # Reuse the campaign generator's strict horizon validation now, before any work.
     _cycles(start_cycle, end_cycle)
 
     return CampaignSpec(
@@ -234,12 +237,10 @@ def _command_available(command: str) -> bool:
 def _rendered_obs_inputs(config: Path, cycle: datetime) -> tuple[list[Path], list[str]]:
     run = load_obs2ioda_run(config.parent, _iso(cycle)) if config.name == "obs2ioda.yaml" else None
     if run is None:
-        # The stage loader expects CONFIG_DIR/obs2ioda.yaml.  Profiles may point to
-        # a differently named source file, so make that limitation explicit.
         return [], [f"Obs2IODA profile must currently point to a file named obs2ioda.yaml: {config}"]
     try:
         plan = _build_plan(run)
-    except Exception as exc:  # converted to one preflight finding below
+    except Exception as exc:
         return [], [str(exc)]
     inputs: list[Path] = []
     tools: list[str] = []
