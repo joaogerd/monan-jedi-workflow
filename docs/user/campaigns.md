@@ -1,12 +1,10 @@
 # Running a campaign
 
-The normal user interface is one campaign YAML plus one command.  Researchers do not need to remember the individual JEDI, MPAS and Obs2IODA stage commands.
+The normal user interface is one campaign YAML plus one command. Researchers do not need to remember the individual JEDI, MPAS and Obs2IODA stage commands.
 
-For the validated three-day M3 experiment:
+After entering the standard MONAN-JEDI environment on JACI, where `CASE` is defined, the validated three-day M3 experiment is started with:
 
 ```bash
-source /p/projetos/monan_das/joao.gerd/work/CASE/case-enter.sh
-
 monan-jedi-workflow campaign run \
   examples/campaigns/m3-3days-20180415.yaml
 ```
@@ -21,7 +19,7 @@ monan-jedi-workflow campaign run \
 6. starts `simpleWorkflow`;
 7. on a later invocation, reuses the same campaign state and continues safely instead of rebuilding the campaign.
 
-The example campaign requests 72 hours beginning at 2018-04-15 00Z.  This gives 13 analyses and 12 six-hour MPAS forecast legs, ending at 2018-04-18 00Z.
+The example campaign requests 72 hours beginning at 2018-04-15 00Z. This gives 13 analyses and 12 six-hour MPAS forecast legs, ending at 2018-04-18 00Z.
 
 ## Campaign file
 
@@ -38,7 +36,7 @@ execution:
   swf_command: swf
 ```
 
-The profile contains the reusable paths and configuration sources for the validated JACI setup.  The campaign file contains only information that normally changes between experiments.
+The profile contains the reusable paths and configuration sources for the validated JACI setup. The campaign file contains only information that normally changes between experiments.
 
 ## Optional commands
 
@@ -61,8 +59,8 @@ After correcting a problem, run the same command again:
 monan-jedi-workflow campaign run CAMPAIGN.yaml
 ```
 
-The existing campaign request is verified before reuse.  A destination created for a different request is rejected instead of being silently overwritten.
+The existing campaign request is verified before reuse. A destination created for a different request is rejected instead of being silently overwritten.
 
 ## Lower-level commands
 
-Commands such as `jedi-prepare`, `jedi-submit`, `mpas-validate` and `obs2ioda-doctor` remain available for development and diagnosis.  They are implementation tools, not the normal procedure for running a campaign.
+Commands such as `jedi-prepare`, `jedi-submit`, `mpas-validate` and `obs2ioda-doctor` remain available for development and diagnosis. They are implementation tools, not the normal procedure for running a campaign.
