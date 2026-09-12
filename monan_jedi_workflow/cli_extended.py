@@ -1,4 +1,5 @@
 """Additional cycle commands layered over the stable MONAN-JEDI CLI."""
+
 from __future__ import annotations
 
 import argparse
@@ -6,43 +7,67 @@ import sys
 from pathlib import Path
 
 from . import cli as legacy
+from .corrected_campaign import materialize_corrected_campaign
 from .corrected_replay import materialize_corrected_replay
-from .init_stage import prepare_mpas_init, submit_mpas_init, validate_mpas_init, wait_mpas_init
+from .init_stage import (
+    prepare_mpas_init,
+    submit_mpas_init,
+    validate_mpas_init,
+    wait_mpas_init,
+)
 from .netcdf_compare import main as compare_netcdf_main
 from .validation_gate import require_valid_manifest
 from .wps_stage import prepare_wps, run_wps, validate_wps
 
 _NEW = {
-    "wps-prepare", "wps-run", "wps-validate",
-    "mpas-init-prepare", "mpas-init-submit", "mpas-init-wait", "mpas-init-validate",
-    "compare-netcdf", "validation-gate", "materialize-corrected-replay",
+    "wps-prepare",
+    "wps-run",
+    "wps-validate",
+    "mpas-init-prepare",
+    "mpas-init-submit",
+    "mpas-init-wait",
+    "mpas-init-validate",
+    "compare-netcdf",
+    "validation-gate",
+    "materialize-corrected-replay",
+    "materialize-corrected-campaign",
 }
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="monan-jedi-workflow")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("wps-prepare", "wps-validate", "mpas-init-prepare", "mpas-init-wait", "mpas-init-validate"):
+    for name in (
+        "wps-prepare",
+        "wps-validate",
+        "mpas-init-prepare",
+        "mpas-init-wait",
+        "mpas-init-validate",
+    ):
         item = sub.add_parser(name)
         item.add_argument("config_dir", type=Path)
         item.add_argument("--cycle", required=True)
         if name == "mpas-init-wait":
             item.add_argument("--poll-seconds", type=int, default=30)
+
     run = sub.add_parser("wps-run")
     run.add_argument("config_dir", type=Path)
     run.add_argument("--cycle", required=True)
     run.add_argument("--force", action="store_true")
+
     submit = sub.add_parser("mpas-init-submit")
     submit.add_argument("config_dir", type=Path)
     submit.add_argument("--cycle", required=True)
     submit.add_argument("--wait", action="store_true")
     submit.add_argument("--resubmit", action="store_true")
     submit.add_argument("--poll-seconds", type=int, default=30)
+
     gate = sub.add_parser(
         "validation-gate",
         help="require one stage validation manifest to contain valid=true",
     )
     gate.add_argument("manifest", type=Path)
+
     replay = sub.add_parser(
         "materialize-corrected-replay",
         help="create a clean 2018-04-15 00Z->18Z simpleWorkflow replay case",
@@ -53,6 +78,25 @@ def _parser() -> argparse.ArgumentParser:
     replay.add_argument("--obs2ioda-config", required=True, type=Path)
     replay.add_argument("--workflow-template", required=True, type=Path)
     replay.add_argument("--destination", required=True, type=Path)
+
+    campaign = sub.add_parser(
+        "materialize-corrected-campaign",
+        help=(
+            "create a clean multi-day corrected campaign beginning at the "
+            "validated 2018-04-15 00Z first cycle"
+        ),
+    )
+    campaign.add_argument("--initial-jedi-case", required=True, type=Path)
+    campaign.add_argument("--cycling-jedi-case", required=True, type=Path)
+    campaign.add_argument("--mpas-case", required=True, type=Path)
+    campaign.add_argument("--obs2ioda-config", required=True, type=Path)
+    campaign.add_argument(
+        "--start-cycle",
+        default="2018-04-15T00:00:00Z",
+        help="first analysis cycle; currently fixed to the validated 2018-04-15 00Z",
+    )
+    campaign.add_argument("--end-cycle", required=True)
+    campaign.add_argument("--destination", required=True, type=Path)
     return parser
 
 
@@ -73,7 +117,13 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "mpas-init-prepare":
         prepare_mpas_init(args.config_dir, args.cycle)
     elif args.command == "mpas-init-submit":
-        submit_mpas_init(args.config_dir, args.cycle, wait=args.wait, resubmit=args.resubmit, poll_seconds=args.poll_seconds)
+        submit_mpas_init(
+            args.config_dir,
+            args.cycle,
+            wait=args.wait,
+            resubmit=args.resubmit,
+            poll_seconds=args.poll_seconds,
+        )
     elif args.command == "mpas-init-wait":
         wait_mpas_init(args.config_dir, args.cycle, poll_seconds=args.poll_seconds)
     elif args.command == "mpas-init-validate":
@@ -91,4 +141,15 @@ def main(argv: list[str] | None = None) -> int:
             destination=args.destination,
         )
         print(f"[OK] materialized corrected replay case: {path}")
+    elif args.command == "materialize-corrected-campaign":
+        path = materialize_corrected_campaign(
+            initial_jedi_case=args.initial_jedi_case,
+            cycling_jedi_case=args.cycling_jedi_case,
+            mpas_case=args.mpas_case,
+            obs2ioda_config=args.obs2ioda_config,
+            start_cycle=args.start_cycle,
+            end_cycle=args.end_cycle,
+            destination=args.destination,
+        )
+        print(f"[OK] materialized corrected campaign: {path}")
     return 0
