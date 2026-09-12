@@ -1,0 +1,5 @@
+profile:
+  initial_jedi_case: $CASE/cases/jedi-2018041500-fgat-corrected
+  cycling_jedi_case: $CASE/cases/jedi-2018041500-fgat-corrected
+  mpas_case: $CASE/cases/mpas-2018041512-fgat-corrected
+  obs2ioda_config: $CASE/obs2ioda.yaml
