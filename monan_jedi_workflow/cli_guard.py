@@ -56,3 +56,8 @@ def main(argv: list[str] | None = None) -> int:
     except (ObservationInputError, StageConfigurationError, FileNotFoundError) as error:
         print(format_error(str(error)), file=sys.stderr)
         return 2
+    except RuntimeError as error:
+        if args and args[0].startswith("obs2ioda-"):
+            print(format_error(str(error)), file=sys.stderr)
+            return 2
+        raise
