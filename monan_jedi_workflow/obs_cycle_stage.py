@@ -53,6 +53,21 @@ def check_obs_cycle_sources(config_dir: Path, cycle_time: str) -> list[InputReso
     return resolutions
 
 
+def _clear_stale_prepbufr_link(run, resolutions: list[InputResolution]) -> None:
+    staged = run.work_dir / "prepbufr.bufr"
+    if not staged.is_symlink():
+        return
+    staged_target = staged.resolve()
+    for item in resolutions:
+        configured = Path(item.configured)
+        if "prepbufr" not in configured.name.lower():
+            continue
+        if configured.exists() and staged_target == configured.resolve():
+            staged.unlink()
+            print(f"[OBS] removed stale failed-attempt link: {staged}")
+            return
+
+
 def _repair_manifest(config_dir: Path, cycle_time: str) -> list[InputResolution]:
     run = load_obs2ioda_run(config_dir, cycle_time)
     manifest = _load_manifest(run)
@@ -66,6 +81,7 @@ def _repair_manifest(config_dir: Path, cycle_time: str) -> list[InputResolution]
     plan, resolutions = _resolve_plan(run, plan)
     if not resolutions:
         return []
+    _clear_stale_prepbufr_link(run, resolutions)
     manifest["converters"] = plan["converters"]
     manifest["plan_sha256"] = plan["plan_sha256"]
     include_sha256 = bool(manifest.get("provenance", {}).get("sha256", False))
