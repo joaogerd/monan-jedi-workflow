@@ -6,8 +6,11 @@ import sys
 from pathlib import Path
 
 from . import cli_extended
+from .campaign import load_campaign_spec
+from .corrected_campaign import _cycles, _iso
 from .obs_cycle_inputs import ObservationInputError
 from .obs_cycle_stage import (
+    check_obs_cycle_sources,
     doctor_obs2ioda_resolved,
     prepare_obs2ioda_resolved,
     run_obs2ioda_resolved,
@@ -17,6 +20,16 @@ from .stage_config import StageConfigurationError
 
 def format_error(message: str) -> str:
     return f"MONAN-JEDI workflow stopped\n{message}"
+
+
+def _check_campaign_observations(config: Path) -> None:
+    spec = load_campaign_spec(config)
+    cycles = _cycles(spec.start_cycle, spec.end_cycle)[1:]
+    resolved = 0
+    for cycle in cycles:
+        resolved += len(check_obs_cycle_sources(spec.obs2ioda_config.parent, _iso(cycle)))
+    suffix = f"; {resolved} dated path(s) resolved by cycle" if resolved else ""
+    print(f"  [OK  ] observation cycle consistency: {len(cycles)} cycles{suffix}")
 
 
 def _dispatch(args: list[str]) -> int:
@@ -31,6 +44,8 @@ def _dispatch(args: list[str]) -> int:
         else:
             run_obs2ioda_resolved(config_dir, cycle, force="--force" in args)
         return 0
+    if len(args) >= 3 and args[0] == "campaign" and args[1] in {"check", "create", "run"}:
+        _check_campaign_observations(Path(args[2]))
     return cli_extended.main(args)
 
 
