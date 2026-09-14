@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import ssl
+import subprocess
 import tarfile
 import tempfile
 import urllib.error
@@ -124,31 +127,156 @@ def _render(template: str, cycle) -> str:
     return template.format(**cycle.render_context())
 
 
-def _download(url: str, destination: Path, *, timeout: int) -> int:
+def _ca_bundle(provider: dict[str, Any]) -> Path | None:
+    raw = provider.get("ca_bundle")
+    if raw in (None, ""):
+        return None
+    if not isinstance(raw, str):
+        raise StageConfigurationError("observation provider ca_bundle must be a path string")
+    path = Path(os.path.expandvars(raw)).expanduser()
+    if not path.is_file():
+        raise ObservationInputError(f"Configured CA bundle does not exist: {path}")
+    return path
+
+
+def _urllib_download(
+    url: str,
+    temporary: Path,
+    *,
+    timeout: int,
+    ca_bundle: Path | None,
+) -> None:
+    request = urllib.request.Request(url, headers={"User-Agent": "MONAN-JEDI-workflow/0.2"})
+    context = ssl.create_default_context(cafile=str(ca_bundle) if ca_bundle else None)
+    with urllib.request.urlopen(request, timeout=timeout, context=context) as response, temporary.open(
+        "wb"
+    ) as stream:
+        while True:
+            block = response.read(1024 * 1024)
+            if not block:
+                break
+            stream.write(block)
+
+
+def _curl_download(
+    url: str,
+    temporary: Path,
+    *,
+    timeout: int,
+    ca_bundle: Path | None,
+) -> str | None:
+    curl = shutil.which("curl")
+    if curl is None:
+        return None
+    command = [
+        curl,
+        "--fail",
+        "--location",
+        "--silent",
+        "--show-error",
+        "--max-time",
+        str(timeout),
+        "--user-agent",
+        "MONAN-JEDI-workflow/0.2",
+        "--output",
+        str(temporary),
+    ]
+    if ca_bundle is not None:
+        command.extend(["--cacert", str(ca_bundle)])
+    command.append(url)
+    process = subprocess.run(command, text=True, capture_output=True, check=False)
+    if process.returncode == 0:
+        return "curl"
+    return f"curl exited {process.returncode}: {(process.stderr or process.stdout).strip()}"
+
+
+def _wget_download(
+    url: str,
+    temporary: Path,
+    *,
+    timeout: int,
+    ca_bundle: Path | None,
+) -> str | None:
+    wget = shutil.which("wget")
+    if wget is None:
+        return None
+    command = [
+        wget,
+        "--quiet",
+        "--timeout",
+        str(timeout),
+        "--tries=1",
+        "--user-agent=MONAN-JEDI-workflow/0.2",
+        "--output-document",
+        str(temporary),
+    ]
+    if ca_bundle is not None:
+        command.extend(["--ca-certificate", str(ca_bundle)])
+    command.append(url)
+    process = subprocess.run(command, text=True, capture_output=True, check=False)
+    if process.returncode == 0:
+        return "wget"
+    return f"wget exited {process.returncode}: {(process.stderr or process.stdout).strip()}"
+
+
+def _download(
+    url: str,
+    destination: Path,
+    *,
+    timeout: int,
+    ca_bundle: Path | None = None,
+) -> tuple[int, str]:
+    """Download with TLS verification, falling back to the host's trusted downloader.
+
+    The fallback never disables certificate verification.  It is useful on HPC
+    systems where the operating-system CA store contains institutional roots that
+    are not present in a Conda/Python CA bundle.
+    """
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(destination.name + ".part")
     temporary.unlink(missing_ok=True)
-    request = urllib.request.Request(url, headers={"User-Agent": "MONAN-JEDI-workflow/0.2"})
+    urllib_problem: str | None = None
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response, temporary.open("wb") as stream:
-            while True:
-                block = response.read(1024 * 1024)
-                if not block:
-                    break
-                stream.write(block)
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        _urllib_download(url, temporary, timeout=timeout, ca_bundle=ca_bundle)
+        transport = "python-https"
+    except (urllib.error.URLError, TimeoutError, OSError, ssl.SSLError) as error:
         temporary.unlink(missing_ok=True)
-        raise ObservationInputError(
-            "Remote observation download failed\n"
-            f"  URL: {url}\n"
-            f"  Destination: {destination}\n"
-            f"  Cause: {error}"
-        ) from None
+        urllib_problem = str(error)
+        curl_result = _curl_download(
+            url, temporary, timeout=timeout, ca_bundle=ca_bundle
+        )
+        if curl_result == "curl":
+            transport = "curl-https"
+        else:
+            temporary.unlink(missing_ok=True)
+            wget_result = _wget_download(
+                url, temporary, timeout=timeout, ca_bundle=ca_bundle
+            )
+            if wget_result == "wget":
+                transport = "wget-https"
+            else:
+                temporary.unlink(missing_ok=True)
+                details = [f"Python HTTPS: {urllib_problem}"]
+                details.append(
+                    "curl: unavailable" if curl_result is None else str(curl_result)
+                )
+                details.append(
+                    "wget: unavailable" if wget_result is None else str(wget_result)
+                )
+                raise ObservationInputError(
+                    "Remote observation download failed with TLS verification enabled\n"
+                    f"  URL: {url}\n"
+                    f"  Destination: {destination}\n"
+                    "  Attempts:\n    "
+                    + "\n    ".join(details)
+                    + "\n  TLS verification was not disabled. If JACI requires an institutional CA, "
+                    "configure provider.ca_bundle."
+                ) from None
     if not temporary.is_file() or temporary.stat().st_size == 0:
         temporary.unlink(missing_ok=True)
         raise ObservationInputError(f"Remote observation download was empty: {url}")
     temporary.replace(destination)
-    return destination.stat().st_size
+    return destination.stat().st_size, transport
 
 
 def _extract_member(archive: Path, member_name: str, destination: Path) -> int:
@@ -191,10 +319,13 @@ def _acquire_remote(candidate: Path, cycle, converter: str, provider: dict[str, 
     kind = str(provider.get("type", "https"))
     url = _render(str(provider.get("url", "")), cycle)
     timeout = int(provider.get("timeout_seconds", 180))
+    ca_bundle = _ca_bundle(provider)
 
     if kind == "https":
-        size = _download(url, candidate, timeout=timeout)
-        record = AcquisitionRecord(converter, cycle.cycle_time, str(candidate), "https", url, size)
+        size, transport = _download(url, candidate, timeout=timeout, ca_bundle=ca_bundle)
+        record = AcquisitionRecord(
+            converter, cycle.cycle_time, str(candidate), transport, url, size
+        )
         _write_provenance(candidate, record)
         return record
 
@@ -202,13 +333,13 @@ def _acquire_remote(candidate: Path, cycle, converter: str, provider: dict[str, 
         member = _render(str(provider.get("member", "")), cycle)
         with tempfile.TemporaryDirectory(prefix="monan-jedi-obs-") as temporary_dir:
             archive = Path(temporary_dir) / Path(url).name
-            _download(url, archive, timeout=timeout)
+            _, transport = _download(url, archive, timeout=timeout, ca_bundle=ca_bundle)
             size = _extract_member(archive, Path(member).name, candidate)
         record = AcquisitionRecord(
             converter,
             cycle.cycle_time,
             str(candidate),
-            "https-tar",
+            f"{transport}-tar",
             f"{url}#{Path(member).name}",
             size,
         )
