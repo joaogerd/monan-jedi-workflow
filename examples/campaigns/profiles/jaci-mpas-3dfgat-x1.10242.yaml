@@ -3,3 +3,25 @@ profile:
   cycling_jedi_case: $CASE/cases/jedi-2018041500-fgat-corrected
   mpas_case: $CASE/cases/mpas-2018041512-fgat-corrected
   obs2ioda_config: $CASE/obs2ioda.yaml
+
+  # Observation acquisition is a campaign-level preflight step.  The workflow
+  # first searches local/cache locations and only then uses explicitly declared
+  # remote providers.  Downloaded files are kept in the same dated cache layout
+  # already used by the validated 2018-04-15 inputs.
+  observation_acquisition:
+    enabled: true
+    search_roots:
+      - $CASE/../data/obs/gdas
+      - /oper/dados/bdados/assimila/gdas
+
+    providers:
+      prepbufr-conventional:
+        type: https
+        url: "https://data.rda.ucar.edu/d337000/prep48h/{cycle_year}/prepbufr.gdas.{cycle_yyyymmdd}.t{cycle_hour}z.nr.48h"
+        timeout_seconds: 300
+
+      gpsro-gnssro:
+        type: https-tar
+        url: "https://data.rda.ucar.edu/d735000/gpsro/{cycle_year}/gpsro.{cycle_yyyymmdd}.tar.gz"
+        member: "gdas.gpsro.t{cycle_hour}z.{cycle_yyyymmdd}.bufr"
+        timeout_seconds: 300
