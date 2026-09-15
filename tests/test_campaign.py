@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from monan_jedi_workflow import campaign
@@ -13,6 +14,7 @@ from monan_jedi_workflow.campaign import (
     preflight_campaign,
     run_campaign,
 )
+from monan_jedi_workflow.stage_config import StageConfigurationError
 
 
 def _spec(tmp_path: Path) -> CampaignSpec:
@@ -82,6 +84,87 @@ def test_load_campaign_spec_resolves_profile_environment_and_duration(
     assert spec.destination == case / "cases/m3-3days-20180415"
     assert spec.initial_jedi_case == case / "cases/initial"
     assert spec.swf_command == ("swf",)
+
+
+def test_load_campaign_spec_resolves_case_root_without_environment(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.delenv("CASE", raising=False)
+    case = tmp_path / "CASE"
+    profile_dir = tmp_path / "profiles"
+    profile_dir.mkdir()
+    profile = profile_dir / "jaci.yaml"
+    profile.write_text(
+        yaml.safe_dump(
+            {
+                "profile": {
+                    "case_root": "../CASE",
+                    "initial_jedi_case": "cases/initial",
+                    "cycling_jedi_case": "cases/cycling",
+                    "mpas_case": "cases/mpas",
+                    "obs2ioda_config": "obs2ioda.yaml",
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    config = tmp_path / "campaign.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "campaign": {
+                    "name": "m3-3days-20180415",
+                    "start": "2018-04-15T00:00:00Z",
+                    "duration": "PT72H",
+                    "destination": "cases/m3-3days-20180415",
+                },
+                "profile": "profiles/jaci.yaml",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    spec = load_campaign_spec(config)
+
+    assert spec.destination == case / "cases/m3-3days-20180415"
+    assert spec.initial_jedi_case == case / "cases/initial"
+    assert spec.cycling_jedi_case == case / "cases/cycling"
+    assert spec.mpas_case == case / "cases/mpas"
+    assert spec.obs2ioda_config == case / "obs2ioda.yaml"
+
+
+@pytest.mark.parametrize("value", ["$CASE/cases/run", "${CASE}/cases/run"])
+def test_load_campaign_spec_rejects_undefined_environment_variable(
+    tmp_path: Path, monkeypatch, value: str
+) -> None:
+    monkeypatch.delenv("CASE", raising=False)
+    config = tmp_path / "campaign.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "campaign": {
+                    "name": "undefined-env",
+                    "start": "2018-04-15T00:00:00Z",
+                    "duration": "PT6H",
+                    "destination": value,
+                },
+                "profile": {
+                    "initial_jedi_case": str(tmp_path / "initial"),
+                    "cycling_jedi_case": str(tmp_path / "cycling"),
+                    "mpas_case": str(tmp_path / "mpas"),
+                    "obs2ioda_config": str(tmp_path / "obs2ioda.yaml"),
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(StageConfigurationError, match=r"\$CASE"):
+        load_campaign_spec(config)
 
 
 def test_load_campaign_spec_accepts_unquoted_yaml_timestamps(tmp_path: Path) -> None:
