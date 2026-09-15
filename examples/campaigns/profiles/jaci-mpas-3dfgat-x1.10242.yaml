@@ -1,0 +1,32 @@
+profile:
+  # Standard JACI workspace layout:
+  #   <workspace>/projects/monan-jedi-workflow
+  #   <workspace>/work/CASE
+  # Resolve the scientific case root from this profile itself so operators do
+  # not need to export CASE before using the campaign interface.
+  case_root: ../../../../../work/CASE
+
+  initial_jedi_case: cases/jedi-2018041500-fgat-corrected
+  cycling_jedi_case: cases/jedi-2018041500-fgat-corrected
+  mpas_case: cases/mpas-2018041512-fgat-corrected
+  obs2ioda_config: obs2ioda.yaml
+
+  observation_acquisition:
+    enabled: true
+    search_roots:
+      - ../../../../../data/obs/gdas
+      - /oper/dados/bdados/assimila/gdas
+
+    providers:
+      prepbufr-conventional:
+        type: https
+        # GDEX currently serves public HTTPS downloads through the Open Science
+        # Data Federation (OSDF), rather than the legacy data.rda.ucar.edu host.
+        url: "https://osdf-data.gdex.ucar.edu/ncar/gdex/d337000/prep48h/{cycle_year}/prepbufr.gdas.{cycle_year}{cycle_month}{cycle_day}.t{cycle_hour}z.nr.48h"
+        timeout_seconds: 300
+
+      gpsro-gnssro:
+        type: https-tar
+        url: "https://osdf-data.gdex.ucar.edu/ncar/gdex/d735000/gpsro/{cycle_year}/gpsro.{cycle_year}{cycle_month}{cycle_day}.tar.gz"
+        member: "gdas.gpsro.t{cycle_hour}z.{cycle_year}{cycle_month}{cycle_day}.bufr"
+        timeout_seconds: 300
