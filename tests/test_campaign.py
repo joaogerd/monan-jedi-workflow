@@ -163,7 +163,7 @@ def test_load_campaign_spec_rejects_undefined_environment_variable(
         encoding="utf-8",
     )
 
-    with pytest.raises(StageConfigurationError, match=r"\$CASE"):
+    with pytest.raises(StageConfigurationError, match=r"\$(?:CASE|\{CASE\})"):
         load_campaign_spec(config)
 
 
