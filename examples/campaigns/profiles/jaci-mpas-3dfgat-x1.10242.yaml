@@ -1,13 +1,20 @@
 profile:
-  initial_jedi_case: $CASE/cases/jedi-2018041500-fgat-corrected
-  cycling_jedi_case: $CASE/cases/jedi-2018041500-fgat-corrected
-  mpas_case: $CASE/cases/mpas-2018041512-fgat-corrected
-  obs2ioda_config: $CASE/obs2ioda.yaml
+  # Standard JACI workspace layout:
+  #   <workspace>/projects/monan-jedi-workflow
+  #   <workspace>/work/CASE
+  # Resolve the scientific case root from this profile itself so operators do
+  # not need to export CASE before using the campaign interface.
+  case_root: ../../../../../work/CASE
+
+  initial_jedi_case: cases/jedi-2018041500-fgat-corrected
+  cycling_jedi_case: cases/jedi-2018041500-fgat-corrected
+  mpas_case: cases/mpas-2018041512-fgat-corrected
+  obs2ioda_config: obs2ioda.yaml
 
   observation_acquisition:
     enabled: true
     search_roots:
-      - $CASE/../../data/obs/gdas
+      - ../../../../../data/obs/gdas
       - /oper/dados/bdados/assimila/gdas
 
     providers:
