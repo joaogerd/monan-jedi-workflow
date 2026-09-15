@@ -31,7 +31,9 @@ from .obs2ioda_stage import _build_plan, load_obs2ioda_run
 from .stage_config import StageConfigurationError
 
 _DURATION = re.compile(r"^PT(?P<hours>[1-9][0-9]*)H$")
-_UNRESOLVED_ENV = re.compile(r"\$\{[^}]+\}")
+_UNRESOLVED_ENV = re.compile(
+    r"\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
+)
 
 
 @dataclass(frozen=True)
@@ -88,15 +90,20 @@ def _load_mapping(path: Path, label: str) -> dict[str, Any]:
 
 def _expand_env(value: Any, *, label: str) -> Any:
     if isinstance(value, dict):
-        return {key: _expand_env(item, label=f"{label}.{key}") for key, item in value.items()}
+        return {
+            key: _expand_env(item, label=f"{label}.{key}")
+            for key, item in value.items()
+        }
     if isinstance(value, list):
         return [_expand_env(item, label=label) for item in value]
     if not isinstance(value, str):
         return value
     expanded = os.path.expandvars(value)
-    if _UNRESOLVED_ENV.search(expanded):
+    unresolved = _UNRESOLVED_ENV.search(expanded)
+    if unresolved:
         raise StageConfigurationError(
-            f"{label} contains an environment variable that is not defined: {value}"
+            f"{label} contains an environment variable that is not defined: "
+            f"{unresolved.group(0)} in {value}"
         )
     return expanded
 
@@ -120,19 +127,36 @@ def _resolve_path(value: str, base_dir: Path) -> Path:
 
 
 def _profile(config: dict[str, Any], config_dir: Path) -> tuple[dict[str, Any], Path]:
+    """Return a resolved profile and the base used for its relative paths.
+
+    By default, profile paths remain relative to the profile file (or campaign
+    file for an inline profile). A profile may declare ``case_root`` to make all
+    scientific case paths relative to one explicit root. This is preferred for
+    site profiles because it avoids requiring operators to export path variables
+    such as ``CASE`` before every campaign command.
+    """
     raw = config.get("profile")
     if isinstance(raw, dict):
-        return _expand_env(raw, label="profile"), config_dir
-    if not isinstance(raw, str) or not raw:
-        raise StageConfigurationError(
-            "campaign profile must be a mapping or a path to a profile YAML file"
-        )
-    profile_path = _resolve_path(_expand_env(raw, label="profile"), config_dir)
-    document = _expand_env(_load_mapping(profile_path, "profile"), label="profile")
-    profile = document.get("profile", document)
-    if not isinstance(profile, dict):
-        raise StageConfigurationError(f"profile must be a mapping: {profile_path}")
-    return profile, profile_path.parent
+        profile = _expand_env(raw, label="profile")
+        profile_dir = config_dir
+    else:
+        if not isinstance(raw, str) or not raw:
+            raise StageConfigurationError(
+                "campaign profile must be a mapping or a path to a profile YAML file"
+            )
+        profile_path = _resolve_path(_expand_env(raw, label="profile"), config_dir)
+        document = _expand_env(_load_mapping(profile_path, "profile"), label="profile")
+        profile = document.get("profile", document)
+        if not isinstance(profile, dict):
+            raise StageConfigurationError(f"profile must be a mapping: {profile_path}")
+        profile_dir = profile_path.parent
+
+    case_root = profile.get("case_root")
+    if case_root is None:
+        return profile, profile_dir
+    if not isinstance(case_root, str) or not case_root.strip():
+        raise StageConfigurationError("profile.case_root must be a non-empty path string")
+    return profile, _resolve_path(case_root.strip(), profile_dir)
 
 
 def _parse_duration(value: str) -> int:
@@ -148,7 +172,7 @@ def _parse_duration(value: str) -> int:
 
 
 def load_campaign_spec(config_path: Path) -> CampaignSpec:
-    """Load a small campaign YAML and resolve profile/environment references."""
+    """Load one campaign and resolve profile, root and environment references."""
     config_path = config_path.resolve()
     document = _expand_env(_load_mapping(config_path, "campaign"), label="campaign")
     campaign = document.get("campaign")
@@ -167,14 +191,18 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     duration_hours: int
     if duration_value is not None:
         if not isinstance(duration_value, str):
-            raise StageConfigurationError("campaign.duration must be a string such as PT72H")
+            raise StageConfigurationError(
+                "campaign.duration must be a string such as PT72H"
+            )
         duration_hours = _parse_duration(duration_value)
         calculated_end = start + timedelta(hours=duration_hours)
     else:
         calculated_end = _parse_cycle(str(end_value))
         duration_hours = int((calculated_end - start).total_seconds() // 3600)
         if duration_hours < 0 or duration_hours % 6:
-            raise StageConfigurationError("campaign end must be on or after start and aligned to 6 hours")
+            raise StageConfigurationError(
+                "campaign end must be on or after start and aligned to 6 hours"
+            )
 
     if end_value is not None:
         declared_end = _parse_cycle(str(end_value))
@@ -182,19 +210,23 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
             raise StageConfigurationError("campaign.end does not match campaign.duration")
     end_cycle = _iso(calculated_end)
 
-    destination_text = _required_string(campaign, "destination", "campaign")
-    destination = _resolve_path(destination_text, config_path.parent)
+    profile, profile_base = _profile(document, config_path.parent)
 
-    profile, profile_dir = _profile(document, config_path.parent)
+    destination_text = _required_string(campaign, "destination", "campaign")
+    destination_base = profile_base if "case_root" in profile else config_path.parent
+    destination = _resolve_path(destination_text, destination_base)
+
     initial_jedi_case = _resolve_path(
-        _required_string(profile, "initial_jedi_case", "profile"), profile_dir
+        _required_string(profile, "initial_jedi_case", "profile"), profile_base
     )
     cycling_jedi_case = _resolve_path(
-        _required_string(profile, "cycling_jedi_case", "profile"), profile_dir
+        _required_string(profile, "cycling_jedi_case", "profile"), profile_base
     )
-    mpas_case = _resolve_path(_required_string(profile, "mpas_case", "profile"), profile_dir)
+    mpas_case = _resolve_path(
+        _required_string(profile, "mpas_case", "profile"), profile_base
+    )
     obs2ioda_config = _resolve_path(
-        _required_string(profile, "obs2ioda_config", "profile"), profile_dir
+        _required_string(profile, "obs2ioda_config", "profile"), profile_base
     )
 
     execution = document.get("execution", {})
@@ -206,7 +238,9 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     elif isinstance(swf_raw, list) and all(isinstance(item, str) for item in swf_raw):
         swf_command = tuple(swf_raw)
     else:
-        raise StageConfigurationError("execution.swf_command must be a string or list of strings")
+        raise StageConfigurationError(
+            "execution.swf_command must be a string or list of strings"
+        )
     if not swf_command:
         raise StageConfigurationError("execution.swf_command cannot be empty")
 
@@ -235,9 +269,15 @@ def _command_available(command: str) -> bool:
 
 
 def _rendered_obs_inputs(config: Path, cycle: datetime) -> tuple[list[Path], list[str]]:
-    run = load_obs2ioda_run(config.parent, _iso(cycle)) if config.name == "obs2ioda.yaml" else None
+    run = (
+        load_obs2ioda_run(config.parent, _iso(cycle))
+        if config.name == "obs2ioda.yaml"
+        else None
+    )
     if run is None:
-        return [], [f"Obs2IODA profile must currently point to a file named obs2ioda.yaml: {config}"]
+        return [], [
+            f"Obs2IODA profile must currently point to a file named obs2ioda.yaml: {config}"
+        ]
     try:
         plan = _build_plan(run)
     except Exception as exc:
@@ -262,7 +302,9 @@ def _rendered_obs_inputs(config: Path, cycle: datetime) -> tuple[list[Path], lis
     return inputs, tools
 
 
-def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> PreflightReport:
+def preflight_campaign(
+    spec: CampaignSpec, *, require_swf: bool = True
+) -> PreflightReport:
     """Check everything knowable before creating or submitting the campaign."""
     items: list[PreflightItem] = []
 
@@ -278,7 +320,9 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
     if all(item.ok for item in items[:4]):
         try:
             inputs = _initial_inputs(spec.initial_jedi_case)
-            missing_initial = [str(path) for path in inputs.values() if not path.is_file()]
+            missing_initial = [
+                str(path) for path in inputs.values() if not path.is_file()
+            ]
             items.append(
                 PreflightItem(
                     "first-cycle starting inputs",
@@ -287,7 +331,9 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
                 )
             )
         except Exception as exc:
-            items.append(PreflightItem("first-cycle starting inputs", False, str(exc)))
+            items.append(
+                PreflightItem("first-cycle starting inputs", False, str(exc))
+            )
 
     if require_swf:
         items.append(
@@ -318,7 +364,9 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
         PreflightItem(
             f"observation inputs ({len(obs_cycles)} cycles)",
             not missing_obs,
-            "all available" if not missing_obs else "; ".join(sorted(set(missing_obs))),
+            "all available"
+            if not missing_obs
+            else "; ".join(sorted(set(missing_obs))),
         )
     )
     items.append(
@@ -333,7 +381,11 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
         workflow = spec.destination / "workflow.yaml"
         request = spec.destination / "campaign-request.yaml"
         ok = spec.destination.is_dir() and workflow.is_file() and request.is_file()
-        detail = "existing restartable campaign" if ok else "destination exists but is not a complete campaign"
+        detail = (
+            "existing restartable campaign"
+            if ok
+            else "destination exists but is not a complete campaign"
+        )
         items.append(PreflightItem("destination", ok, detail))
     else:
         parent = spec.destination.parent
@@ -417,7 +469,11 @@ def print_preflight(report: PreflightReport) -> None:
         marker = "OK" if item.ok else "FAIL"
         print(f"  [{marker:<4}] {item.label}: {item.detail}")
     print()
-    print("Preflight PASS" if report.valid else "Preflight FAILED - campaign was not started")
+    print(
+        "Preflight PASS"
+        if report.valid
+        else "Preflight FAILED - campaign was not started"
+    )
 
 
 def check_campaign(config_path: Path, *, require_swf: bool = True) -> PreflightReport:
