@@ -1,9 +1,9 @@
 """High-level campaign interface for reproducible MONAN-JEDI experiments.
 
-The user-facing contract is intentionally small: one campaign YAML describes
-what period to run and which validated profile to use.  This module owns the
-preflight, clean materialization and simpleWorkflow invocation so operators do
-not need to remember the lower-level JEDI/MPAS/Obs2IODA command sequence.
+A campaign YAML contains the period and scientific choices.  A reusable profile
+contains site paths.  Materialization produces one compact native-cycle
+simpleWorkflow definition; runtime cycle instances live in SQLite rather than
+being duplicated in YAML.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from .corrected_campaign import (
     _parse_cycle,
     materialize_corrected_campaign,
 )
-from .corrected_replay import _initial_inputs
+from .mpas_stage import load_mpas_run
 from .obs2ioda_stage import _build_plan, load_obs2ioda_run
 from .stage_config import StageConfigurationError
 
@@ -46,11 +46,15 @@ class CampaignSpec:
     end_cycle: str
     duration_hours: int
     destination: Path
-    initial_jedi_case: Path
     cycling_jedi_case: Path
+    initial_mpas_case: Path
     mpas_case: Path
     obs2ioda_config: Path
     swf_command: tuple[str, ...]
+    run_mpas_on_last_cycle: bool = False
+    # Retained as cheap source compatibility for older profile tooling.  The
+    # compact campaign no longer consumes a precomputed first-cycle JEDI case.
+    initial_jedi_case: Path | None = None
 
     @property
     def workdir(self) -> Path:
@@ -119,6 +123,15 @@ def _required_string(mapping: dict[str, Any], key: str, label: str) -> str:
     return value.strip()
 
 
+def _optional_path(mapping: dict[str, Any], key: str, base_dir: Path) -> Path | None:
+    value = mapping.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise StageConfigurationError(f"profile.{key} must be a non-empty path string")
+    return _resolve_path(value.strip(), base_dir)
+
+
 def _resolve_path(value: str, base_dir: Path) -> Path:
     path = Path(value).expanduser()
     if not path.is_absolute():
@@ -127,14 +140,7 @@ def _resolve_path(value: str, base_dir: Path) -> Path:
 
 
 def _profile(config: dict[str, Any], config_dir: Path) -> tuple[dict[str, Any], Path]:
-    """Return a resolved profile and the base used for its relative paths.
-
-    By default, profile paths remain relative to the profile file (or campaign
-    file for an inline profile). A profile may declare ``case_root`` to make all
-    scientific case paths relative to one explicit root. This is preferred for
-    site profiles because it avoids requiring operators to export path variables
-    such as ``CASE`` before every campaign command.
-    """
+    """Return a resolved profile and the base used for its relative paths."""
     raw = config.get("profile")
     if isinstance(raw, dict):
         profile = _expand_env(raw, label="profile")
@@ -171,6 +177,21 @@ def _parse_duration(value: str) -> int:
     return hours
 
 
+def _forecast_config(document: dict[str, Any]) -> bool:
+    raw = document.get("forecast", {})
+    if not isinstance(raw, dict):
+        raise StageConfigurationError("forecast must be a mapping")
+    unknown = set(raw) - {"run_on_last_cycle"}
+    if unknown:
+        raise StageConfigurationError(
+            "forecast has unsupported field(s): " + ", ".join(sorted(unknown))
+        )
+    value = raw.get("run_on_last_cycle", False)
+    if not isinstance(value, bool):
+        raise StageConfigurationError("forecast.run_on_last_cycle must be boolean")
+    return value
+
+
 def load_campaign_spec(config_path: Path) -> CampaignSpec:
     """Load one campaign and resolve profile, root and environment references."""
     config_path = config_path.resolve()
@@ -181,7 +202,6 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
 
     name = _required_string(campaign, "name", "campaign")
     start_cycle = _iso(_parse_cycle(_required_string(campaign, "start", "campaign")))
-
     duration_value = campaign.get("duration")
     end_value = campaign.get("end")
     if duration_value is None and end_value is None:
@@ -191,9 +211,7 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     duration_hours: int
     if duration_value is not None:
         if not isinstance(duration_value, str):
-            raise StageConfigurationError(
-                "campaign.duration must be a string such as PT72H"
-            )
+            raise StageConfigurationError("campaign.duration must be a string such as PT72H")
         duration_hours = _parse_duration(duration_value)
         calculated_end = start + timedelta(hours=duration_hours)
     else:
@@ -211,16 +229,15 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     end_cycle = _iso(calculated_end)
 
     profile, profile_base = _profile(document, config_path.parent)
-
     destination_text = _required_string(campaign, "destination", "campaign")
     destination_base = profile_base if "case_root" in profile else config_path.parent
     destination = _resolve_path(destination_text, destination_base)
 
-    initial_jedi_case = _resolve_path(
-        _required_string(profile, "initial_jedi_case", "profile"), profile_base
-    )
     cycling_jedi_case = _resolve_path(
         _required_string(profile, "cycling_jedi_case", "profile"), profile_base
+    )
+    initial_mpas_case = _resolve_path(
+        _required_string(profile, "initial_mpas_case", "profile"), profile_base
     )
     mpas_case = _resolve_path(
         _required_string(profile, "mpas_case", "profile"), profile_base
@@ -228,6 +245,7 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     obs2ioda_config = _resolve_path(
         _required_string(profile, "obs2ioda_config", "profile"), profile_base
     )
+    initial_jedi_case = _optional_path(profile, "initial_jedi_case", profile_base)
 
     execution = document.get("execution", {})
     if not isinstance(execution, dict):
@@ -245,7 +263,6 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
         raise StageConfigurationError("execution.swf_command cannot be empty")
 
     _cycles(start_cycle, end_cycle)
-
     return CampaignSpec(
         config_path=config_path,
         name=name,
@@ -253,11 +270,13 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
         end_cycle=end_cycle,
         duration_hours=duration_hours,
         destination=destination,
-        initial_jedi_case=initial_jedi_case,
         cycling_jedi_case=cycling_jedi_case,
+        initial_mpas_case=initial_mpas_case,
         mpas_case=mpas_case,
         obs2ioda_config=obs2ioda_config,
         swf_command=swf_command,
+        run_mpas_on_last_cycle=_forecast_config(document),
+        initial_jedi_case=initial_jedi_case,
     )
 
 
@@ -269,11 +288,7 @@ def _command_available(command: str) -> bool:
 
 
 def _rendered_obs_inputs(config: Path, cycle: datetime) -> tuple[list[Path], list[str]]:
-    run = (
-        load_obs2ioda_run(config.parent, _iso(cycle))
-        if config.name == "obs2ioda.yaml"
-        else None
-    )
+    run = load_obs2ioda_run(config.parent, _iso(cycle)) if config.name == "obs2ioda.yaml" else None
     if run is None:
         return [], [
             f"Obs2IODA profile must currently point to a file named obs2ioda.yaml: {config}"
@@ -302,38 +317,49 @@ def _rendered_obs_inputs(config: Path, cycle: datetime) -> tuple[list[Path], lis
     return inputs, tools
 
 
-def preflight_campaign(
-    spec: CampaignSpec, *, require_swf: bool = True
-) -> PreflightReport:
+def _initial_mpas_detail(spec: CampaignSpec) -> PreflightItem:
+    config = spec.initial_mpas_case / "mpas.yaml"
+    if not config.is_file():
+        return PreflightItem("initial MPAS case", False, f"missing {config}")
+    source_cycle = _parse_cycle(spec.start_cycle) - timedelta(hours=6)
+    try:
+        run = load_mpas_run(spec.initial_mpas_case, _iso(source_cycle))
+    except Exception as exc:
+        return PreflightItem("initial MPAS case", False, str(exc))
+    lead_hours = int(run.config.get("lead_hours", 0))
+    if lead_hours < 6:
+        return PreflightItem(
+            "initial MPAS case",
+            False,
+            f"lead_hours={lead_hours}; at least 6 hours are required",
+        )
+    return PreflightItem(
+        "initial MPAS case",
+        True,
+        f"{config} (lead_hours={lead_hours})",
+    )
+
+
+def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> PreflightReport:
     """Check everything knowable before creating or submitting the campaign."""
     items: list[PreflightItem] = []
-
     for label, path, kind in (
-        ("initial JEDI case", spec.initial_jedi_case, "dir"),
         ("cycling JEDI case", spec.cycling_jedi_case, "dir"),
         ("MPAS case", spec.mpas_case, "dir"),
         ("Obs2IODA configuration", spec.obs2ioda_config, "file"),
     ):
         ok = path.is_dir() if kind == "dir" else path.is_file()
         items.append(PreflightItem(label, ok, str(path)))
+    items.append(_initial_mpas_detail(spec))
 
-    if all(item.ok for item in items[:4]):
-        try:
-            inputs = _initial_inputs(spec.initial_jedi_case)
-            missing_initial = [
-                str(path) for path in inputs.values() if not path.is_file()
-            ]
-            items.append(
-                PreflightItem(
-                    "first-cycle starting inputs",
-                    not missing_initial,
-                    "available" if not missing_initial else ", ".join(missing_initial),
-                )
+    if spec.initial_jedi_case is not None:
+        items.append(
+            PreflightItem(
+                "legacy initial JEDI case (not consumed)",
+                spec.initial_jedi_case.is_dir(),
+                str(spec.initial_jedi_case),
             )
-        except Exception as exc:
-            items.append(
-                PreflightItem("first-cycle starting inputs", False, str(exc))
-            )
+        )
 
     if require_swf:
         items.append(
@@ -352,21 +378,18 @@ def preflight_campaign(
     )
 
     cycles = _cycles(spec.start_cycle, spec.end_cycle)
-    obs_cycles = cycles[1:]
     missing_obs: list[str] = []
     missing_tools: set[str] = set()
     if spec.obs2ioda_config.is_file():
-        for cycle in obs_cycles:
+        for cycle in cycles:
             inputs, tools = _rendered_obs_inputs(spec.obs2ioda_config, cycle)
             missing_obs.extend(str(path) for path in inputs if not path.is_file())
             missing_tools.update(tool for tool in tools if not _command_available(tool))
     items.append(
         PreflightItem(
-            f"observation inputs ({len(obs_cycles)} cycles)",
+            f"observation inputs ({len(cycles)} cycles)",
             not missing_obs,
-            "all available"
-            if not missing_obs
-            else "; ".join(sorted(set(missing_obs))),
+            "all available" if not missing_obs else "; ".join(sorted(set(missing_obs))),
         )
     )
     items.append(
@@ -381,21 +404,24 @@ def preflight_campaign(
         workflow = spec.destination / "workflow.yaml"
         request = spec.destination / "campaign-request.yaml"
         ok = spec.destination.is_dir() and workflow.is_file() and request.is_file()
-        detail = (
-            "existing restartable campaign"
-            if ok
-            else "destination exists but is not a complete campaign"
-        )
+        detail = "existing restartable campaign" if ok else "destination exists but is not a complete campaign"
         items.append(PreflightItem("destination", ok, detail))
     else:
         parent = spec.destination.parent
         ok = parent.exists() and os.access(parent, os.W_OK)
         items.append(PreflightItem("destination", ok, str(spec.destination)))
-
     return PreflightReport(spec=spec, items=tuple(items))
 
 
 def _request_document(spec: CampaignSpec) -> dict[str, Any]:
+    profile: dict[str, str] = {
+        "cycling_jedi_case": str(spec.cycling_jedi_case),
+        "initial_mpas_case": str(spec.initial_mpas_case),
+        "mpas_case": str(spec.mpas_case),
+        "obs2ioda_config": str(spec.obs2ioda_config),
+    }
+    if spec.initial_jedi_case is not None:
+        profile["initial_jedi_case"] = str(spec.initial_jedi_case)
     return {
         "campaign": {
             "name": spec.name,
@@ -404,12 +430,8 @@ def _request_document(spec: CampaignSpec) -> dict[str, Any]:
             "duration_hours": spec.duration_hours,
             "destination": str(spec.destination),
         },
-        "profile": {
-            "initial_jedi_case": str(spec.initial_jedi_case),
-            "cycling_jedi_case": str(spec.cycling_jedi_case),
-            "mpas_case": str(spec.mpas_case),
-            "obs2ioda_config": str(spec.obs2ioda_config),
-        },
+        "profile": profile,
+        "forecast": {"run_on_last_cycle": spec.run_mpas_on_last_cycle},
         "execution": {"swf_command": list(spec.swf_command)},
     }
 
@@ -436,15 +458,16 @@ def materialize_campaign(spec: CampaignSpec) -> Path:
     if spec.destination.exists():
         _validate_existing_campaign(spec)
         return spec.destination
-
     materialize_corrected_campaign(
         initial_jedi_case=spec.initial_jedi_case,
         cycling_jedi_case=spec.cycling_jedi_case,
+        initial_mpas_case=spec.initial_mpas_case,
         mpas_case=spec.mpas_case,
         obs2ioda_config=spec.obs2ioda_config,
         start_cycle=spec.start_cycle,
         end_cycle=spec.end_cycle,
         destination=spec.destination,
+        run_mpas_on_last_cycle=spec.run_mpas_on_last_cycle,
     )
     (spec.destination / "campaign-request.yaml").write_text(
         yaml.safe_dump(_request_document(spec), sort_keys=False), encoding="utf-8"
@@ -455,13 +478,14 @@ def materialize_campaign(spec: CampaignSpec) -> Path:
 def print_preflight(report: PreflightReport) -> None:
     spec = report.spec
     cycles = _cycles(spec.start_cycle, spec.end_cycle)
+    mpas_cycles = len(cycles) if spec.run_mpas_on_last_cycle else max(0, len(cycles) - 1)
     print("MONAN-JEDI Campaign")
     print()
     print(f"Name       {spec.name}")
     print(f"Period     {spec.start_cycle} -> {spec.end_cycle}")
     print(f"Duration   {spec.duration_hours} h")
     print(f"Analyses   {len(cycles)}")
-    print(f"Forecasts  {max(0, len(cycles) - 1)} x 6 h")
+    print(f"MPAS       {mpas_cycles} cycle integration(s) + 1 initialization")
     print(f"Directory  {spec.destination}")
     print()
     print("Preflight")
@@ -469,11 +493,7 @@ def print_preflight(report: PreflightReport) -> None:
         marker = "OK" if item.ok else "FAIL"
         print(f"  [{marker:<4}] {item.label}: {item.detail}")
     print()
-    print(
-        "Preflight PASS"
-        if report.valid
-        else "Preflight FAILED - campaign was not started"
-    )
+    print("Preflight PASS" if report.valid else "Preflight FAILED - campaign was not started")
 
 
 def check_campaign(config_path: Path, *, require_swf: bool = True) -> PreflightReport:
