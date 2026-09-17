@@ -51,3 +51,6 @@ jobs:
           make validate
           make render-yaml
           make render-pbs
+
+      - name: Report native-cycle structure
+        run: python scripts/report_native_cycle_structure.py
