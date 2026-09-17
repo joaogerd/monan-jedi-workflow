@@ -157,7 +157,6 @@ def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
     contract = _require_mapping(config.get("forecast_contract", {}), "mpas.forecast_contract")
     if contract:
         expected = {
-            "run_hours": 6,
             "da_state_interval_hours": 3,
             "mpi_ranks": 128,
             "partition": "x1.10242.graph.info.part.128",
@@ -170,8 +169,21 @@ def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
             for key, value in expected.items()
             if contract.get(key) != value
         ]
-        if lead_hours != 6:
-            differences.append(f"lead_hours={lead_hours!r} (expected 6)")
+        try:
+            run_hours = int(contract.get("run_hours"))
+        except (TypeError, ValueError):
+            differences.append(
+                f"run_hours={contract.get('run_hours')!r} (expected integer {lead_hours})"
+            )
+        else:
+            if run_hours != lead_hours:
+                differences.append(
+                    f"run_hours={run_hours!r} (expected {lead_hours!r} to match lead_hours)"
+                )
+        if lead_hours < 6:
+            differences.append(
+                f"lead_hours={lead_hours!r} (expected at least 6 for DA cycling)"
+            )
         if differences:
             raise StageConfigurationError(
                 "MPAS cycling forecast contract mismatch: " + "; ".join(differences)
