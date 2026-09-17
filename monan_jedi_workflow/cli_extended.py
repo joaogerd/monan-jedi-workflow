@@ -90,12 +90,23 @@ def _parser() -> argparse.ArgumentParser:
     materialize = sub.add_parser(
         "materialize-corrected-campaign",
         help=(
-            "developer command: create a clean multi-day corrected campaign "
-            "beginning at the validated 2018-04-15 00Z first cycle"
+            "developer command: create a compact native-cycle campaign beginning "
+            "at the validated 2018-04-15 00Z first cycle"
         ),
     )
-    materialize.add_argument("--initial-jedi-case", required=True, type=Path)
+    materialize.add_argument(
+        "--initial-jedi-case",
+        type=Path,
+        default=None,
+        help="legacy source-compatibility argument; no precomputed first background is consumed",
+    )
     materialize.add_argument("--cycling-jedi-case", required=True, type=Path)
+    materialize.add_argument(
+        "--initial-mpas-case",
+        required=True,
+        type=Path,
+        help="standalone MPAS case whose integration creates the first background",
+    )
     materialize.add_argument("--mpas-case", required=True, type=Path)
     materialize.add_argument("--obs2ioda-config", required=True, type=Path)
     materialize.add_argument(
@@ -105,6 +116,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     materialize.add_argument("--end-cycle", required=True)
     materialize.add_argument("--destination", required=True, type=Path)
+    materialize.add_argument(
+        "--run-mpas-on-last-cycle",
+        action="store_true",
+        help="run MPAS from the final analysis when a forecast is scientifically requested",
+    )
 
     campaign = sub.add_parser(
         "campaign",
@@ -168,11 +184,13 @@ def main(argv: list[str] | None = None) -> int:
         path = materialize_corrected_campaign(
             initial_jedi_case=args.initial_jedi_case,
             cycling_jedi_case=args.cycling_jedi_case,
+            initial_mpas_case=args.initial_mpas_case,
             mpas_case=args.mpas_case,
             obs2ioda_config=args.obs2ioda_config,
             start_cycle=args.start_cycle,
             end_cycle=args.end_cycle,
             destination=args.destination,
+            run_mpas_on_last_cycle=args.run_mpas_on_last_cycle,
         )
         print(f"[OK] materialized corrected campaign: {path}")
     elif args.command == "campaign":

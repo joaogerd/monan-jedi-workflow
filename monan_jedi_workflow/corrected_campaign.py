@@ -1,9 +1,9 @@
-"""Generate and materialize a clean multi-day corrected cycling campaign.
+"""Generate and materialize compact corrected cycling campaigns.
 
-The validated 2018-04-15 corrected replay remains the scientific starting
-point.  This module extends that same contract over an arbitrary 6-hourly end
-cycle while keeping every cycle in one simpleWorkflow execution graph so that
-cross-cycle dependencies and restart semantics remain explicit.
+The campaign YAML defines the requested period.  The generated workflow defines
+one one-time MPAS initialization and one static set of cycle tasks.  Native
+simpleWorkflow cycle expansion supplies the timestamps at runtime, so the YAML
+does not grow with the number of analysis times.
 """
 
 from __future__ import annotations
@@ -17,13 +17,11 @@ import yaml
 
 from .corrected_replay import (
     _FIRST_CYCLE,
-    _INITIAL_PREVIOUS_ID,
+    _absolutize_case_path,
     _copy_clean_case,
-    _initial_inputs,
-    _patch_jedi,
-    _patch_mpas,
+    _load_yaml,
     _patch_obs,
-    _safe_initial_link,
+    _write_yaml,
 )
 from .stage_config import StageConfigurationError
 
@@ -53,19 +51,8 @@ def _cycle_id(cycle: datetime) -> str:
     return cycle.strftime("%Y%m%dT%H%M%SZ")
 
 
-def _cycle_key(cycle: datetime) -> str:
-    return cycle.strftime("%Y%m%d%H")
-
-
-def _obs_id(cycle: datetime) -> str:
-    return cycle.strftime("%Y%m%d%H")
-
-
-def _mpas_file_time(cycle: datetime) -> str:
-    return cycle.strftime("%Y-%m-%d_%H.00.00")
-
-
 def _cycles(start_cycle: str, end_cycle: str) -> list[datetime]:
+    """Return the inclusive six-hourly campaign cycle range."""
     start = _parse_cycle(start_cycle)
     end = _parse_cycle(end_cycle)
     validated_start = _parse_cycle(_FIRST_CYCLE)
@@ -83,266 +70,369 @@ def _cycles(start_cycle: str, end_cycle: str) -> list[datetime]:
     return [start + index * _CYCLE_STEP for index in range(count)]
 
 
-def _validation_gate(name: str, dependency: str, validation: str) -> dict[str, Any]:
-    return {
+def _validation_gate(
+    name: str,
+    dependency: str,
+    validation: str,
+    *,
+    cycle_scope: str | None = None,
+) -> dict[str, Any]:
+    task: dict[str, Any] = {
         "name": name,
         "depends_on": [dependency],
         "argv": ["monan-jedi-workflow", "validation-gate", validation],
         "input_fingerprint": "sha256",
         "inputs": {"required": [validation]},
     }
+    if cycle_scope is not None:
+        task["cycle_scope"] = cycle_scope
+    return task
 
 
-def _jedi_tasks(
-    cycle: datetime,
-    *,
-    first: bool,
-    previous_cycle: datetime | None,
-) -> list[dict[str, Any]]:
-    key = _cycle_key(cycle)
-    run_id = _cycle_id(cycle)
-    cycle_iso = _iso(cycle)
-    analysis_file_time = _mpas_file_time(cycle)
-    prefix = f"jedi{key}"
-
-    prepare: dict[str, Any] = {
-        "name": f"{prefix}_prepare",
-        "argv": [
-            "monan-jedi-workflow",
-            "jedi-prepare",
-            "{experiment_dir}",
-            "--cycle",
-            cycle_iso,
-        ],
-        "inputs": {"required": ["{experiment_dir}/jedi.yaml"]},
-        "outputs": {
-            "required": [
-                f"{{experiment_dir}}/work/jedi/{run_id}/run_jedi.pbs",
-                f"{{experiment_dir}}/work/jedi/{run_id}/.monan-jedi-workflow/jedi-submission.json",
-            ]
-        },
-    }
-
-    if not first:
-        if previous_cycle is None:
-            raise AssertionError("non-first JEDI cycle requires a previous cycle")
-        previous_key = _cycle_key(previous_cycle)
-        previous_run_id = _cycle_id(previous_cycle)
-        trajectory_time = _mpas_file_time(cycle - timedelta(hours=3))
-        obs_id = _obs_id(cycle)
-        prepare["depends_on"] = [f"mpas{previous_key}_gate", f"obs{key}_gate"]
-        prepare["inputs"]["required"].extend(
-            [
-                f"{{experiment_dir}}/work/mpas/{previous_run_id}/mpasout.{trajectory_time}.nc",
-                f"{{experiment_dir}}/work/mpas/{previous_run_id}/mpasout.{analysis_file_time}.nc",
-                f"{{experiment_dir}}/work/obs/{obs_id}/sondes_obs_{obs_id}.h5",
-                f"{{experiment_dir}}/work/obs/{obs_id}/sfc_obs_{obs_id}.h5",
-                f"{{experiment_dir}}/work/obs/{obs_id}/gnssro_obs_{obs_id}.h5",
-            ]
-        )
-
-    submission = f"{{experiment_dir}}/work/jedi/{run_id}/.monan-jedi-workflow/jedi-submission.json"
-    validation = f"{{experiment_dir}}/work/jedi/{run_id}/.monan-jedi-workflow/jedi-validation.json"
-    artifacts = f"{{experiment_dir}}/work/jedi/{run_id}/.monan-jedi-workflow/jedi-artifacts.json"
-    analysis = f"{{experiment_dir}}/work/jedi/{run_id}/Data/states/mpas.3dvar.{analysis_file_time}.nc"
-
-    tasks: list[dict[str, Any]] = [prepare]
-    tasks.append(
-        {
-            "name": f"{prefix}_submit",
-            "depends_on": [f"{prefix}_prepare"],
-            "argv": [
-                "monan-jedi-workflow",
-                "jedi-submit",
-                "{experiment_dir}",
-                "--cycle",
-                cycle_iso,
-            ],
-            "outputs": {"required": [submission]},
-        }
-    )
-    tasks.append(
-        {
-            "name": f"{prefix}_wait",
-            "depends_on": [f"{prefix}_submit"],
-            "argv": [
-                "monan-jedi-workflow",
-                "jedi-wait",
-                "{experiment_dir}",
-                "--cycle",
-                cycle_iso,
-                "--poll-seconds",
-                "30",
-            ],
-            "outputs": {"required": [submission]},
-        }
-    )
-    tasks.append(
-        {
-            "name": f"{prefix}_validate",
-            "depends_on": [f"{prefix}_wait"],
-            "argv": [
-                "monan-jedi-workflow",
-                "jedi-validate",
-                "{experiment_dir}",
-                "--cycle",
-                cycle_iso,
-            ],
-            "outputs": {"required": [validation, artifacts, analysis]},
-        }
-    )
-    tasks.append(_validation_gate(f"{prefix}_gate", f"{prefix}_validate", validation))
-    return tasks
-
-
-def _mpas_tasks(cycle: datetime) -> list[dict[str, Any]]:
-    key = _cycle_key(cycle)
-    run_id = _cycle_id(cycle)
-    cycle_iso = _iso(cycle)
-    prefix = f"mpas{key}"
-    analysis_time = _mpas_file_time(cycle)
-    plus3 = _mpas_file_time(cycle + timedelta(hours=3))
-    plus6 = _mpas_file_time(cycle + timedelta(hours=6))
-    submission = f"{{experiment_dir}}/work/mpas/{run_id}/.monan-jedi-workflow/mpas-submission.json"
-    validation = f"{{experiment_dir}}/work/mpas/{run_id}/.monan-jedi-workflow/mpas-validation.json"
+def _initialization_tasks(start_cycle: datetime) -> list[dict[str, Any]]:
+    source_cycle = start_cycle - _CYCLE_STEP
+    source_iso = _iso(source_cycle)
+    source_id = _cycle_id(source_cycle)
+    target_iso = _iso(start_cycle)
+    target_id = _cycle_id(start_cycle)
+    root = "{experiment_dir}"
+    run = f"{root}/work/initialization/mpas/{source_id}"
+    submission = f"{run}/.monan-jedi-workflow/mpas-submission.json"
+    validation = f"{run}/.monan-jedi-workflow/mpas-validation.json"
+    background = f"{root}/work/background/{target_id}"
 
     return [
         {
-            "name": f"{prefix}_prepare",
-            "depends_on": [f"jedi{key}_gate"],
+            "name": "mpas_initial_prepare",
             "argv": [
                 "monan-jedi-workflow",
                 "mpas-prepare",
-                "{experiment_dir}",
+                f"{root}/initialization",
                 "--cycle",
-                cycle_iso,
+                source_iso,
             ],
-            "inputs": {
-                "required": [
-                    "{experiment_dir}/mpas.yaml",
-                    f"{{experiment_dir}}/work/jedi/{run_id}/Data/states/mpas.3dvar.{analysis_time}.nc",
-                ]
-            },
+            "inputs": {"required": [f"{root}/initialization/mpas.yaml"]},
             "outputs": {
                 "required": [
-                    f"{{experiment_dir}}/work/mpas/{run_id}/run_mpas.pbs",
+                    f"{run}/run_mpas.pbs",
                     submission,
                 ]
             },
         },
         {
-            "name": f"{prefix}_submit",
-            "depends_on": [f"{prefix}_prepare"],
+            "name": "mpas_initial_submit",
+            "depends_on": ["mpas_initial_prepare"],
             "argv": [
                 "monan-jedi-workflow",
                 "mpas-submit",
-                "{experiment_dir}",
+                f"{root}/initialization",
                 "--cycle",
-                cycle_iso,
+                source_iso,
             ],
             "outputs": {"required": [submission]},
         },
         {
-            "name": f"{prefix}_wait",
-            "depends_on": [f"{prefix}_submit"],
+            "name": "mpas_initial_wait",
+            "depends_on": ["mpas_initial_submit"],
             "argv": [
                 "monan-jedi-workflow",
                 "mpas-wait",
-                "{experiment_dir}",
+                f"{root}/initialization",
                 "--cycle",
-                cycle_iso,
+                source_iso,
                 "--poll-seconds",
                 "30",
             ],
             "outputs": {"required": [submission]},
         },
         {
-            "name": f"{prefix}_validate",
-            "depends_on": [f"{prefix}_wait"],
+            "name": "mpas_initial_validate",
+            "depends_on": ["mpas_initial_wait"],
             "argv": [
                 "monan-jedi-workflow",
                 "mpas-validate",
-                "{experiment_dir}",
+                f"{root}/initialization",
                 "--cycle",
-                cycle_iso,
+                source_iso,
             ],
+            "outputs": {"required": [validation]},
+        },
+        _validation_gate("mpas_initial_gate", "mpas_initial_validate", validation),
+        {
+            "name": "initial_background",
+            "depends_on": ["mpas_initial_gate"],
+            "argv": [
+                "monan-jedi-workflow",
+                "background-publish",
+                root,
+                "--mpas-config-dir",
+                f"{root}/initialization",
+                "--source-cycle",
+                source_iso,
+                "--target-cycle",
+                target_iso,
+            ],
+            "inputs": {"required": [validation]},
             "outputs": {
                 "required": [
-                    validation,
-                    f"{{experiment_dir}}/work/mpas/{run_id}/mpasout.{plus3}.nc",
-                    f"{{experiment_dir}}/work/mpas/{run_id}/mpasout.{plus6}.nc",
+                    f"{background}/trajectory.nc",
+                    f"{background}/state.nc",
+                    f"{background}/background.json",
                 ]
             },
         },
-        _validation_gate(f"{prefix}_gate", f"{prefix}_validate", validation),
     ]
 
 
-def _obs_tasks(cycle: datetime, previous_cycle: datetime) -> list[dict[str, Any]]:
-    key = _cycle_key(cycle)
-    previous_key = _cycle_key(previous_cycle)
-    cycle_iso = _iso(cycle)
-    obs_id = _obs_id(cycle)
-    prefix = f"obs{key}"
-    doctor = f"{{experiment_dir}}/work/obs/{obs_id}/.monan-jedi-workflow/obs2ioda-doctor.json"
-    prepared = f"{{experiment_dir}}/work/obs/{obs_id}/.monan-jedi-workflow/obs2ioda.json"
-    validation = f"{{experiment_dir}}/work/obs/{obs_id}/.monan-jedi-workflow/obs2ioda-validation.json"
-    sondes = f"{{experiment_dir}}/work/obs/{obs_id}/sondes_obs_{obs_id}.h5"
-    sfc = f"{{experiment_dir}}/work/obs/{obs_id}/sfc_obs_{obs_id}.h5"
-    gnssro = f"{{experiment_dir}}/work/obs/{obs_id}/gnssro_obs_{obs_id}.h5"
+def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
+    root = "{experiment_dir}"
+    cycle_id = "{cycle_id}"
+    obs_id = "{cycle_yyyymmddhh}"
+    analysis_file_time = "{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}.00.00"
 
-    return [
+    background_dir = f"{root}/work/background/{cycle_id}"
+    background_validation = f"{background_dir}/background-validation.json"
+    obs_dir = f"{root}/work/obs/{obs_id}"
+    obs_doctor = f"{obs_dir}/.monan-jedi-workflow/obs2ioda-doctor.json"
+    obs_plan = f"{obs_dir}/.monan-jedi-workflow/obs2ioda.json"
+    obs_validation = f"{obs_dir}/.monan-jedi-workflow/obs2ioda-validation.json"
+    sondes = f"{obs_dir}/sondes_obs_{obs_id}.h5"
+    sfc = f"{obs_dir}/sfc_obs_{obs_id}.h5"
+    gnssro = f"{obs_dir}/gnssro_obs_{obs_id}.h5"
+
+    jedi_run = f"{root}/work/jedi/{cycle_id}"
+    jedi_submission = f"{jedi_run}/.monan-jedi-workflow/jedi-submission.json"
+    jedi_validation = f"{jedi_run}/.monan-jedi-workflow/jedi-validation.json"
+    jedi_artifacts = f"{jedi_run}/.monan-jedi-workflow/jedi-artifacts.json"
+    analysis = f"{jedi_run}/Data/states/mpas.3dvar.{analysis_file_time}.nc"
+
+    mpas_run = f"{root}/work/mpas/{cycle_id}"
+    mpas_submission = f"{mpas_run}/.monan-jedi-workflow/mpas-submission.json"
+    mpas_validation = f"{mpas_run}/.monan-jedi-workflow/mpas-validation.json"
+    mpas_scope = "all" if run_mpas_on_last_cycle else "not_last"
+
+    tasks: list[dict[str, Any]] = [
         {
-            "name": f"{prefix}_doctor",
-            "depends_on": [f"jedi{previous_key}_gate"],
+            "name": "background_check",
+            "argv": [
+                "monan-jedi-workflow",
+                "background-check",
+                root,
+                "--cycle",
+                "{cycle_time}",
+            ],
+            "inputs": {
+                "required": [
+                    f"{background_dir}/trajectory.nc",
+                    f"{background_dir}/state.nc",
+                ]
+            },
+            "outputs": {"required": [background_validation]},
+        },
+        {
+            "name": "observations_doctor",
+            "cycle_scope": "all",
             "argv": [
                 "monan-jedi-workflow",
                 "obs2ioda-doctor",
-                "{experiment_dir}",
+                root,
                 "--cycle",
-                cycle_iso,
+                "{cycle_time}",
             ],
-            "inputs": {"required": ["{experiment_dir}/obs2ioda.yaml"]},
-            "outputs": {"required": [doctor]},
+            "inputs": {"required": [f"{root}/obs2ioda.yaml"]},
+            "outputs": {"required": [obs_doctor]},
         },
         {
-            "name": f"{prefix}_prepare",
-            "depends_on": [f"{prefix}_doctor"],
+            "name": "observations_prepare",
+            "cycle_scope": "all",
+            "depends_on": ["observations_doctor"],
             "argv": [
                 "monan-jedi-workflow",
                 "obs2ioda-prepare",
-                "{experiment_dir}",
+                root,
                 "--cycle",
-                cycle_iso,
+                "{cycle_time}",
             ],
-            "outputs": {"required": [prepared]},
+            "outputs": {"required": [obs_plan]},
         },
         {
-            "name": f"{prefix}_run",
-            "depends_on": [f"{prefix}_prepare"],
+            "name": "observations_run",
+            "cycle_scope": "all",
+            "depends_on": ["observations_prepare"],
             "argv": [
                 "monan-jedi-workflow",
                 "obs2ioda-run",
-                "{experiment_dir}",
+                root,
                 "--cycle",
-                cycle_iso,
+                "{cycle_time}",
             ],
             "outputs": {"required": [sondes, sfc, gnssro]},
         },
         {
-            "name": f"{prefix}_validate",
-            "depends_on": [f"{prefix}_run"],
+            "name": "observations_validate",
+            "cycle_scope": "all",
+            "depends_on": ["observations_run"],
             "argv": [
                 "monan-jedi-workflow",
                 "obs2ioda-validate",
-                "{experiment_dir}",
+                root,
                 "--cycle",
-                cycle_iso,
+                "{cycle_time}",
             ],
-            "outputs": {"required": [validation, sondes, sfc, gnssro]},
+            "outputs": {"required": [obs_validation, sondes, sfc, gnssro]},
         },
-        _validation_gate(f"{prefix}_gate", f"{prefix}_validate", validation),
+        _validation_gate(
+            "observations_gate", "observations_validate", obs_validation, cycle_scope="all"
+        ),
+        {
+            "name": "jedi_prepare",
+            "depends_on": ["background_check", "observations_gate"],
+            "argv": [
+                "monan-jedi-workflow",
+                "jedi-prepare",
+                root,
+                "--cycle",
+                "{cycle_time}",
+            ],
+            "inputs": {
+                "required": [
+                    f"{root}/jedi.yaml",
+                    f"{background_dir}/trajectory.nc",
+                    f"{background_dir}/state.nc",
+                    sondes,
+                    sfc,
+                    gnssro,
+                ]
+            },
+            "outputs": {
+                "required": [f"{jedi_run}/run_jedi.pbs", jedi_submission]
+            },
+        },
+        {
+            "name": "jedi_submit",
+            "depends_on": ["jedi_prepare"],
+            "argv": [
+                "monan-jedi-workflow",
+                "jedi-submit",
+                root,
+                "--cycle",
+                "{cycle_time}",
+            ],
+            "outputs": {"required": [jedi_submission]},
+        },
+        {
+            "name": "jedi_wait",
+            "depends_on": ["jedi_submit"],
+            "argv": [
+                "monan-jedi-workflow",
+                "jedi-wait",
+                root,
+                "--cycle",
+                "{cycle_time}",
+                "--poll-seconds",
+                "30",
+            ],
+            "outputs": {"required": [jedi_submission]},
+        },
+        {
+            "name": "jedi_validate",
+            "depends_on": ["jedi_wait"],
+            "argv": [
+                "monan-jedi-workflow",
+                "jedi-validate",
+                root,
+                "--cycle",
+                "{cycle_time}",
+            ],
+            "outputs": {"required": [jedi_validation, jedi_artifacts, analysis]},
+        },
+        _validation_gate("jedi_gate", "jedi_validate", jedi_validation),
     ]
+
+    for task in (
+        {
+            "name": "mpas_prepare",
+            "cycle_scope": mpas_scope,
+            "depends_on": ["jedi_gate"],
+            "argv": [
+                "monan-jedi-workflow",
+                "mpas-prepare",
+                root,
+                "--cycle",
+                "{cycle_time}",
+            ],
+            "inputs": {"required": [f"{root}/mpas.yaml", analysis]},
+            "outputs": {"required": [f"{mpas_run}/run_mpas.pbs", mpas_submission]},
+        },
+        {
+            "name": "mpas_submit",
+            "cycle_scope": mpas_scope,
+            "depends_on": ["mpas_prepare"],
+            "argv": [
+                "monan-jedi-workflow",
+                "mpas-submit",
+                root,
+                "--cycle",
+                "{cycle_time}",
+            ],
+            "outputs": {"required": [mpas_submission]},
+        },
+        {
+            "name": "mpas_wait",
+            "cycle_scope": mpas_scope,
+            "depends_on": ["mpas_submit"],
+            "argv": [
+                "monan-jedi-workflow",
+                "mpas-wait",
+                root,
+                "--cycle",
+                "{cycle_time}",
+                "--poll-seconds",
+                "30",
+            ],
+            "outputs": {"required": [mpas_submission]},
+        },
+        {
+            "name": "mpas_validate",
+            "cycle_scope": mpas_scope,
+            "depends_on": ["mpas_wait"],
+            "argv": [
+                "monan-jedi-workflow",
+                "mpas-validate",
+                root,
+                "--cycle",
+                "{cycle_time}",
+            ],
+            "outputs": {"required": [mpas_validation]},
+        },
+        _validation_gate(
+            "mpas_gate", "mpas_validate", mpas_validation, cycle_scope=mpas_scope
+        ),
+        {
+            "name": "next_background",
+            "cycle_scope": "not_last",
+            "depends_on": ["mpas_gate"],
+            "argv": [
+                "monan-jedi-workflow",
+                "background-publish",
+                root,
+                "--source-cycle",
+                "{cycle_time}",
+                "--target-cycle",
+                "{next_cycle_time}",
+            ],
+            "inputs": {"required": [mpas_validation]},
+            "outputs": {
+                "required": [
+                    f"{root}/work/background/{{next_cycle_id}}/trajectory.nc",
+                    f"{root}/work/background/{{next_cycle_id}}/state.nc",
+                    f"{root}/work/background/{{next_cycle_id}}/background.json",
+                ]
+            },
+        },
+    ):
+        tasks.append(task)
+    return tasks
 
 
 def build_corrected_campaign_workflow(
@@ -350,57 +440,228 @@ def build_corrected_campaign_workflow(
     start_cycle: str = _FIRST_CYCLE,
     end_cycle: str,
     experiment_dir: str,
+    run_mpas_on_last_cycle: bool = False,
 ) -> dict[str, Any]:
-    """Build one explicit dependency graph for a corrected cycling campaign."""
+    """Build a constant-size native-cycle workflow for a corrected campaign."""
     cycles = _cycles(start_cycle, end_cycle)
-    tasks: list[dict[str, Any]] = []
-
-    for index, cycle in enumerate(cycles):
-        previous = cycles[index - 1] if index else None
-        tasks.extend(_jedi_tasks(cycle, first=index == 0, previous_cycle=previous))
-        if index + 1 < len(cycles):
-            next_cycle = cycles[index + 1]
-            tasks.extend(_mpas_tasks(cycle))
-            tasks.extend(_obs_tasks(next_cycle, cycle))
-
-    start_key = _cycle_key(cycles[0])
-    end_key = _cycle_key(cycles[-1])
     return {
-        "workflow": {"name": f"monan_jedi_corrected_campaign_{start_key}_{end_key}"},
+        "format_version": 1,
+        "workflow": {"name": "monan_jedi_corrected_campaign"},
         "context": {"experiment_dir": experiment_dir},
-        "tasks": tasks,
+        "initialization": {"tasks": _initialization_tasks(cycles[0])},
+        "cycle": {
+            "start": _iso(cycles[0]),
+            "end": _iso(cycles[-1]),
+            "step": "PT6H",
+        },
+        "tasks": _cycle_tasks(run_mpas_on_last_cycle=run_mpas_on_last_cycle),
     }
+
+
+def _validate_cycling_contract(mpas: dict[str, Any]) -> None:
+    lead_hours = int(mpas.get("lead_hours", -1))
+    if lead_hours < 6 or lead_hours % 3:
+        raise StageConfigurationError(
+            "corrected campaign requires mpas.lead_hours >= 6 and divisible by 3"
+        )
+    contract = mpas.get("forecast_contract")
+    expected = {
+        "da_state_interval_hours": 3,
+        "mpi_ranks": 128,
+        "partition": "x1.10242.graph.info.part.128",
+        "do_restart": False,
+        "do_DAcycling": True,
+        "IAU": "off",
+    }
+    if not isinstance(contract, dict):
+        raise StageConfigurationError("source MPAS case must declare forecast_contract")
+    differences = [
+        f"{key}={contract.get(key)!r} (expected {value!r})"
+        for key, value in expected.items()
+        if contract.get(key) != value
+    ]
+    if int(contract.get("run_hours", -1)) != lead_hours:
+        differences.append(
+            f"run_hours={contract.get('run_hours')!r} (expected {lead_hours!r})"
+        )
+    if differences:
+        raise StageConfigurationError(
+            "source MPAS case does not satisfy the corrected forecast_contract: "
+            + "; ".join(differences)
+        )
+
+
+def _absolutize_mpas_assets(mpas: dict[str, Any], source_case: Path) -> None:
+    for entry in mpas.get("templates", []):
+        if isinstance(entry, dict):
+            entry["source"] = _absolutize_case_path(entry.get("source"), source_case)
+    directories = mpas.get("link_directories", [])
+    for index, entry in enumerate(directories):
+        if isinstance(entry, dict):
+            entry["source"] = _absolutize_case_path(entry.get("source"), source_case)
+        elif isinstance(entry, str):
+            directories[index] = _absolutize_case_path(entry, source_case)
+    for entry in mpas.get("links", []):
+        if isinstance(entry, dict):
+            entry["source"] = _absolutize_case_path(entry.get("source"), source_case)
+
+
+def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
+    """Materialize a standalone MPAS integration that produces the first background."""
+    source_case = source_case.resolve()
+    data = _load_yaml(source_case / "mpas.yaml")
+    mpas = data.get("mpas")
+    if not isinstance(mpas, dict):
+        raise StageConfigurationError("initial MPAS mpas.yaml must define mpas mapping")
+    lead_hours = int(mpas.get("lead_hours", -1))
+    if lead_hours < 6:
+        raise StageConfigurationError("initial MPAS integration must cover at least 6 hours")
+    pbs = mpas.get("pbs")
+    if not isinstance(pbs, dict):
+        raise StageConfigurationError("initial MPAS configuration must define pbs")
+    mpas["run_dir"] = str(
+        destination.resolve() / "work/initialization/mpas/{cycle_id}"
+    )
+    _absolutize_mpas_assets(mpas, source_case)
+    _write_yaml(destination / "initialization/mpas.yaml", data)
+
+
+def _patch_cycling_mpas(source_case: Path, destination: Path) -> None:
+    source_case = source_case.resolve()
+    data = _load_yaml(source_case / "mpas.yaml")
+    mpas = data.get("mpas")
+    if not isinstance(mpas, dict):
+        raise StageConfigurationError("mpas.yaml must define mpas mapping")
+    _validate_cycling_contract(mpas)
+    pbs = mpas.get("pbs")
+    if not isinstance(pbs, dict) or int(pbs.get("mpiprocs", 0)) != 128:
+        raise StageConfigurationError("corrected campaign requires MPAS pbs.mpiprocs=128")
+    pbs["setup"] = []
+    mpas["run_dir"] = str(destination.resolve() / "work/mpas/{cycle_id}")
+    _absolutize_mpas_assets(mpas, source_case)
+
+    analysis_link_found = False
+    for entry in mpas.get("links", []):
+        if not isinstance(entry, dict):
+            continue
+        target = str(entry.get("target", ""))
+        if target.startswith("mpas.analysis-full.") or target == "init.nc":
+            entry["source"] = str(
+                destination.resolve()
+                / "work/jedi/{cycle_id}/Data/states/mpas.3dvar.{mpas_file_time}.nc"
+            )
+            entry["target"] = "mpas.analysis-full.{mpas_file_time}.nc"
+            analysis_link_found = True
+    if not analysis_link_found:
+        raise StageConfigurationError(
+            "source MPAS case does not declare the analysis initial-condition link"
+        )
+    _write_yaml(destination / "mpas.yaml", data)
+
+
+def _patch_jedi_native(destination: Path) -> None:
+    path = destination / "jedi.yaml"
+    data = _load_yaml(path)
+    jedi = data.get("jedi")
+    if not isinstance(jedi, dict):
+        raise StageConfigurationError("jedi.yaml must define jedi mapping")
+    root = destination.resolve() / "work"
+    jedi["run_dir"] = str(root / "jedi/{cycle_id}")
+    cycle = jedi.setdefault("cycle", {})
+    cycle["first_cycle"] = _FIRST_CYCLE
+
+    background = jedi.get("background")
+    if not isinstance(background, dict):
+        raise StageConfigurationError("jedi.background must be a mapping")
+    normalized_trajectory = str(root / "background/{cycle_id}/trajectory.nc")
+    background["initial_source"] = normalized_trajectory
+    background["source"] = normalized_trajectory
+
+    base = jedi.get("analysis_base_state")
+    if not isinstance(base, dict):
+        raise StageConfigurationError("jedi.analysis_base_state must be a mapping")
+    base["source"] = str(root / "background/{cycle_id}/state.nc")
+    base["target"] = "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"
+    prior_expected_count = base.get("expected_variable_count")
+    allowed_existing_counts = (None, 62, {"first_cycle": 62, "cycling": 63})
+    if prior_expected_count not in allowed_existing_counts:
+        raise StageConfigurationError(
+            "corrected campaign expected the validated JEDI state-count contract; "
+            f"found {prior_expected_count!r}"
+        )
+    base["expected_variable_count"] = {"first_cycle": 62, "cycling": 63}
+
+    found = set()
+    links = jedi.get("links", [])
+    if not isinstance(links, list):
+        raise StageConfigurationError("jedi.links must be a list")
+    for entry in links:
+        if not isinstance(entry, dict):
+            continue
+        target = str(entry.get("target", "")).lower()
+        if "sondes_obs" in target:
+            entry["source"] = str(
+                root / "obs/{analysis_yyyymmddhh}/sondes_obs_{analysis_yyyymmddhh}.h5"
+            )
+            found.add("sondes")
+        elif "sfc_obs" in target:
+            entry["source"] = str(
+                root / "obs/{analysis_yyyymmddhh}/sfc_obs_{analysis_yyyymmddhh}.h5"
+            )
+            found.add("sfc")
+        elif "gnssro_obs" in target:
+            entry["source"] = str(
+                root / "obs/{analysis_yyyymmddhh}/gnssro_obs_{analysis_yyyymmddhh}.h5"
+            )
+            found.add("gnssro")
+    if found != {"sondes", "sfc", "gnssro"}:
+        raise StageConfigurationError(
+            "cycling JEDI case must declare sondes, sfc and gnssro links"
+        )
+    pbs = jedi.get("pbs")
+    if not isinstance(pbs, dict) or int(pbs.get("mpiprocs", 0)) != 128:
+        raise StageConfigurationError("corrected campaign requires JEDI pbs.mpiprocs=128")
+    _write_yaml(path, data)
 
 
 def materialize_corrected_campaign(
     *,
-    initial_jedi_case: Path,
     cycling_jedi_case: Path,
+    initial_mpas_case: Path,
     mpas_case: Path,
     obs2ioda_config: Path,
     destination: Path,
     start_cycle: str = _FIRST_CYCLE,
     end_cycle: str,
+    run_mpas_on_last_cycle: bool = False,
+    initial_jedi_case: Path | None = None,
 ) -> Path:
-    """Create a clean, non-executed corrected campaign through ``end_cycle``."""
+    """Create a clean compact campaign without executing scientific work.
+
+    ``initial_jedi_case`` is accepted only as a source-compatibility argument
+    for older callers.  The compact campaign no longer consumes its precomputed
+    background or observations; the formal MPAS initialization and current-cycle
+    Obs2IODA tasks produce those inputs inside the campaign.
+    """
+    del initial_jedi_case
     cycles = _cycles(start_cycle, end_cycle)
     destination = destination.resolve()
     if destination.exists():
         raise FileExistsError(f"campaign destination already exists: {destination}")
 
-    inputs = _initial_inputs(initial_jedi_case.resolve())
-
     try:
         _copy_clean_case(cycling_jedi_case.resolve(), destination)
-        campaign_root = destination / "work"
-        _patch_jedi(destination, campaign_root)
-        _patch_mpas(mpas_case.resolve(), destination, campaign_root)
-        _patch_obs(obs2ioda_config.resolve(), destination, campaign_root)
+        (destination / "initialization").mkdir(parents=True, exist_ok=True)
+        _patch_jedi_native(destination)
+        _patch_initial_mpas(initial_mpas_case.resolve(), destination)
+        _patch_cycling_mpas(mpas_case.resolve(), destination)
+        _patch_obs(obs2ioda_config.resolve(), destination, destination / "work")
 
         workflow = build_corrected_campaign_workflow(
             start_cycle=start_cycle,
             end_cycle=end_cycle,
             experiment_dir=str(destination),
+            run_mpas_on_last_cycle=run_mpas_on_last_cycle,
         )
         (destination / "workflow.yaml").write_text(
             yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
@@ -413,28 +674,17 @@ def materialize_corrected_campaign(
                         "end_cycle": _iso(cycles[-1]),
                         "cycle_interval_hours": 6,
                         "analysis_cycles": len(cycles),
-                        "forecast_legs": len(cycles) - 1,
-                        "duration_hours": int((cycles[-1] - cycles[0]).total_seconds() // 3600),
+                        "forecast_legs_for_cycling": len(cycles) - 1,
+                        "run_mpas_on_last_cycle": run_mpas_on_last_cycle,
+                        "duration_hours": int(
+                            (cycles[-1] - cycles[0]).total_seconds() // 3600
+                        ),
                     }
                 },
                 sort_keys=False,
             ),
             encoding="utf-8",
         )
-
-        initial_mpas = campaign_root / "mpas" / _INITIAL_PREVIOUS_ID
-        _safe_initial_link(
-            inputs["trajectory"],
-            initial_mpas / "mpasout.2018-04-14_21.00.00.nc",
-        )
-        _safe_initial_link(
-            inputs["analysis_base"],
-            initial_mpas / "mpasout.2018-04-15_00.00.00.nc",
-        )
-        initial_obs = campaign_root / "obs" / "2018041500"
-        _safe_initial_link(inputs["sondes"], initial_obs / "sondes_obs_2018041500.h5")
-        _safe_initial_link(inputs["sfc"], initial_obs / "sfc_obs_2018041500.h5")
-        _safe_initial_link(inputs["gnssro"], initial_obs / "gnssro_obs_2018041500.h5")
     except Exception:
         shutil.rmtree(destination, ignore_errors=True)
         raise

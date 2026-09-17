@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .background_stage import check_background, publish_background
 from .config import load_experiment_config, validate_experiment_config
 from .cycle_doctor import doctor_cycle, print_doctor_report
 from .jedi_stage import prepare_jedi, submit_jedi, validate_jedi
@@ -48,14 +49,7 @@ def _add_cycle_argument(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_cycle_stage_commands(sub: argparse._SubParsersAction) -> None:
-    """Register cycle-aware MPAS-JEDI analysis commands.
-
-    The command split mirrors the stage contract used by external orchestrators:
-    prepare materialises a runtime, submit performs the scheduler side effect,
-    wait observes scheduler completion, and validate determines scientific/run
-    success.  Keeping these actions separate is what allows the same domain
-    commands to be called from simpleWorkflow, ecFlow, Cylc or by hand.
-    """
+    """Register cycle-aware MPAS-JEDI analysis commands."""
     jedi_prepare = sub.add_parser(
         "jedi-prepare", help="prepare one cycle-specific MPAS-JEDI analysis runtime"
     )
@@ -150,6 +144,21 @@ def build_parser() -> argparse.ArgumentParser:
     mpas_validate = sub.add_parser("mpas-validate")
     _add_config_dir(mpas_validate)
     _add_cycle_argument(mpas_validate)
+
+    background_check = sub.add_parser(
+        "background-check", help="validate the normalized background for one analysis cycle"
+    )
+    _add_config_dir(background_check)
+    _add_cycle_argument(background_check)
+
+    background_publish = sub.add_parser(
+        "background-publish",
+        help="publish MPAS products through the normalized JEDI background interface",
+    )
+    _add_config_dir(background_publish)
+    background_publish.add_argument("--mpas-config-dir", type=Path, default=None)
+    background_publish.add_argument("--source-cycle", required=True, metavar="TIME")
+    background_publish.add_argument("--target-cycle", required=True, metavar="TIME")
 
     obs_doctor = sub.add_parser("obs2ioda-doctor")
     _add_config_dir(obs_doctor)
@@ -291,6 +300,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "mpas-validate":
         validate_mpas(args.config_dir, args.cycle)
+        return 0
+    if args.command == "background-check":
+        check_background(args.config_dir, args.cycle)
+        return 0
+    if args.command == "background-publish":
+        publish_background(
+            args.config_dir,
+            mpas_config_dir=args.mpas_config_dir or args.config_dir,
+            source_cycle_time=args.source_cycle,
+            target_cycle_time=args.target_cycle,
+        )
         return 0
     if args.command == "obs2ioda-doctor":
         doctor_obs2ioda(args.config_dir, args.cycle)
