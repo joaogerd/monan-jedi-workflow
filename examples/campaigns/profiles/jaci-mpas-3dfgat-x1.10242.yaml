@@ -12,10 +12,10 @@ profile:
 
   cycling_jedi_case: cases/jedi-2018041500-fgat-corrected
 
-  # This is a real MPAS forecast case whose initial state is valid at
-  # 2018-04-14 18Z.  It must produce 21Z and 00Z states and is executed by the
-  # workflow initialization phase; those outputs become background(2018041500).
-  # The case is a site/HPC input, not a precomputed background shortcut.
+  # Required JACI/site input for the native-cycle campaign. This directory must
+  # be materialized from a full MPAS initial state valid at 2018-04-14 18Z. The
+  # workflow executes it and requires the 21Z and 00Z states; it must not point
+  # to precomputed 21Z/00Z backgrounds from the legacy campaign.
   initial_mpas_case: cases/mpas-2018041418-initial
 
   mpas_case: cases/mpas-2018041512-fgat-corrected
