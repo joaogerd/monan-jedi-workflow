@@ -19,7 +19,7 @@ dev = [
 ]
 
 [project.scripts]
-monan-jedi-workflow = "monan_jedi_workflow.cli_extended:main"
+monan-jedi-workflow = "monan_jedi_workflow.cli_frontend:main"
 monan-jedi-mpas = "monan_jedi_workflow.cli_mpas:main"
 
 [tool.setuptools.packages.find]
