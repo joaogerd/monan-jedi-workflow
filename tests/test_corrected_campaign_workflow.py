@@ -182,8 +182,8 @@ def test_background_interface_is_uniform_for_first_and_later_cycles() -> None:
     background = tasks["background_check"]
     jedi = tasks["jedi_prepare"]
 
-    assert "{cycle_id}" in " ".join(background["argv"])
     assert "{cycle_time}" in " ".join(background["argv"])
+    assert any("{cycle_id}" in path for path in background["inputs"]["required"])
     assert "{experiment_dir}/work/background/{cycle_id}/trajectory.nc" in jedi["inputs"]["required"]
     assert "{experiment_dir}/work/background/{cycle_id}/state.nc" in jedi["inputs"]["required"]
 
