@@ -589,7 +589,9 @@ def _patch_jedi_native(destination: Path) -> None:
             "corrected campaign expected the validated JEDI state-count contract; "
             f"found {prior_expected_count!r}"
         )
-    base["expected_variable_count"] = {"first_cycle": 62, "cycling": 63}
+    # Both first and later backgrounds now come from the MPAS DA output stream.
+    # Its refl10cm field is absent only from the legacy precomputed background.
+    base["expected_variable_count"] = {"first_cycle": 63, "cycling": 63}
 
     found = set()
     links = jedi.get("links", [])

@@ -225,3 +225,19 @@ def test_materialized_campaign_records_compact_scope(tmp_path: Path) -> None:
     assert len(loaded["initialization"]["tasks"]) == 6
     assert len(loaded["tasks"]) == 17
     assert materialize_corrected_campaign is not None
+
+
+def test_native_initial_background_uses_mpas_output_state_count(tmp_path: Path) -> None:
+    from monan_jedi_workflow.corrected_campaign import _patch_jedi_native
+    from test_corrected_replay_materialization import _jedi_case
+
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    case = _jedi_case(tmp_path / "case", inputs, initial=True)
+    _patch_jedi_native(case)
+    config = yaml.safe_load((case / "jedi.yaml").read_text())["jedi"]
+    # Formal MPAS initialization writes the same 63-field DA stream as cycling.
+    # The legacy precomputed first background had only 62 (no refl10cm).
+    assert config["analysis_base_state"]["expected_variable_count"] == {
+        "first_cycle": 63, "cycling": 63,
+    }
