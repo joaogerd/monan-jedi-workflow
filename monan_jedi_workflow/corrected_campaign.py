@@ -55,12 +55,6 @@ def _cycles(start_cycle: str, end_cycle: str) -> list[datetime]:
     """Return the inclusive six-hourly campaign cycle range."""
     start = _parse_cycle(start_cycle)
     end = _parse_cycle(end_cycle)
-    validated_start = _parse_cycle(_FIRST_CYCLE)
-    if start != validated_start:
-        raise StageConfigurationError(
-            "the corrected campaign currently requires the validated first cycle "
-            f"{_FIRST_CYCLE}; found {start_cycle}"
-        )
     if end < start:
         raise StageConfigurationError("campaign end cycle precedes the first cycle")
     span = end - start
@@ -559,7 +553,7 @@ def _patch_cycling_mpas(source_case: Path, destination: Path) -> None:
     _write_yaml(destination / "mpas.yaml", data)
 
 
-def _patch_jedi_native(destination: Path) -> None:
+def _patch_jedi_native(destination: Path, start_cycle: str = _FIRST_CYCLE) -> None:
     path = destination / "jedi.yaml"
     data = _load_yaml(path)
     jedi = data.get("jedi")
@@ -568,7 +562,7 @@ def _patch_jedi_native(destination: Path) -> None:
     root = destination.resolve() / "work"
     jedi["run_dir"] = str(root / "jedi/{cycle_id}")
     cycle = jedi.setdefault("cycle", {})
-    cycle["first_cycle"] = _FIRST_CYCLE
+    cycle["first_cycle"] = _iso(_parse_cycle(start_cycle))
 
     background = jedi.get("background")
     if not isinstance(background, dict):
@@ -654,7 +648,7 @@ def materialize_corrected_campaign(
     try:
         _copy_clean_case(cycling_jedi_case.resolve(), destination)
         (destination / "initialization").mkdir(parents=True, exist_ok=True)
-        _patch_jedi_native(destination)
+        _patch_jedi_native(destination, start_cycle)
         _patch_initial_mpas(initial_mpas_case.resolve(), destination)
         _patch_cycling_mpas(mpas_case.resolve(), destination)
         _patch_obs(obs2ioda_config.resolve(), destination, destination / "work")

@@ -201,13 +201,20 @@ def test_observations_belong_to_current_cycle() -> None:
     assert "{cycle_yyyymmddhh}" in tasks["jedi_prepare"]["inputs"]["required"][3]
 
 
-def test_campaign_rejects_non_validated_start_cycle() -> None:
-    with pytest.raises(StageConfigurationError, match="validated first cycle"):
-        build_corrected_campaign_workflow(
-            start_cycle="2018-04-15T06:00:00Z",
-            end_cycle="2018-04-18T00:00:00Z",
-            experiment_dir="/tmp/campaign",
-        )
+def test_campaign_accepts_arbitrary_aligned_start_cycle() -> None:
+    document = build_corrected_campaign_workflow(
+        start_cycle="2025-08-01T00:00:00Z",
+        end_cycle="2025-08-08T00:00:00Z",
+        experiment_dir="/tmp/campaign",
+    )
+
+    assert document["cycle"] == {
+        "start": "2025-08-01T00:00:00Z",
+        "end": "2025-08-08T00:00:00Z",
+        "step": "PT6H",
+    }
+    assert len(document["initialization"]["tasks"]) == 6
+    assert len(document["tasks"]) == 17
 
 
 def test_materialized_campaign_records_compact_scope(tmp_path: Path) -> None:

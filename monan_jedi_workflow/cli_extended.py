@@ -90,8 +90,8 @@ def _parser() -> argparse.ArgumentParser:
     materialize = sub.add_parser(
         "materialize-corrected-campaign",
         help=(
-            "developer command: create a compact native-cycle campaign beginning "
-            "at the validated 2018-04-15 00Z first cycle"
+            "developer command: create a compact native-cycle campaign for an "
+            "arbitrary 6-hourly analysis period"
         ),
     )
     materialize.add_argument(
@@ -112,7 +112,7 @@ def _parser() -> argparse.ArgumentParser:
     materialize.add_argument(
         "--start-cycle",
         default="2018-04-15T00:00:00Z",
-        help="first analysis cycle; currently fixed to the validated 2018-04-15 00Z",
+        help="first analysis cycle (must be aligned to 00/06/12/18Z)",
     )
     materialize.add_argument("--end-cycle", required=True)
     materialize.add_argument("--destination", required=True, type=Path)
