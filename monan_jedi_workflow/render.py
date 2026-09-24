@@ -226,6 +226,15 @@ def render_pbs(config: ExperimentConfig) -> str:
         if key in runtime_env and runtime_env[key] is not None
     ]
 
+    bootstrap = pbs.get("bootstrap", [])
+    if not isinstance(bootstrap, list) or not all(
+        isinstance(item, str) and item.strip() for item in bootstrap
+    ):
+        raise ValueError("pbs.bootstrap must be a list of non-empty shell commands")
+    bootstrap_block = "\n".join(bootstrap)
+    if bootstrap_block:
+        bootstrap_block += "\n\n"
+
     log_config = pbs.get("log", {})
     log_directory = log_config.get("directory", "logs")
     log_filename = log_config.get("filename", "run.${PBS_JOBID}.log")
@@ -261,7 +270,9 @@ if [ "$(pwd)" != "{runtime_dir}" ]; then
 fi
 
 : "${{MONAN_JEDI_INSTALL_ROOT:?MONAN_JEDI_INSTALL_ROOT must point to the public MONAN-JEDI installation}}"
-export MONAN_JEDI_INSTALL_BIN_DIR="${{MONAN_JEDI_INSTALL_BIN_DIR:-${{MONAN_JEDI_INSTALL_ROOT}}/bin}}"
+: "${{STACK_ROOT:?STACK_ROOT must point to the selected spack-stack checkout}}"
+
+{bootstrap_block}export MONAN_JEDI_INSTALL_BIN_DIR="${{MONAN_JEDI_INSTALL_BIN_DIR:-${{MONAN_JEDI_INSTALL_ROOT}}/bin}}"
 export JEDI_EXECUTABLE="${{JEDI_EXECUTABLE:-${{MONAN_JEDI_INSTALL_BIN_DIR}}/{executable_name}}}"
 
 mkdir -p Data/os Data/states {log_directory}
