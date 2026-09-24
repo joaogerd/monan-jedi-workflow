@@ -9,6 +9,16 @@ pbs:
 
   launcher: /opt/cray/pals/1.6/bin/mpiexec
 
+  # Rebuild the selected scientific environment on the compute node. STACK_ROOT
+  # is an ecosystem anchor supplied by the user/site, not a repository path.
+  bootstrap:
+    - 'module purge'
+    - 'pushd "${STACK_ROOT}" >/dev/null'
+    - 'source configs/sites/tier2/jaci/setup.sh'
+    - 'popd >/dev/null'
+    - 'module use "${STACK_ROOT}/envs/jaci-mpas-jedi-gcc12-craympich/modules"'
+    - 'module load cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0'
+
   runtime:
     omp_num_threads: 1
     oops_trace: 0
