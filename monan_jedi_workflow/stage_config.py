@@ -78,6 +78,10 @@ def render_declared_variables(
                 f"{label}.variables may not replace reserved context field {name!r}."
             )
         variable_label = f"{label}.variables.{name}"
+        if not isinstance(value, str) or not value:
+            raise StageConfigurationError(
+                f"{variable_label} must be a non-empty string."
+            )
         expanded = _expand_environment(value, label=variable_label)
         rendered[name] = render_text(expanded, rendered, label=variable_label)
     return rendered
