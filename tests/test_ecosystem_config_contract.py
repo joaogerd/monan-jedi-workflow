@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from monan_jedi_workflow.config import load_experiment_config
+from monan_jedi_workflow.render import render_pbs
 from monan_jedi_workflow.site import render_site_environment_block
 from monan_jedi_workflow.stage_config import (
     StageConfigurationError,
@@ -158,3 +160,17 @@ def test_legacy_renderer_no_longer_derives_source_or_build_roots() -> None:
     assert "MONAN_JEDI_BUILD_DIR" not in source
     assert "/builds/" not in source
     assert "MONAN_JEDI_INSTALL_ROOT must point to the public MONAN-JEDI installation" in source
+
+
+def test_legacy_static_pbs_requires_and_bootstraps_shared_anchors() -> None:
+    config = load_experiment_config(
+        ROOT / "configs/experiments/3dfgat_mpastatic_x1.10242_2018041500"
+    )
+    rendered = render_pbs(config)
+
+    assert "MONAN_JEDI_INSTALL_ROOT must point to the public MONAN-JEDI installation" in rendered
+    assert "STACK_ROOT must point to the selected spack-stack checkout" in rendered
+    assert 'pushd "${STACK_ROOT}" >/dev/null' in rendered
+    assert 'module use "${STACK_ROOT}/envs/jaci-mpas-jedi-gcc12-craympich/modules"' in rendered
+    assert "MONAN_JEDI_RUN_ID" not in rendered
+    assert "/builds/" not in rendered
