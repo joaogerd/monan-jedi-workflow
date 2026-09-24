@@ -46,6 +46,7 @@ def _case(tmp_path: Path) -> tuple[Path, Path]:
             "variables": {
                 "root": str(tmp_path),
                 "forecast_root": str(forecast),
+                "stack_root": "/runtime/test-stack",
             },
             "run_dir": "{root}/work/jedi/{cycle_id}",
             "runtime": {"skeleton": str(skeleton)},
@@ -69,6 +70,7 @@ def _case(tmp_path: Path) -> tuple[Path, Path]:
                 "mpiprocs": 64,
                 "walltime": "00:30:00",
                 "launcher": "mpiexec",
+                "bootstrap": ["echo stack={stack_root}"],
                 "command": ["/bin/echo", "variational.yaml"],
             },
             "validation": {
@@ -222,6 +224,8 @@ def test_prepare_first_cycle_uses_external_background(tmp_path: Path) -> None:
     assert "#PBS -q pesqmini" in pbs
     assert "#PBS -l select=1:ncpus=64:mpiprocs=64" in pbs
     assert pbs.count("#PBS -l place=excl") == 1
+    assert "echo stack=/runtime/test-stack" in pbs
+    assert pbs.index("echo stack=/runtime/test-stack") < pbs.index("mpiexec -n 64")
     manifest = json.loads(run.manifest_path.read_text(encoding="utf-8"))
     assert manifest["state"] == "prepared"
 
