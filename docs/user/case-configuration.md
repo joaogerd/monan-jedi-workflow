@@ -9,6 +9,29 @@ obs2ioda.yaml   preparação das observações
 workflow.yaml   dependências e período (simpleWorkflow)
 ```
 
+## Âncoras compartilhadas de runtime
+
+Os casos JACI mantidos usam somente as duas interfaces públicas do ecossistema:
+
+```bash
+export MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/$USER/build/monan-jedi
+export STACK_ROOT=/path/to/validated/spack-stack
+```
+
+Nos stages, a ligação fica explícita em `variables:`:
+
+```yaml
+variables:
+  monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+  stack_root: ${STACK_ROOT}
+```
+
+Somente valores declarados em `variables:` recebem expansão de ambiente. Essa
+regra é intencional: strings de runtime que pertencem ao Shell/PBS, como
+`${PBS_JOBID}`, não devem ser consumidas prematuramente pelo Python. Uma
+referência declarada em `variables:` que não esteja definida é erro de
+configuração.
+
 ## `jedi.yaml`
 
 Contém o contrato da análise: horários, runtime, background, links, templates, PBS e validação.
@@ -104,3 +127,15 @@ exclusive node placement:
 The `aux` queue is exempt because it permits shared resources. The workflow
 adds this directive automatically according to the configured PBS queue, so
 case YAML files do not need to declare `place: excl` themselves.
+
+
+## Ambiente PBS
+
+Os stages JEDI e MPAS aceitam `pbs.bootstrap` como lista ordenada de comandos
+Shell executados no nó de computação antes das variáveis específicas do job e do
+`mpiexec`. Use esse bloco para reconstruir o Spack-Stack selecionado por
+`STACK_ROOT`.
+
+`pbs.setup`, quando presente, continua aceito para compatibilidade com casos que
+fazem `source` de um script local. Os exemplos mantidos não dependem mais de
+scripts internos de outro repositório para preparar o ambiente científico.
