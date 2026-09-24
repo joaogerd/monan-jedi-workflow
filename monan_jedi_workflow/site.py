@@ -7,12 +7,17 @@ current process; it only generates an auditable shell snippet for the job script
 
 from __future__ import annotations
 
+import os
+import re
+import warnings
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from .config import require_key
+
+_ENV_REFERENCE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
 
 
 def _quote_shell(value: Any) -> str:
@@ -25,8 +30,32 @@ def _export(name: str, value: Any) -> str:
     return f"export {name}={_quote_shell(value)}"
 
 
+def _expand_environment(value: Any, path: str = "") -> Any:
+    """Expand explicit shell variables in the declarative site configuration."""
+    if isinstance(value, dict):
+        return {
+            str(key): _expand_environment(item, f"{path}.{key}" if path else str(key))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _expand_environment(item, f"{path}[{index}]")
+            for index, item in enumerate(value)
+        ]
+    if not isinstance(value, str):
+        return value
+    expanded = os.path.expandvars(value)
+    match = _ENV_REFERENCE.search(expanded)
+    if match is not None:
+        name = match.group(1) or match.group(2)
+        raise ValueError(
+            f"Undefined environment variable in site configuration at {path}: {name}"
+        )
+    return expanded
+
+
 def load_site_config(path: str | Path) -> dict[str, Any]:
-    """Load a site YAML configuration file."""
+    """Load a site YAML and resolve its explicitly referenced environment anchors."""
     site_path = Path(path)
     if not site_path.is_file():
         raise FileNotFoundError(f"Site configuration file not found: {site_path}")
@@ -34,8 +63,7 @@ def load_site_config(path: str | Path) -> dict[str, Any]:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):
         raise TypeError(f"Site configuration must be a mapping: {site_path}")
-    return data
-
+    return _expand_environment(data)
 
 def render_site_environment_block(path: str | Path) -> str:
     """Render a PBS shell block from a site YAML configuration."""
@@ -65,14 +93,29 @@ def render_site_environment_block(path: str | Path) -> str:
         if key in site and site[key] is not None:
             lines.append(_export(env_name, site[key]))
 
-    mpas_bundle_build = require_key(jedi, "mpas_bundle_build", "site.yaml jedi")
-    variational_exe = require_key(jedi, "variational_exe", "site.yaml jedi")
+    install_root = jedi.get("install_root")
+    legacy_bundle = jedi.get("mpas_bundle_build")
+    if install_root is None:
+        if legacy_bundle is None:
+            raise KeyError("site.yaml jedi.install_root is required")
+        warnings.warn(
+            "jedi.mpas_bundle_build is deprecated; use jedi.install_root",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        install_root = legacy_bundle
+    variational_exe = jedi.get(
+        "variational_exe",
+        str(Path(str(install_root)) / "bin" / "mpasjedi_variational.x"),
+    )
     lines.extend(
         [
-            _export("MPAS_BUNDLE_BUILD", mpas_bundle_build),
+            _export("MONAN_JEDI_INSTALL_ROOT", install_root),
             _export("MPASJEDI_VARIATIONAL_EXE", variational_exe),
         ]
     )
+    if legacy_bundle is not None:
+        lines.append(_export("MPAS_BUNDLE_BUILD", legacy_bundle))
 
     if "launcher" in mpi:
         lines.append(_export("MPI_LAUNCHER", mpi["launcher"]))
@@ -81,10 +124,16 @@ def render_site_environment_block(path: str | Path) -> str:
 
     if stack.get("load", False):
         stack_root = require_key(stack, "root", "site.yaml stack")
-        stack_module_root = require_key(stack, "module_root", "site.yaml stack")
+        stack_env_name = str(stack.get("env_name", "jaci-mpas-jedi-gcc12-craympich"))
+        stack_module_root = stack.get(
+            "module_root",
+            str(Path(str(stack_root)) / "envs" / stack_env_name / "modules"),
+        )
         stack_env_module = require_key(stack, "env_module", "site.yaml stack")
-        stack_site_setup = require_key(stack, "site_setup", "site.yaml stack")
-        stack_env_name = stack.get("env_name")
+        stack_site_setup = stack.get(
+            "site_setup",
+            str(Path(str(stack_root)) / "configs" / "sites" / "tier2" / "jaci" / "setup.sh"),
+        )
 
         lines.append(_export("MONAN_LOAD_STACK", "true"))
         lines.append(_export("STACK_ROOT", stack_root))
@@ -130,8 +179,8 @@ def render_site_environment_block(path: str | Path) -> str:
 
     lines.extend(
         [
-            "export PATH=\"${MPAS_BUNDLE_BUILD}/bin:${PATH}\"",
-            "export LD_LIBRARY_PATH=\"${MPAS_BUNDLE_BUILD}/lib:${LD_LIBRARY_PATH:-}\"",
+            "export PATH=\"${MONAN_JEDI_INSTALL_ROOT}/bin:${PATH}\"",
+            "export LD_LIBRARY_PATH=\"${MONAN_JEDI_INSTALL_ROOT}/lib:${LD_LIBRARY_PATH:-}\"",
         ]
     )
 
