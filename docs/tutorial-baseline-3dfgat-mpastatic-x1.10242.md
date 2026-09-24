@@ -67,11 +67,18 @@ method:
   ninner: 10
 ```
 
-Também define o executável esperado:
+O baseline estático preserva apenas o nome do executável no YAML. O PBS resolve
+esse nome a partir do prefixo público selecionado pelo usuário:
+
+```bash
+export MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/$USER/build/monan-jedi
+```
 
 ```text
-/p/projetos/monan_das/${USER}/builds/monan-jedi-mpas/bin/mpasjedi_variational.x
+${MONAN_JEDI_INSTALL_ROOT}/bin/mpasjedi_variational.x
 ```
+
+Não aponte esse baseline para checkout ou árvore privada de build.
 
 ### `runtime.yaml`
 
