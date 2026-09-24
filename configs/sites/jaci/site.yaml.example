@@ -1,24 +1,25 @@
 site:
   name: jaci
-  workspace: /p/projetos/monan_das/joao.gerd
-  workflow_root: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow
-  work_root: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow
-  scratch: /p/projetos/monan_das/joao.gerd/scratch/monan-jedi-workflow
-  data_root: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow/data
-  external_data_root: /p/projetos/monan_das/joao.gerd/external-inputs/3dvar_fgat
-  experiment_root: /p/projetos/monan_das/joao.gerd/scratch/monan-jedi-workflow/experiments
+  workspace: /p/projetos/monan_das/$USER
+  workflow_root: /p/projetos/monan_das/$USER/projects/monan-jedi-workflow
+  work_root: /p/projetos/monan_das/$USER/work/monan-jedi-workflow
+  scratch: /p/projetos/monan_das/$USER/scratch/monan-jedi-workflow
+  data_root: /p/projetos/monan_das/$USER/data
+  external_data_root: /p/projetos/monan_das/$USER/external-inputs/3dvar_fgat
+  experiment_root: /p/projetos/monan_das/$USER/scratch/monan-jedi-workflow/experiments
 
+# Cross-repository runtime contract. STACK_ROOT must identify the actual
+# spack-stack checkout; module_root and site_setup are derived when omitted.
 stack:
   load: true
-  root: /p/projetos/monan_das/joao.gerd/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack
+  root: ${STACK_ROOT}
   env_name: jaci-mpas-jedi-gcc12-craympich
-  module_root: /p/projetos/monan_das/joao.gerd/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack/envs/jaci-mpas-jedi-gcc12-craympich/modules
   env_module: cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0
-  site_setup: /p/projetos/monan_das/joao.gerd/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack/configs/sites/tier2/jaci/setup.sh
 
+# MONAN-JEDI source/build paths are deliberately absent. Consumers receive only
+# the stable installed runtime prefix.
 jedi:
-  mpas_bundle_build: /p/projetos/monan_das/joao.gerd/work/monan-jedi-mpas/build
-  variational_exe: /p/projetos/monan_das/joao.gerd/work/monan-jedi-mpas/build/bin/mpasjedi_variational.x
+  install_root: ${MONAN_JEDI_INSTALL_ROOT}
 
 mpi:
   launcher: /opt/cray/pals/1.6/bin/mpiexec
