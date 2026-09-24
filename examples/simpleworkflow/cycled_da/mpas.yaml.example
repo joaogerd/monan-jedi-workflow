@@ -7,6 +7,10 @@
 # ajuste este contrato antes de produção.
 
 mpas:
+  variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    stack_root: ${STACK_ROOT}
+
   lead_hours: 3
   run_dir: "work/mpas/{cycle_id}"
 
@@ -18,7 +22,7 @@ mpas:
     - source: "work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{mpas_file_time}.nc"
       target: init.nc
 
-    - source: /path/to/current/atmosphere_model
+    - source: "{monan_jedi_install_root}/bin/mpas_atmosphere"
       target: atmosphere_model
     - source: /path/to/current/x1.10242.invariant.nc
       target: x1.10242.invariant.nc
@@ -40,6 +44,13 @@ mpas:
     mpiprocs: 64
     walltime: "01:00:00"
     launcher: /opt/cray/pals/1.6/bin/mpiexec
+    bootstrap:
+      - "module purge"
+      - "pushd {stack_root} >/dev/null"
+      - "source configs/sites/tier2/jaci/setup.sh"
+      - "popd >/dev/null"
+      - "module use {stack_root}/envs/jaci-mpas-jedi-gcc12-craympich/modules"
+      - "module load cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0"
     command: ["./atmosphere_model"]
     environment:
       OMP_NUM_THREADS: "1"
