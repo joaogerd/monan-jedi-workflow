@@ -17,7 +17,8 @@ jedi:
     first_cycle: "2018-04-15T00:00:00Z"
 
   variables:
-    current_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    stack_root: ${STACK_ROOT}
     baseline_root: /p/projetos/monan_das/USUARIO/manual-tests/baseline_bmatrix
 
   run_dir: /p/projetos/monan_das/USUARIO/work/CASE/work/jedi/{cycle_id}
@@ -75,8 +76,15 @@ jedi:
     mpiprocs: 128
     walltime: "00:30:00"
     launcher: /opt/cray/pals/1.6/bin/mpiexec
+    bootstrap:
+      - "module purge"
+      - "pushd {stack_root} >/dev/null"
+      - "source configs/sites/tier2/jaci/setup.sh"
+      - "popd >/dev/null"
+      - "module use {stack_root}/envs/jaci-mpas-jedi-gcc12-craympich/modules"
+      - "module load cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0"
     command:
-      - "{current_install}/bin/mpasjedi_variational.x"
+      - "{monan_jedi_install_root}/bin/mpasjedi_variational.x"
       - 3dfgat.bmatrix.yaml
     environment:
       OMP_NUM_THREADS: "1"
