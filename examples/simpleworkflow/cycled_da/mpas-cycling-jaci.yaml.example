@@ -4,9 +4,10 @@ mpas:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     stack_root: ${STACK_ROOT}
     case_root: /p/projetos/monan_das/$USER/work/CASE
+    baseline_root: /p/projetos/monan_das/$USER/manual-tests/baseline_bmatrix
 
   lead_hours: 6
-  run_dir: {case_root}/work/mpas/{cycle_id}
+  run_dir: "{case_root}/work/mpas/{cycle_id}"
   forecast_contract:
     run_hours: 6
     da_state_interval_hours: 3
@@ -17,7 +18,7 @@ mpas:
     IAU: 'off'
   clean_patterns: ["mpasout.*.nc", "restart.*.nc", "log.atmosphere.*.out"]
   link_directories:
-    - source: {case_root}/runtime-skeleton
+    - source: "{case_root}/runtime-skeleton"
       include: &physics_tables
         [CAM_ABS_DATA.DBL, CAM_AEROPT_DATA.DBL, GENPARM.TBL, LANDUSE.TBL,
          OZONE_DAT.TBL, OZONE_LAT.TBL, OZONE_PLEV.TBL, RRTMG_LW_DATA,
@@ -25,13 +26,13 @@ mpas:
          VEGPARM.TBL]
   links:
     # Deve ser um estado MPAS completo pré-semeado antes da variacional.
-    - source: {case_root}/work/jedi/{cycle_id}/Data/states/mpas.3dvar.{mpas_file_time}.nc
+    - source: "{case_root}/work/jedi/{cycle_id}/Data/states/mpas.3dvar.{mpas_file_time}.nc"
       target: "mpas.analysis-full.{mpas_file_time}.nc"
-    - source: {monan_jedi_install_root}/bin/mpas_atmosphere
+    - source: "{monan_jedi_install_root}/bin/mpas_atmosphere"
       target: mpas_atmosphere
-    - source: /p/projetos/monan_das/$USER/manual-tests/baseline_bmatrix/x1.10242.invariant.nc
+    - source: "{baseline_root}/x1.10242.invariant.nc"
       target: x1.10242.invariant.nc
-    - source: /p/projetos/monan_das/$USER/manual-tests/baseline_bmatrix/x1.10242.graph.info.part.128
+    - source: "{baseline_root}/x1.10242.graph.info.part.128"
       target: x1.10242.graph.info.part.128
   templates:
     - source: templates/namelist.atmosphere.cycling.in
