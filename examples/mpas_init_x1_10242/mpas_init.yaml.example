@@ -1,6 +1,6 @@
 mpas_init:
   variables:
-    install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     mesh: x1.10242
     nproc: "128"
     mesh_root: /p/projetos/monan_das/USUARIO/projects/mpas_meshes/quasi_uniform/x1.10242_240km
@@ -8,7 +8,7 @@ mpas_init:
     output_root: /p/projetos/monan_das/USUARIO/work/monan-jedi-workflow/mpas_init
   run_dir: "{output_root}/{cycle_yyyymmddhh}"
   links:
-    - {source: "{install}/bin/mpas_init_atmosphere", target: mpas_init_atmosphere}
+    - {source: "{monan_jedi_install_root}/bin/mpas_init_atmosphere", target: mpas_init_atmosphere}
     - {source: "{mesh_root}/mesh/{mesh}.grid.nc", target: "{mesh}.grid.nc"}
     - {source: "{mesh_root}/graph/{mesh}.graph.info", target: "{mesh}.graph.info"}
     - {source: "{mesh_root}/partitions/{mesh}.graph.info.part.{nproc}", target: "{mesh}.graph.info.part.{nproc}"}
