@@ -1,7 +1,12 @@
 # Primeiro forecast de cycling validável no JACI: analysis 00Z -> da_state 03Z/06Z.
 mpas:
+  variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    stack_root: ${STACK_ROOT}
+    case_root: /p/projetos/monan_das/$USER/work/CASE
+
   lead_hours: 6
-  run_dir: /p/projetos/monan_das/joao.gerd/work/CASE/work/mpas/{cycle_id}
+  run_dir: {case_root}/work/mpas/{cycle_id}
   forecast_contract:
     run_hours: 6
     da_state_interval_hours: 3
@@ -12,7 +17,7 @@ mpas:
     IAU: 'off'
   clean_patterns: ["mpasout.*.nc", "restart.*.nc", "log.atmosphere.*.out"]
   link_directories:
-    - source: /p/projetos/monan_das/joao.gerd/work/CASE/runtime-skeleton
+    - source: {case_root}/runtime-skeleton
       include: &physics_tables
         [CAM_ABS_DATA.DBL, CAM_AEROPT_DATA.DBL, GENPARM.TBL, LANDUSE.TBL,
          OZONE_DAT.TBL, OZONE_LAT.TBL, OZONE_PLEV.TBL, RRTMG_LW_DATA,
@@ -20,13 +25,13 @@ mpas:
          VEGPARM.TBL]
   links:
     # Deve ser um estado MPAS completo pré-semeado antes da variacional.
-    - source: /p/projetos/monan_das/joao.gerd/work/CASE/work/jedi/{cycle_id}/Data/states/mpas.3dvar.{mpas_file_time}.nc
+    - source: {case_root}/work/jedi/{cycle_id}/Data/states/mpas.3dvar.{mpas_file_time}.nc
       target: "mpas.analysis-full.{mpas_file_time}.nc"
-    - source: /p/projetos/monan_das/joao.gerd/builds/monan-jedi-mpas/bin/mpas_atmosphere
+    - source: {monan_jedi_install_root}/bin/mpas_atmosphere
       target: mpas_atmosphere
-    - source: /p/projetos/monan_das/joao.gerd/manual-tests/baseline_bmatrix/x1.10242.invariant.nc
+    - source: /p/projetos/monan_das/$USER/manual-tests/baseline_bmatrix/x1.10242.invariant.nc
       target: x1.10242.invariant.nc
-    - source: /p/projetos/monan_das/joao.gerd/manual-tests/baseline_bmatrix/x1.10242.graph.info.part.128
+    - source: /p/projetos/monan_das/$USER/manual-tests/baseline_bmatrix/x1.10242.graph.info.part.128
       target: x1.10242.graph.info.part.128
   templates:
     - source: templates/namelist.atmosphere.cycling.in
@@ -42,8 +47,13 @@ mpas:
     mpiprocs: 128
     walltime: "02:00:00"
     launcher: /opt/cray/pals/1.6/bin/mpiexec
-    setup:
-      - /p/projetos/monan_das/joao.gerd/projects/mpas-bmatrix-global/scripts/load_jaci_env.sh
+    bootstrap:
+      - "module purge"
+      - "pushd {stack_root} >/dev/null"
+      - "source configs/sites/tier2/jaci/setup.sh"
+      - "popd >/dev/null"
+      - "module use {stack_root}/envs/jaci-mpas-jedi-gcc12-craympich/modules"
+      - "module load cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0"
     command: ["./mpas_atmosphere"]
     environment:
       OMP_NUM_THREADS: "1"
