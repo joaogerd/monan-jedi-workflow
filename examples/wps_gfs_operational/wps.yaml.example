@@ -5,11 +5,10 @@
 
 wps:
   variables:
-    monan_jedi_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
-    wps_root: "{monan_jedi_install}/wps/WPS-4.6.0"
-    ungrib: "{wps_root}/ungrib.exe"
-    link_grib: "{wps_root}/link_grib.csh"
-    vtable_gfs: "{wps_root}/ungrib/Variable_Tables/Vtable.GFS"
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    ungrib: "{monan_jedi_install_root}/bin/ungrib.exe"
+    link_grib: "{monan_jedi_install_root}/bin/link_grib.csh"
+    vtable_gfs: "{monan_jedi_install_root}/share/wps/Variable_Tables/Vtable.GFS"
 
     # Replace with the approved source layout for GFS GRIB2 files.
     grib_input: /CAMINHO/EXPLICITO/gfs.t{cycle_hour}z.pgrb2.0p25.f000
