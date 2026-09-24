@@ -4,17 +4,21 @@ Este documento registra o contrato efetivamente testado para converter PREPBUFR 
 
 ## Ambiente
 
-O executável depende do ambiente JACI carregado pelo workflow. Antes de testar manualmente ou executar um caso que use o binário, carregue:
+O executável é publicado pelo MONAN-JEDI e os exemplos mantidos o resolvem a
+partir do prefixo público:
 
 ```bash
-source scripts/load_jaci_env.sh
+export MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/$USER/build/monan-jedi
+export STACK_ROOT=/path/to/validated/spack-stack
 ```
 
-Sem esse ambiente, o carregador dinâmico pode não localizar bibliotecas como `libfabric.so.1`.
+O stage Obs2IODA mantém sua configuração de bibliotecas local ao processo filho e
+o `obs2ioda-doctor` verifica as dependências antes da conversão. Não dependa de
+um `scripts/load_jaci_env.sh` pertencente a outro repositório.
 
 ## Contrato do executável testado
 
-O binário publicado em `builds/monan-jedi-mpas/bin/obs2ioda_v3` não expõe uma interface de ajuda útil: `-h`, `--help` e `-help` terminam com sucesso sem explicar argumentos.
+O binário publicado em `$MONAN_JEDI_INSTALL_ROOT/bin/obs2ioda_v3` não expõe uma interface de ajuda útil: `-h`, `--help` e `-help` terminam com sucesso sem explicar argumentos.
 
 A execução testada é baseada no diretório corrente:
 
@@ -89,7 +93,7 @@ cp examples/obs2ioda/prepbufr-operational/obs2ioda.yaml.example \
 Substitua `USUARIO` no arquivo copiado e execute um ciclo conhecido:
 
 ```bash
-source scripts/load_jaci_env.sh
+test -x "$MONAN_JEDI_INSTALL_ROOT/bin/obs2ioda_v3"
 
 monan-jedi-workflow obs2ioda-doctor cases/obs2ioda-operational \
   --cycle 2026-06-26T00:00:00Z
