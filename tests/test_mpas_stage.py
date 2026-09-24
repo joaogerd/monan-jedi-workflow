@@ -26,6 +26,8 @@ def test_prepare_mpas_stages_links_templates_and_pbs(tmp_path: Path) -> None:
     )
     (config_dir / "mpas.yaml").write_text(
         """mpas:
+  variables:
+    stack_root: /runtime/test-stack
   lead_hours: 6
   run_dir: work/mpas/{cycle_id}
   clean_patterns: ["mpasout.*.nc"]
@@ -48,6 +50,7 @@ def test_prepare_mpas_stages_links_templates_and_pbs(tmp_path: Path) -> None:
     mpiprocs: 2
     walltime: "00:10:00"
     launcher: mpiexec
+    bootstrap: ["echo stack={stack_root}"]
     command: ["./mpas_atmosphere"]
     environment:
       OMP_NUM_THREADS: "1"
@@ -69,6 +72,8 @@ def test_prepare_mpas_stages_links_templates_and_pbs(tmp_path: Path) -> None:
     pbs = run.pbs_path.read_text()
     assert "#PBS -q pesqmini" in pbs
     assert pbs.count("#PBS -l place=excl") == 1
+    assert "echo stack=/runtime/test-stack" in pbs
+    assert pbs.index("echo stack=/runtime/test-stack") < pbs.index("mpiexec -n 2")
     assert "mpiexec -n 2 ./mpas_atmosphere" in pbs
 
 
