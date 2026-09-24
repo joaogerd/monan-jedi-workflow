@@ -260,11 +260,7 @@ if [ "$(pwd)" != "{runtime_dir}" ]; then
   cd {runtime_dir}
 fi
 
-export PROJECT_ROOT="${{PROJECT_ROOT:-/p/projetos/monan_das/${{USER}}}}"
-export MONAN_JEDI_RUN_ID="${{MONAN_JEDI_RUN_ID:-monan-jedi-mpas}}"
-export MONAN_JEDI_SOURCE_DIR="${{MONAN_JEDI_SOURCE_DIR:-${{PROJECT_ROOT}}/work/MONAN-JEDI}}"
-export MONAN_JEDI_BUILD_DIR="${{MONAN_JEDI_BUILD_DIR:-${{PROJECT_ROOT}}/work/${{MONAN_JEDI_RUN_ID}}/build}}"
-export MONAN_JEDI_INSTALL_ROOT="${{MONAN_JEDI_INSTALL_ROOT:-${{PROJECT_ROOT}}/builds/${{MONAN_JEDI_RUN_ID}}}}"
+: "${{MONAN_JEDI_INSTALL_ROOT:?MONAN_JEDI_INSTALL_ROOT must point to the public MONAN-JEDI installation}}"
 export MONAN_JEDI_INSTALL_BIN_DIR="${{MONAN_JEDI_INSTALL_BIN_DIR:-${{MONAN_JEDI_INSTALL_ROOT}}/bin}}"
 export JEDI_EXECUTABLE="${{JEDI_EXECUTABLE:-${{MONAN_JEDI_INSTALL_BIN_DIR}}/{executable_name}}}"
 
