@@ -65,6 +65,7 @@ def load_site_config(path: str | Path) -> dict[str, Any]:
         raise TypeError(f"Site configuration must be a mapping: {site_path}")
     return _expand_environment(data)
 
+
 def render_site_environment_block(path: str | Path) -> str:
     """Render a PBS shell block from a site YAML configuration."""
     config = load_site_config(path)
