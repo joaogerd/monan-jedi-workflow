@@ -11,6 +11,7 @@ from monan_jedi_workflow.site import render_site_environment_block
 from monan_jedi_workflow.stage_config import (
     StageConfigurationError,
     render_declared_variables,
+    render_text,
 )
 
 
@@ -208,3 +209,21 @@ def test_maintained_jaci_bootstraps_protect_setup_from_nounset() -> None:
         assert "set +u" in text
         assert "monan_had_nounset" in text
         assert text.index("set +u") < text.index("source configs/sites/tier2/jaci/setup.sh")
+
+
+
+def test_cycle_jaci_bootstrap_shell_braces_survive_template_rendering() -> None:
+    for relative, root_key in (
+        ("examples/simpleworkflow/cycled_da/jedi.yaml.example", "jedi"),
+        ("examples/simpleworkflow/cycled_da/jedi-baseline-bmatrix.yaml.example", "jedi"),
+        ("examples/simpleworkflow/cycled_da/mpas.yaml.example", "mpas"),
+        ("examples/simpleworkflow/cycled_da/mpas-cycling-jaci.yaml.example", "mpas"),
+    ):
+        document = yaml.safe_load((ROOT / relative).read_text(encoding="utf-8"))
+        bootstrap = document[root_key]["pbs"]["bootstrap"]
+        rendered = [
+            render_text(item, {"stack_root": "/runtime/spack-stack"}, label=relative)
+            for item in bootstrap
+        ]
+        restore = next(item for item in rendered if "monan_had_nounset" in item and "if [[" in item)
+        assert "${monan_had_nounset}" in restore
