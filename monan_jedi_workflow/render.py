@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +64,21 @@ def _render_filters(filters: list[dict[str, Any]], indent: int) -> list[str]:
                 lines.append(f"{sub}{key}: {_render_simple_value(value)}")
 
     return lines
+
+
+_ENV_REFERENCE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+
+
+def _resolved_environment_anchor(value: Any, label: str) -> str:
+    """Resolve a required submission-time environment anchor."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a non-empty string")
+    expanded = os.path.expandvars(value)
+    match = _ENV_REFERENCE.search(expanded)
+    if match is not None:
+        name = match.group(1) or match.group(2)
+        raise ValueError(f"{label} references undefined environment variable: {name}")
+    return expanded
 
 
 def _shell_export(name: str, value: Any) -> str:
@@ -211,6 +229,18 @@ def render_pbs(config: ExperimentConfig) -> str:
     launcher = pbs.get("launcher", "mpiexec")
     executable_name = Path(str(jedi["executable"])).name
 
+    anchors = pbs.get("environment_anchors", {})
+    if not isinstance(anchors, dict):
+        raise TypeError("pbs.environment_anchors must be a mapping.")
+    install_root = _resolved_environment_anchor(
+        anchors.get("monan_jedi_install_root"),
+        "pbs.environment_anchors.monan_jedi_install_root",
+    )
+    stack_root = _resolved_environment_anchor(
+        anchors.get("stack_root"),
+        "pbs.environment_anchors.stack_root",
+    )
+
     runtime_env = pbs.get("runtime", {})
     export_map = {
         "omp_num_threads": "OMP_NUM_THREADS",
@@ -269,8 +299,8 @@ if [ "$(pwd)" != "{runtime_dir}" ]; then
   cd {runtime_dir}
 fi
 
-: "${{MONAN_JEDI_INSTALL_ROOT:?MONAN_JEDI_INSTALL_ROOT must point to the public MONAN-JEDI installation}}"
-: "${{STACK_ROOT:?STACK_ROOT must point to the selected spack-stack checkout}}"
+export MONAN_JEDI_INSTALL_ROOT={shlex.quote(install_root)}
+export STACK_ROOT={shlex.quote(stack_root)}
 
 {bootstrap_block}export MONAN_JEDI_INSTALL_BIN_DIR="${{MONAN_JEDI_INSTALL_BIN_DIR:-${{MONAN_JEDI_INSTALL_ROOT}}/bin}}"
 export JEDI_EXECUTABLE="${{JEDI_EXECUTABLE:-${{MONAN_JEDI_INSTALL_BIN_DIR}}/{executable_name}}}"
