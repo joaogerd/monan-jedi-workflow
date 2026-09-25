@@ -159,18 +159,52 @@ def test_legacy_renderer_no_longer_derives_source_or_build_roots() -> None:
     assert "MONAN_JEDI_SOURCE_DIR" not in source
     assert "MONAN_JEDI_BUILD_DIR" not in source
     assert "/builds/" not in source
-    assert "MONAN_JEDI_INSTALL_ROOT must point to the public MONAN-JEDI installation" in source
+    assert "pbs.environment_anchors.monan_jedi_install_root" in source
+    assert "pbs.environment_anchors.stack_root" in source
 
 
-def test_legacy_static_pbs_requires_and_bootstraps_shared_anchors() -> None:
+def test_legacy_static_pbs_requires_and_bootstraps_shared_anchors(monkeypatch) -> None:
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", "/runtime/monan-jedi")
+    monkeypatch.setenv("STACK_ROOT", "/runtime/spack-stack")
     config = load_experiment_config(
         ROOT / "configs/experiments/3dfgat_mpastatic_x1.10242_2018041500"
     )
     rendered = render_pbs(config)
 
-    assert "MONAN_JEDI_INSTALL_ROOT must point to the public MONAN-JEDI installation" in rendered
-    assert "STACK_ROOT must point to the selected spack-stack checkout" in rendered
+    assert "export MONAN_JEDI_INSTALL_ROOT=/runtime/monan-jedi" in rendered
+    assert "export STACK_ROOT=/runtime/spack-stack" in rendered
     assert 'pushd "${STACK_ROOT}" >/dev/null' in rendered
     assert 'module use "${STACK_ROOT}/envs/jaci-mpas-jedi-gcc12-craympich/modules"' in rendered
+    assert rendered.index("set +u") < rendered.index("source configs/sites/tier2/jaci/setup.sh")
+    assert rendered.index('if [[ "${monan_had_nounset}" == "1" ]]') > rendered.index(
+        "source configs/sites/tier2/jaci/setup.sh"
+    )
     assert "MONAN_JEDI_RUN_ID" not in rendered
     assert "/builds/" not in rendered
+
+
+
+def test_legacy_static_pbs_rejects_missing_submission_anchor(monkeypatch) -> None:
+    monkeypatch.delenv("MONAN_JEDI_INSTALL_ROOT", raising=False)
+    monkeypatch.setenv("STACK_ROOT", "/runtime/spack-stack")
+    config = load_experiment_config(
+        ROOT / "configs/experiments/3dfgat_mpastatic_x1.10242_2018041500"
+    )
+
+    with pytest.raises(ValueError, match="MONAN_JEDI_INSTALL_ROOT"):
+        render_pbs(config)
+
+
+def test_maintained_jaci_bootstraps_protect_setup_from_nounset() -> None:
+    paths = [
+        ROOT / "configs/experiments/3dfgat_mpastatic_x1.10242_2018041500/pbs.yaml",
+        ROOT / "examples/simpleworkflow/cycled_da/jedi.yaml.example",
+        ROOT / "examples/simpleworkflow/cycled_da/jedi-baseline-bmatrix.yaml.example",
+        ROOT / "examples/simpleworkflow/cycled_da/mpas.yaml.example",
+        ROOT / "examples/simpleworkflow/cycled_da/mpas-cycling-jaci.yaml.example",
+    ]
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        assert "set +u" in text
+        assert "monan_had_nounset" in text
+        assert text.index("set +u") < text.index("source configs/sites/tier2/jaci/setup.sh")
