@@ -27,7 +27,20 @@ def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -
     stack = Path(stack_root)
     manifest = install / "share" / "monan-jedi" / "install-manifest.json"
     if not manifest.is_file():
-        raise FileNotFoundError(f"MONAN-JEDI runtime contract not found: {manifest}")
+        warnings.warn(
+            "MONAN-JEDI install has no ecosystem contract v2; using the "
+            "legacy JACI stack defaults. Reinstall MONAN-JEDI before the "
+            "next compatibility window.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        env_name = "jaci-mpas-jedi-gcc12-craympich"
+        return {
+            "stack_env_name": env_name,
+            "stack_env_module": "cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0",
+            "stack_site_setup": "configs/sites/tier2/jaci/setup.sh",
+            "stack_module_root": str(stack / "envs" / env_name / "modules"),
+        }
     try:
         payload = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
