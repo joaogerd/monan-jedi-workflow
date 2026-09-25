@@ -35,6 +35,9 @@ pbs:
     oops_debug: 0
     gfortran_convert_unit: "big_endian:101-200"
     f_ufmtendian: "big"
+    # Historical baseline override: this frozen static validation was proven
+    # with libfabric software matching. Modern cycling cases use "hybrid".
+    # This is job-local runtime policy, not an ecosystem-wide anchor.
     fi_cxi_rx_match_mode: "software"
 
   log:
