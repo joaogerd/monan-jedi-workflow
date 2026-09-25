@@ -7,6 +7,7 @@ copying large scientific input files and instead stages them through symlinks.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -223,6 +224,14 @@ def get_rendered_dir(config: ExperimentConfig) -> Path:
     return get_work_root(config) / rendered_dir
 
 
+def _expand_runtime_path(raw: str, label: str) -> str:
+    """Expand a runtime path and reject unresolved environment references."""
+    expanded = os.path.expandvars(raw)
+    if "$" in expanded:
+        raise ValueError(f"Unresolved environment variable in {label}: {raw}")
+    return expanded
+
+
 def _resolve_source(source: str, data_root: Path) -> Path:
     """Resolve a configured runtime source path.
 
@@ -261,7 +270,7 @@ def _resolve_source(source: str, data_root: Path) -> Path:
     >>> _resolve_source("/scratch/file.nc", Path("/data"))
     PosixPath('/scratch/file.nc')
     """
-    path = Path(str(source))
+    path = Path(_expand_runtime_path(str(source), "runtime.required_links source"))
     if path.is_absolute():
         return path
     return data_root / path
@@ -422,7 +431,12 @@ def _physics_file_links(runtime_cfg: dict[str, Any], data_root: Path) -> list[tu
         return []
 
     if isinstance(physics_cfg, dict):
-        root = Path(str(physics_cfg.get("root", data_root / "MPAS_namelist_stream_physics_files")))
+        root = Path(
+            _expand_runtime_path(
+                str(physics_cfg.get("root", data_root / "MPAS_namelist_stream_physics_files")),
+                "runtime.physics_files.root",
+            )
+        )
         files = physics_cfg.get("files", DEFAULT_MPAS_PHYSICS_FILES)
     else:
         root = data_root / "MPAS_namelist_stream_physics_files"
