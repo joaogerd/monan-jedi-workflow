@@ -12,7 +12,8 @@ jedi:
     first_cycle: "2018-04-15T00:00:00Z"
 
   variables:
-    current_install: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    stack_root: ${STACK_ROOT}
     bmatrix_root: /path/to/published/bmatrix
     obs_root: work/obs
     # GNSSRO não vem do PREPBUFR convencional deste exemplo; é entrada externa.
@@ -77,8 +78,19 @@ jedi:
     mpiprocs: 64
     walltime: "00:30:00"
     launcher: /opt/cray/pals/1.6/bin/mpiexec
+    bootstrap:
+      - "module purge"
+      - 'monan_had_nounset=0; case "$-" in *u*) monan_had_nounset=1 ;; esac'
+      - "set +u"
+      - "pushd {stack_root} >/dev/null"
+      - "source configs/sites/tier2/jaci/setup.sh"
+      - "popd >/dev/null"
+      - 'if [[ "${{monan_had_nounset}}" == "1" ]]; then set -u; else set +u; fi'
+      - "unset monan_had_nounset"
+      - "module use {stack_root}/envs/jaci-mpas-jedi-gcc12-craympich/modules"
+      - "module load cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0"
     command:
-      - "{current_install}/bin/mpasjedi_variational.x"
+      - "{monan_jedi_install_root}/bin/mpasjedi_variational.x"
       - variational.yaml
     environment:
       OMP_NUM_THREADS: "1"

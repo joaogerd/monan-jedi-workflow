@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +64,21 @@ def _render_filters(filters: list[dict[str, Any]], indent: int) -> list[str]:
                 lines.append(f"{sub}{key}: {_render_simple_value(value)}")
 
     return lines
+
+
+_ENV_REFERENCE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+
+
+def _resolved_environment_anchor(value: Any, label: str) -> str:
+    """Resolve a required submission-time environment anchor."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a non-empty string")
+    expanded = os.path.expandvars(value)
+    match = _ENV_REFERENCE.search(expanded)
+    if match is not None:
+        name = match.group(1) or match.group(2)
+        raise ValueError(f"{label} references undefined environment variable: {name}")
+    return expanded
 
 
 def _shell_export(name: str, value: Any) -> str:
@@ -211,6 +229,18 @@ def render_pbs(config: ExperimentConfig) -> str:
     launcher = pbs.get("launcher", "mpiexec")
     executable_name = Path(str(jedi["executable"])).name
 
+    anchors = pbs.get("environment_anchors", {})
+    if not isinstance(anchors, dict):
+        raise TypeError("pbs.environment_anchors must be a mapping.")
+    install_root = _resolved_environment_anchor(
+        anchors.get("monan_jedi_install_root"),
+        "pbs.environment_anchors.monan_jedi_install_root",
+    )
+    stack_root = _resolved_environment_anchor(
+        anchors.get("stack_root"),
+        "pbs.environment_anchors.stack_root",
+    )
+
     runtime_env = pbs.get("runtime", {})
     export_map = {
         "omp_num_threads": "OMP_NUM_THREADS",
@@ -225,6 +255,15 @@ def render_pbs(config: ExperimentConfig) -> str:
         for key, env_name in export_map.items()
         if key in runtime_env and runtime_env[key] is not None
     ]
+
+    bootstrap = pbs.get("bootstrap", [])
+    if not isinstance(bootstrap, list) or not all(
+        isinstance(item, str) and item.strip() for item in bootstrap
+    ):
+        raise ValueError("pbs.bootstrap must be a list of non-empty shell commands")
+    bootstrap_block = "\n".join(bootstrap)
+    if bootstrap_block:
+        bootstrap_block += "\n\n"
 
     log_config = pbs.get("log", {})
     log_directory = log_config.get("directory", "logs")
@@ -260,12 +299,10 @@ if [ "$(pwd)" != "{runtime_dir}" ]; then
   cd {runtime_dir}
 fi
 
-export PROJECT_ROOT="${{PROJECT_ROOT:-/p/projetos/monan_das/${{USER}}}}"
-export MONAN_JEDI_RUN_ID="${{MONAN_JEDI_RUN_ID:-monan-jedi-mpas}}"
-export MONAN_JEDI_SOURCE_DIR="${{MONAN_JEDI_SOURCE_DIR:-${{PROJECT_ROOT}}/work/MONAN-JEDI}}"
-export MONAN_JEDI_BUILD_DIR="${{MONAN_JEDI_BUILD_DIR:-${{PROJECT_ROOT}}/work/${{MONAN_JEDI_RUN_ID}}/build}}"
-export MONAN_JEDI_INSTALL_ROOT="${{MONAN_JEDI_INSTALL_ROOT:-${{PROJECT_ROOT}}/builds/${{MONAN_JEDI_RUN_ID}}}}"
-export MONAN_JEDI_INSTALL_BIN_DIR="${{MONAN_JEDI_INSTALL_BIN_DIR:-${{MONAN_JEDI_INSTALL_ROOT}}/bin}}"
+export MONAN_JEDI_INSTALL_ROOT={shlex.quote(install_root)}
+export STACK_ROOT={shlex.quote(stack_root)}
+
+{bootstrap_block}export MONAN_JEDI_INSTALL_BIN_DIR="${{MONAN_JEDI_INSTALL_BIN_DIR:-${{MONAN_JEDI_INSTALL_ROOT}}/bin}}"
 export JEDI_EXECUTABLE="${{JEDI_EXECUTABLE:-${{MONAN_JEDI_INSTALL_BIN_DIR}}/{executable_name}}}"
 
 mkdir -p Data/os Data/states {log_directory}

@@ -12,6 +12,8 @@ EXPERIMENT_NAME = "3dfgat_mpastatic_x1.10242_2018041500"
 
 
 def run_cli(monkeypatch, *args: str) -> int:
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", "/runtime/monan-jedi")
+    monkeypatch.setenv("STACK_ROOT", "/runtime/spack-stack")
     monkeypatch.setattr(sys, "argv", ["monan-jedi-workflow", *args])
     return cli.main()
 

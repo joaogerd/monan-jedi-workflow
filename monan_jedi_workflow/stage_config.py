@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +13,21 @@ from .yaml_utils import load_yaml_file
 
 class StageConfigurationError(ValueError):
     """An optional domain-stage YAML contract is incomplete or invalid."""
+
+
+_ENV_REFERENCE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+
+
+def _expand_environment(value: str, *, label: str) -> str:
+    """Expand shell variables used deliberately by declared stage variables."""
+    expanded = os.path.expandvars(value)
+    match = _ENV_REFERENCE.search(expanded)
+    if match is not None:
+        name = match.group(1) or match.group(2)
+        raise StageConfigurationError(
+            f"{label} contains an environment variable that is not defined: {name}"
+        )
+    return expanded
 
 
 def load_stage_config(config_dir: Path, filename: str, root_key: str) -> dict[str, Any]:
@@ -60,7 +77,13 @@ def render_declared_variables(
             raise StageConfigurationError(
                 f"{label}.variables may not replace reserved context field {name!r}."
             )
-        rendered[name] = render_text(value, rendered, label=f"{label}.variables.{name}")
+        variable_label = f"{label}.variables.{name}"
+        if not isinstance(value, str) or not value:
+            raise StageConfigurationError(
+                f"{variable_label} must be a non-empty string."
+            )
+        expanded = _expand_environment(value, label=variable_label)
+        rendered[name] = render_text(expanded, rendered, label=variable_label)
     return rendered
 
 

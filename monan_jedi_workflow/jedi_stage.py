@@ -871,6 +871,27 @@ def _render_pbs(run: JEDIRun) -> None:
         label="jedi.pbs.stderr",
     )
 
+    bootstrap = _require_list(pbs.get("bootstrap", []), "jedi.pbs.bootstrap")
+    if any(not isinstance(item, str) or not item for item in bootstrap):
+        raise StageConfigurationError(
+            "jedi.pbs.bootstrap must contain non-empty shell commands."
+        )
+    bootstrap_lines = [
+        render_text(item, run.context, label="jedi.pbs.bootstrap item")
+        for item in bootstrap
+    ]
+
+    setup = _require_list(pbs.get("setup", []), "jedi.pbs.setup")
+    if any(not isinstance(item, str) or not item for item in setup):
+        raise StageConfigurationError(
+            "jedi.pbs.setup must contain non-empty script paths."
+        )
+    setup_lines = [
+        "source "
+        + shlex.quote(render_text(item, run.context, label="jedi.pbs.setup item"))
+        for item in setup
+    ]
+
     environment = _require_mapping(
         pbs.get("environment", {}), "jedi.pbs.environment"
     )
@@ -907,6 +928,8 @@ def _render_pbs(run: JEDIRun) -> None:
         "",
         "set -euo pipefail",
         f"cd {shlex.quote(str(run.run_dir))}",
+        *bootstrap_lines,
+        *setup_lines,
         *exports,
         "ulimit -s unlimited || true",
         (

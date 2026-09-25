@@ -52,6 +52,26 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
+## Contrato de runtime do ecossistema
+
+O workflow é consumidor do runtime publicado pelo `MONAN-JEDI`. Para os casos
+mantidos no JACI, selecione explicitamente as duas âncoras compartilhadas antes
+de preparar ou submeter ciclos:
+
+```bash
+export MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/$USER/build/monan-jedi
+export STACK_ROOT=/path/to/validated/spack-stack
+```
+
+`MONAN_JEDI_INSTALL_ROOT` é o prefixo instalado público; não é checkout nem
+árvore de build. Os stages derivam dele `mpasjedi_variational.x`,
+`mpas_atmosphere`, `mpas_init_atmosphere`, WPS e Obs2IODA. `STACK_ROOT`
+seleciona o ambiente de dependências/MPI que os PBS devem reconstruir no nó de
+computação.
+
+Os YAMLs cycle-aware podem referenciar essas âncoras dentro de `variables:`.
+Referências de ambiente não definidas falham durante a resolução do caso.
+
 ## Primeiro ciclo
 
 Um caso cíclico contém, no mínimo:
@@ -126,3 +146,14 @@ Os comandos anteriores (`validate-config`, `prepare-runtime`, `render-yaml`, `re
 ## Segurança operacional
 
 Preparação e renderização não submetem jobs implicitamente. A primeira operação que chama `qsub` é sempre um comando de submissão explícito (`*-submit`). Término no PBS e sucesso científico são estados diferentes: use sempre `*-validate`.
+
+
+### PBS runtime anchors
+
+Cycle-aware examples resolve `MONAN_JEDI_INSTALL_ROOT` and `STACK_ROOT` through
+their declared stage variables. The retained static baseline declares the same two
+values under `pbs.environment_anchors`; the renderer embeds them directly in the
+PBS script, so jobs do not depend on `qsub -V` or login-shell inheritance.
+
+The maintained JACI bootstrap temporarily disables Bash `nounset` only while
+sourcing the site `setup.sh`, then restores the previous state before MPI starts.

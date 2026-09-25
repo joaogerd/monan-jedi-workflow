@@ -5,8 +5,9 @@
 
 obs2ioda:
   variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     workflow_root: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow
-    obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
+    obs2ioda_executable: "{monan_jedi_install_root}/bin/obs2ioda_v3"
     prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
 
     prepbufr_input: /p/projetos/monan_das/USUARIO/external-inputs/mpasjedi_tutorial202509NCAR/obs_bufr/2018041500/prepbufr.gdas.20180415.t00z.nr.48h

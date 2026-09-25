@@ -19,6 +19,7 @@ from .stage_config import (
     StageConfigurationError,
     cycle_render_context,
     load_stage_config,
+    render_declared_variables,
     render_text,
     resolve_path,
 )
@@ -153,6 +154,7 @@ def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
         **context,
         "mpas_t_plus_3_file_time": intermediate.strftime("%Y-%m-%d_%H.%M.%S"),
     }
+    context = render_declared_variables(config, context, label="mpas")
 
     contract = _require_mapping(config.get("forecast_contract", {}), "mpas.forecast_contract")
     if contract:
@@ -238,6 +240,14 @@ def _render_pbs(run: MPASRun) -> None:
         exports.append(
             f"export {name}={shlex.quote(render_text(value, run.context, label=f'mpas.pbs.environment.{name}'))}"
         )
+    bootstrap = _require_list(pbs.get("bootstrap", []), "mpas.pbs.bootstrap")
+    if any(not isinstance(item, str) or not item for item in bootstrap):
+        raise StageConfigurationError("mpas.pbs.bootstrap must contain non-empty shell commands.")
+    bootstrap_lines = [
+        render_text(item, run.context, label="mpas.pbs.bootstrap item")
+        for item in bootstrap
+    ]
+
     setup = _require_list(pbs.get("setup", []), "mpas.pbs.setup")
     if any(not isinstance(item, str) or not item for item in setup):
         raise StageConfigurationError("mpas.pbs.setup must contain non-empty script paths.")
@@ -269,6 +279,7 @@ def _render_pbs(run: MPASRun) -> None:
         "",
         "set -euo pipefail",
         f"cd {shlex.quote(str(run.run_dir))}",
+        *bootstrap_lines,
         *setup_lines,
         *exports,
         "ulimit -s unlimited || true",

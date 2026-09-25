@@ -7,8 +7,9 @@
 
 obs2ioda:
   variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     workflow_root: /p/projetos/monan_das/USUARIO/projects/monan-jedi-workflow
-    obs2ioda_executable: /p/projetos/monan_das/USUARIO/builds/monan-jedi-mpas/bin/obs2ioda_v3
+    obs2ioda_executable: "{monan_jedi_install_root}/bin/obs2ioda_v3"
     prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
 
     # Ajuste para o arquivo PREPBUFR associado ao ciclo escolhido.

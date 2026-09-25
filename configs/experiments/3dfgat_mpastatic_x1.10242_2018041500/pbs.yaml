@@ -9,6 +9,26 @@ pbs:
 
   launcher: /opt/cray/pals/1.6/bin/mpiexec
 
+  # Submission-time ecosystem anchors are resolved by the renderer and embedded
+  # in the PBS script, so qsub environment inheritance is not required.
+  environment_anchors:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    stack_root: ${STACK_ROOT}
+
+  # Rebuild the selected scientific environment on the compute node. STACK_ROOT
+  # is an ecosystem anchor supplied by the user/site, not a repository path.
+  bootstrap:
+    - 'module purge'
+    - 'monan_had_nounset=0; case "$-" in *u*) monan_had_nounset=1 ;; esac'
+    - 'set +u'
+    - 'pushd "${STACK_ROOT}" >/dev/null'
+    - 'source configs/sites/tier2/jaci/setup.sh'
+    - 'popd >/dev/null'
+    - 'if [[ "${monan_had_nounset}" == "1" ]]; then set -u; else set +u; fi'
+    - 'unset monan_had_nounset'
+    - 'module use "${STACK_ROOT}/envs/jaci-mpas-jedi-gcc12-craympich/modules"'
+    - 'module load cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0'
+
   runtime:
     omp_num_threads: 1
     oops_trace: 0

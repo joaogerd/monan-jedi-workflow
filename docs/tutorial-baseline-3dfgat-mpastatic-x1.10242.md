@@ -67,11 +67,18 @@ method:
   ninner: 10
 ```
 
-Também define o executável esperado:
+O baseline estático preserva apenas o nome do executável no YAML. O PBS resolve
+esse nome a partir do prefixo público selecionado pelo usuário:
+
+```bash
+export MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/$USER/build/monan-jedi
+```
 
 ```text
-/p/projetos/monan_das/${USER}/builds/monan-jedi-mpas/bin/mpasjedi_variational.x
+${MONAN_JEDI_INSTALL_ROOT}/bin/mpasjedi_variational.x
 ```
+
+Não aponte esse baseline para checkout ou árvore privada de build.
 
 ### `runtime.yaml`
 
@@ -131,6 +138,15 @@ Data/os
 Data/states
 testinput
 ```
+
+### Ambiente reproduzível no PBS
+
+Antes de `render-pbs`, exporte `MONAN_JEDI_INSTALL_ROOT` e `STACK_ROOT`. O
+`pbs.yaml` os declara em `environment_anchors`; o renderer resolve e escreve os
+valores no próprio script PBS. Portanto a execução não depende de `qsub -V`.
+
+O bootstrap JACI preserva `set -euo pipefail`, mas desativa `nounset` somente
+durante `source configs/sites/tier2/jaci/setup.sh`, restaurando-o em seguida.
 
 ## 3. Ordem correta de execução
 

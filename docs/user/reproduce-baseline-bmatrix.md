@@ -11,6 +11,8 @@ Neste teste use exatamente o mesmo executavel, YAML, background, observacoes, B 
 ```bash
 export CASE=/p/projetos/monan_das/$USER/work/CASE
 export BASELINE=/p/projetos/monan_das/$USER/manual-tests/baseline_bmatrix
+export MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/$USER/build/monan-jedi
+export STACK_ROOT=/path/to/validated/spack-stack
 mkdir -p "$CASE"
 ```
 
@@ -78,16 +80,16 @@ cp \
   "$CASE/jedi.yaml"
 ```
 
-Edite `USUARIO` e o caminho `current_install`.
+Edite somente os caminhos do caso/baseline que forem específicos da sua área de
+trabalho. O executável não é configurado por `current_install`: o exemplo deriva
+`mpasjedi_variational.x` de `MONAN_JEDI_INSTALL_ROOT`.
 
-Para descobrir o executavel atual:
+Confirme o runtime antes de preparar:
 
 ```bash
-command -v mpasjedi_variational.x
-readlink -f "$(command -v mpasjedi_variational.x)"
+test -x "$MONAN_JEDI_INSTALL_ROOT/bin/mpasjedi_variational.x"
+test -d "$STACK_ROOT"
 ```
-
-Se o executavel estiver em `/algum/prefixo/bin/mpasjedi_variational.x`, use `/algum/prefixo` como `current_install`.
 
 Nesta primeira reproducao, `templates.source` aponta diretamente para:
 
