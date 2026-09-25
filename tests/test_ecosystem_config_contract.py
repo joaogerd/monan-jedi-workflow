@@ -209,7 +209,8 @@ def test_maintained_jaci_bootstraps_protect_setup_from_nounset() -> None:
         text = path.read_text(encoding="utf-8")
         assert "set +u" in text
         assert "monan_had_nounset" in text
-        assert text.index("set +u") < text.index("source configs/sites/tier2/jaci/setup.sh")
+        assert "source {stack_site_setup}" in text
+        assert text.index("set +u") < text.index("source {stack_site_setup}")
 
 
 
@@ -222,8 +223,14 @@ def test_cycle_jaci_bootstrap_shell_braces_survive_template_rendering() -> None:
     ):
         document = yaml.safe_load((ROOT / relative).read_text(encoding="utf-8"))
         bootstrap = document[root_key]["pbs"]["bootstrap"]
+        context = {
+            "stack_root": "/runtime/spack-stack",
+            "stack_site_setup": "configs/sites/tier2/jaci/setup.sh",
+            "stack_module_root": "/runtime/spack-stack/envs/jaci-test/modules",
+            "stack_env_module": "test/jedi-mpas-env/2.0.0",
+        }
         rendered = [
-            render_text(item, {"stack_root": "/runtime/spack-stack"}, label=relative)
+            render_text(item, context, label=relative)
             for item in bootstrap
         ]
         restore = next(item for item in rendered if "monan_had_nounset" in item and "if [[" in item)
