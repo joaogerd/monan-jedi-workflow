@@ -75,7 +75,7 @@ jedi:
     ncpus: 128
     mpiprocs: 128
     walltime: "00:30:00"
-    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    launcher: mpiexec
     bootstrap:
       - "module purge"
       - 'monan_had_nounset=0; case "$-" in *u*) monan_had_nounset=1 ;; esac'
