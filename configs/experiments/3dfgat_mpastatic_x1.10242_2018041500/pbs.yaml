@@ -9,6 +9,12 @@ pbs:
 
   launcher: /opt/cray/pals/1.6/bin/mpiexec
 
+  # Submission-time ecosystem anchors are resolved by the renderer and embedded
+  # in the PBS script, so qsub environment inheritance is not required.
+  environment_anchors:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    stack_root: ${STACK_ROOT}
+
   # Rebuild the selected scientific environment on the compute node. STACK_ROOT
   # is an ecosystem anchor supplied by the user/site, not a repository path.
   bootstrap:
