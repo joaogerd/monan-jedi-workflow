@@ -43,7 +43,7 @@ mpas:
     ncpus: 64
     mpiprocs: 64
     walltime: "01:00:00"
-    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    launcher: mpiexec
     bootstrap:
       - "module purge"
       - 'monan_had_nounset=0; case "$-" in *u*) monan_had_nounset=1 ;; esac'
