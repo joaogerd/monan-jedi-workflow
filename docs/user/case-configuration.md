@@ -139,3 +139,13 @@ Shell executados no nó de computação antes das variáveis específicas do job
 `pbs.setup`, quando presente, continua aceito para compatibilidade com casos que
 fazem `source` de um script local. Os exemplos mantidos não dependem mais de
 scripts internos de outro repositório para preparar o ambiente científico.
+
+
+For JACI, do not assume that custom environment variables exported in the login shell
+are inherited by PBS. Cycle-aware stages render resolved paths directly into their
+commands. The retained static baseline uses `pbs.environment_anchors` to embed the
+two shared runtime anchors in the generated script.
+
+When a bootstrap sources the JACI spack-stack `setup.sh` under `set -u`, protect
+that source operation with a temporary `set +u` and restore the prior nounset state
+afterward, as shown by the maintained examples.
