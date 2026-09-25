@@ -121,7 +121,8 @@ def get_data_root(config: ExperimentConfig) -> Path:
     'jedi'
     """
     paths = require_key(config.experiment, "paths", "experiment.yaml")
-    return Path(str(require_key(paths, "data_root", "experiment.yaml paths")))
+    raw = str(require_key(paths, "data_root", "experiment.yaml paths"))
+    return Path(os.path.expandvars(raw))
 
 
 def get_runtime_dir(config: ExperimentConfig) -> Path:
