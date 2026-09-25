@@ -26,10 +26,9 @@ method:
   ninner: 10
   gradient_norm_reduction: 1.0e-10
 paths:
-  data_root: /p/projetos/monan_das/joao.gerd/data/mpasjedi_tutorial2024_testdata
+  data_root: /p/projetos/monan_das/$USER/data/mpasjedi_tutorial2024_testdata
   work_root: .
   runtime_dir: build/runtime/3dfgat_mpastatic_x1.10242_2018041500/2018041500
   rendered_dir: build/rendered
-  scratch_root: /p/projetos/monan_das/joao.gerd/scratch/monan-jedi-workflow
 jedi:
   executable: mpasjedi_variational.x
