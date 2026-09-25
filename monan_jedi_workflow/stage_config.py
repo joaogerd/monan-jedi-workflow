@@ -92,15 +92,8 @@ def render_declared_variables(
     install_root = rendered.get("monan_jedi_install_root")
     stack_root = rendered.get("stack_root")
     if install_root and stack_root:
-        manifest = (
-            Path(install_root)
-            / "share"
-            / "monan-jedi"
-            / "install-manifest.json"
-        )
-        if manifest.is_file():
-            for name, value in runtime_contract_context(install_root, stack_root).items():
-                rendered.setdefault(name, value)
+        for name, value in runtime_contract_context(install_root, stack_root).items():
+            rendered.setdefault(name, value)
 
     return rendered
 
