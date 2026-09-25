@@ -21,7 +21,7 @@ jedi:
   install_root: ${MONAN_JEDI_INSTALL_ROOT}
 
 mpi:
-  launcher: /opt/cray/pals/1.6/bin/mpiexec
+  launcher: mpiexec
   tasks_flag: -n
 
 runtime:
