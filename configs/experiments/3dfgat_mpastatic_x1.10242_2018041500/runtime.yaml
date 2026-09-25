@@ -1,4 +1,7 @@
 runtime:
+  # Runtime software/support comes only from the public MONAN-JEDI installation.
+  # Experiment/background fields that are scientific inputs remain relative to
+  # experiment.paths.data_root.
   required_links:
     - source: background/2018041418/mpasout.2018-04-14_21.00.00.nc
       target: background/mpasout.2018-04-14_21.00.00.nc
@@ -26,28 +29,28 @@ runtime:
     - source: MPAS_namelist_stream_physics_files/streams.atmosphere_240km
       target: streams.atmosphere.inner
 
-    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/stream_list.atmosphere.background
+    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/stream_list.atmosphere.background
       target: stream_list.atmosphere.background
 
-    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/stream_list.atmosphere.analysis
+    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/stream_list.atmosphere.analysis
       target: stream_list.atmosphere.analysis
 
-    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/stream_list.atmosphere.control
+    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/stream_list.atmosphere.control
       target: stream_list.atmosphere.control
 
-    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/stream_list.atmosphere.ensemble
+    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/stream_list.atmosphere.ensemble
       target: stream_list.atmosphere.ensemble
 
-    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/geovars.yaml
+    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/geovars.yaml
       target: geovars.yaml
 
-    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/namelists/keptvars.yaml
+    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/keptvars.yaml
       target: keptvars.yaml
 
-    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/ufo-data/testinput_tier_1
+    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/ufo/testinput_tier_1
       target: Data/ufo/testinput_tier_1
 
-    - source: /p/projetos/monan_das/joao.gerd/projects/MONAN-JEDI/mpas-jedi/test/testinput/obsop_name_map.yaml
+    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/testinput/obsop_name_map.yaml
       target: testinput/obsop_name_map.yaml
 
   required_directories:
@@ -59,7 +62,7 @@ runtime:
     - testinput
 
   physics_files:
-    root: /p/projetos/monan_das/joao.gerd/manual-tests/official-3dvar-baseline-x1.2562
+    root: ${MONAN_JEDI_INSTALL_ROOT}/share/MPAS/core_atmosphere
     files:
       - CAM_ABS_DATA.DBL
       - CAM_AEROPT_DATA.DBL

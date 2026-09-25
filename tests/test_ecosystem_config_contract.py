@@ -7,6 +7,7 @@ import yaml
 
 from monan_jedi_workflow.config import load_experiment_config
 from monan_jedi_workflow.render import render_pbs
+from monan_jedi_workflow.runtime import _physics_file_links, _resolve_source
 from monan_jedi_workflow.site import render_site_environment_block
 from monan_jedi_workflow.stage_config import (
     StageConfigurationError,
@@ -227,3 +228,63 @@ def test_cycle_jaci_bootstrap_shell_braces_survive_template_rendering() -> None:
         ]
         restore = next(item for item in rendered if "monan_had_nounset" in item and "if [[" in item)
         assert "${monan_had_nounset}" in restore
+
+
+
+def test_static_baseline_runtime_uses_installed_support_only() -> None:
+    path = ROOT / "configs/experiments/3dfgat_mpastatic_x1.10242_2018041500/runtime.yaml"
+    text = path.read_text(encoding="utf-8")
+    document = yaml.safe_load(text)
+    runtime = document["runtime"]
+
+    assert "/p/projetos/monan_das/joao.gerd" not in text
+    assert "/projects/MONAN-JEDI" not in text
+    assert "manual-tests/official-3dvar-baseline" not in text
+    assert runtime["physics_files"]["root"] == (
+        "${MONAN_JEDI_INSTALL_ROOT}/share/MPAS/core_atmosphere"
+    )
+
+    installed_sources = [
+        item["source"]
+        for item in runtime["required_links"]
+        if str(item["source"]).startswith("${MONAN_JEDI_INSTALL_ROOT}")
+    ]
+    assert installed_sources
+    assert all("/share/" in source for source in installed_sources)
+    assert any("/share/monan-jedi/mpas-jedi/namelists/" in source for source in installed_sources)
+    assert any("/share/monan-jedi/ufo/testinput_tier_1" in source for source in installed_sources)
+
+
+def test_runtime_paths_expand_install_anchor(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", "/runtime/monan-jedi")
+
+    source = _resolve_source(
+        "${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/geovars.yaml",
+        tmp_path,
+    )
+    assert source == Path(
+        "/runtime/monan-jedi/share/monan-jedi/mpas-jedi/namelists/geovars.yaml"
+    )
+
+    links = _physics_file_links(
+        {
+            "physics_files": {
+                "root": "${MONAN_JEDI_INSTALL_ROOT}/share/MPAS/core_atmosphere",
+                "files": ["GENPARM.TBL"],
+            }
+        },
+        tmp_path,
+    )
+    assert links == [
+        (Path("/runtime/monan-jedi/share/MPAS/core_atmosphere/GENPARM.TBL"), "GENPARM.TBL")
+    ]
+
+
+def test_runtime_paths_reject_missing_install_anchor(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("MONAN_JEDI_INSTALL_ROOT", raising=False)
+
+    with pytest.raises(ValueError, match="MONAN_JEDI_INSTALL_ROOT"):
+        _resolve_source(
+            "${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/geovars.yaml",
+            tmp_path,
+        )
