@@ -139,6 +139,15 @@ Data/states
 testinput
 ```
 
+### Ambiente reproduzível no PBS
+
+Antes de `render-pbs`, exporte `MONAN_JEDI_INSTALL_ROOT` e `STACK_ROOT`. O
+`pbs.yaml` os declara em `environment_anchors`; o renderer resolve e escreve os
+valores no próprio script PBS. Portanto a execução não depende de `qsub -V`.
+
+O bootstrap JACI preserva `set -euo pipefail`, mas desativa `nounset` somente
+durante `source configs/sites/tier2/jaci/setup.sh`, restaurando-o em seguida.
+
 ## 3. Ordem correta de execução
 
 A ordem correta para preparar e executar o baseline é:
