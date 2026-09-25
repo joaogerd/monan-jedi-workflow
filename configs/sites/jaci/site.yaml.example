@@ -8,13 +8,12 @@ site:
   external_data_root: /p/projetos/monan_das/$USER/external-inputs/3dvar_fgat
   experiment_root: /p/projetos/monan_das/$USER/scratch/monan-jedi-workflow/experiments
 
-# Cross-repository runtime contract. STACK_ROOT must identify the actual
-# spack-stack checkout; module_root and site_setup are derived when omitted.
+# Cross-repository runtime contract. STACK_ROOT selects the actual spack-stack
+# checkout. env_name, env_module, module_root and site_setup come from the
+# installed MONAN-JEDI ecosystem contract v2 and are not duplicated here.
 stack:
   load: true
   root: ${STACK_ROOT}
-  env_name: jaci-mpas-jedi-gcc12-craympich
-  env_module: cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0
 
 # MONAN-JEDI source/build paths are deliberately absent. Consumers receive only
 # the stable installed runtime prefix.
