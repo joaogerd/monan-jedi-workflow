@@ -694,7 +694,7 @@ def validate_experiment_config(config: ExperimentConfig) -> list[str]:
 
     # Paths and executable are checked last because they are mostly operational
     # settings. They are still required before rendering or staging files.
-    for key in ["data_root", "work_root", "runtime_dir", "rendered_dir", "scratch_root"]:
+    for key in ["data_root", "work_root", "runtime_dir", "rendered_dir"]:
         require_key(paths, key, "experiment.yaml paths")
 
     require_key(jedi, "executable", "experiment.yaml jedi")
