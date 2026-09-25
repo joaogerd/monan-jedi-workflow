@@ -7,6 +7,7 @@ current process; it only generates an auditable shell snippet for the job script
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import warnings
@@ -18,6 +19,44 @@ import yaml
 from .config import require_key
 
 _ENV_REFERENCE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+
+
+def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -> dict[str, str]:
+    """Resolve stack settings from the MONAN-JEDI ecosystem contract v2."""
+    install = Path(install_root)
+    stack = Path(stack_root)
+    manifest = install / "share" / "monan-jedi" / "install-manifest.json"
+    if not manifest.is_file():
+        raise FileNotFoundError(f"MONAN-JEDI runtime contract not found: {manifest}")
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Invalid MONAN-JEDI runtime contract: {manifest}: {error}") from error
+
+    if not isinstance(payload, dict) or payload.get("ecosystem_contract_version") != 2:
+        raise ValueError(
+            "MONAN-JEDI installation does not provide ecosystem contract v2; "
+            "reinstall the producer before using maintained workflow cases."
+        )
+    if payload.get("contract") != "monan-jedi-runtime-v2":
+        raise ValueError("Unsupported MONAN-JEDI runtime contract identifier.")
+
+    settings = payload.get("stack")
+    if not isinstance(settings, dict):
+        raise ValueError("MONAN-JEDI runtime contract has no stack block.")
+    for key in ("env_name", "env_module", "site_setup", "module_root_template"):
+        if not isinstance(settings.get(key), str) or not settings[key]:
+            raise ValueError(f"Runtime contract stack.{key} must be a non-empty string.")
+
+    module_root = stack / settings["module_root_template"].format(
+        env_name=settings["env_name"]
+    )
+    return {
+        "stack_env_name": settings["env_name"],
+        "stack_env_module": settings["env_module"],
+        "stack_site_setup": settings["site_setup"],
+        "stack_module_root": str(module_root),
+    }
 
 
 def _quote_shell(value: Any) -> str:
