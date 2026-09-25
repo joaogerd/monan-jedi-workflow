@@ -21,7 +21,7 @@ mpas_init:
     ncpus: 128
     mpiprocs: 128
     walltime: "00:30:00"
-    launcher: /opt/cray/pals/1.6/bin/mpiexec
+    launcher: mpiexec
     command: [./mpas_init_atmosphere]
   validation:
     log: log.init_atmosphere.0000.out
