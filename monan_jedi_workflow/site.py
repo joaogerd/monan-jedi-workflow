@@ -177,15 +177,27 @@ def render_site_environment_block(path: str | Path) -> str:
 
     if stack.get("load", False):
         stack_root = require_key(stack, "root", "site.yaml stack")
-        stack_env_name = str(stack.get("env_name", "jaci-mpas-jedi-gcc12-craympich"))
-        stack_module_root = stack.get(
-            "module_root",
-            str(Path(str(stack_root)) / "envs" / stack_env_name / "modules"),
-        )
-        stack_env_module = require_key(stack, "env_module", "site.yaml stack")
-        stack_site_setup = stack.get(
-            "site_setup",
-            str(Path(str(stack_root)) / "configs" / "sites" / "tier2" / "jaci" / "setup.sh"),
+        contract = runtime_contract_context(install_root, stack_root)
+
+        for key, derived_key in (
+            ("env_name", "stack_env_name"),
+            ("env_module", "stack_env_module"),
+            ("module_root", "stack_module_root"),
+        ):
+            explicit = stack.get(key)
+            if explicit is not None and str(explicit) != contract[derived_key]:
+                warnings.warn(
+                    f"site.yaml stack.{key} is deprecated and differs from the "
+                    "installed runtime contract; the installed contract wins.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
+        stack_env_name = contract["stack_env_name"]
+        stack_module_root = contract["stack_module_root"]
+        stack_env_module = contract["stack_env_module"]
+        stack_site_setup = str(
+            Path(str(stack_root)) / contract["stack_site_setup"]
         )
 
         lines.append(_export("MONAN_LOAD_STACK", "true"))
