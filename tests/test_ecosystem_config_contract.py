@@ -252,7 +252,8 @@ def test_static_baseline_runtime_uses_installed_support_only() -> None:
     assert installed_sources
     assert all("/share/" in source for source in installed_sources)
     assert any("/share/monan-jedi/mpas-jedi/namelists/" in source for source in installed_sources)
-    assert any("/share/monan-jedi/ufo/testinput_tier_1" in source for source in installed_sources)
+    assert not any("/share/monan-jedi/ufo/" in source for source in installed_sources)
+    assert any(item["source"] == "ufo/testinput_tier_1" for item in runtime["required_links"])
 
 
 def test_runtime_paths_expand_install_anchor(monkeypatch, tmp_path: Path) -> None:
