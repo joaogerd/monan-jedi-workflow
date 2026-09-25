@@ -146,3 +146,14 @@ Os comandos anteriores (`validate-config`, `prepare-runtime`, `render-yaml`, `re
 ## Segurança operacional
 
 Preparação e renderização não submetem jobs implicitamente. A primeira operação que chama `qsub` é sempre um comando de submissão explícito (`*-submit`). Término no PBS e sucesso científico são estados diferentes: use sempre `*-validate`.
+
+
+### PBS runtime anchors
+
+Cycle-aware examples resolve `MONAN_JEDI_INSTALL_ROOT` and `STACK_ROOT` through
+their declared stage variables. The retained static baseline declares the same two
+values under `pbs.environment_anchors`; the renderer embeds them directly in the
+PBS script, so jobs do not depend on `qsub -V` or login-shell inheritance.
+
+The maintained JACI bootstrap temporarily disables Bash `nounset` only while
+sourcing the site `setup.sh`, then restores the previous state before MPI starts.
