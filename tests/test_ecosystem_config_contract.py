@@ -76,6 +76,7 @@ runtime:
 
     assert 'export MONAN_JEDI_INSTALL_ROOT="/runtime/monan-jedi"' in rendered
     assert 'export STACK_ROOT="/runtime/spack-stack"' in rendered
+    assert "module purge" in rendered
     assert (
         'export STACK_MODULE_ROOT="/runtime/spack-stack/envs/'
         'jaci-mpas-jedi-gcc12-craympich/modules"'
