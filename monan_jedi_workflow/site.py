@@ -211,6 +211,7 @@ def render_site_environment_block(path: str | Path) -> str:
         lines.extend(
             [
                 "",
+                "module purge",
                 "case \"$-\" in",
                 "  *u*) monan_had_nounset=1 ;;",
                 "  *) monan_had_nounset=0 ;;",
