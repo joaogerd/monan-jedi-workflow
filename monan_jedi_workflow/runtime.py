@@ -77,7 +77,8 @@ def get_work_root(config: ExperimentConfig) -> Path:
     PosixPath('/tmp/work')
     """
     paths = require_key(config.experiment, "paths", "experiment.yaml")
-    return Path(str(require_key(paths, "work_root", "experiment.yaml paths")))
+    raw = str(require_key(paths, "work_root", "experiment.yaml paths"))
+    return Path(_expand_runtime_path(raw, "experiment.paths.work_root"))
 
 
 def get_data_root(config: ExperimentConfig) -> Path:
@@ -122,7 +123,7 @@ def get_data_root(config: ExperimentConfig) -> Path:
     """
     paths = require_key(config.experiment, "paths", "experiment.yaml")
     raw = str(require_key(paths, "data_root", "experiment.yaml paths"))
-    return Path(os.path.expandvars(raw))
+    return Path(_expand_runtime_path(raw, "experiment.paths.data_root"))
 
 
 def get_runtime_dir(config: ExperimentConfig) -> Path:
