@@ -47,7 +47,7 @@ runtime:
     - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/keptvars.yaml
       target: keptvars.yaml
 
-    - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/ufo/testinput_tier_1
+    - source: ufo/testinput_tier_1
       target: Data/ufo/testinput_tier_1
 
     - source: ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/testinput/obsop_name_map.yaml

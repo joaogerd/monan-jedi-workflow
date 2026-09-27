@@ -7,6 +7,7 @@ current process; it only generates an auditable shell snippet for the job script
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import warnings
@@ -18,6 +19,57 @@ import yaml
 from .config import require_key
 
 _ENV_REFERENCE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+
+
+def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -> dict[str, str]:
+    """Resolve stack settings from the MONAN-JEDI ecosystem contract v2."""
+    install = Path(install_root)
+    stack = Path(stack_root)
+    manifest = install / "share" / "monan-jedi" / "install-manifest.json"
+    if not manifest.is_file():
+        warnings.warn(
+            "MONAN-JEDI install has no ecosystem contract v2; using the "
+            "legacy JACI stack defaults. Reinstall MONAN-JEDI before the "
+            "next compatibility window.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        env_name = "jaci-mpas-jedi-gcc12-craympich"
+        return {
+            "stack_env_name": env_name,
+            "stack_env_module": "cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0",
+            "stack_site_setup": "configs/sites/tier2/jaci/setup.sh",
+            "stack_module_root": str(stack / "envs" / env_name / "modules"),
+        }
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Invalid MONAN-JEDI runtime contract: {manifest}: {error}") from error
+
+    if not isinstance(payload, dict) or payload.get("ecosystem_contract_version") != 2:
+        raise ValueError(
+            "MONAN-JEDI installation does not provide ecosystem contract v2; "
+            "reinstall the producer before using maintained workflow cases."
+        )
+    if payload.get("contract") != "monan-jedi-runtime-v2":
+        raise ValueError("Unsupported MONAN-JEDI runtime contract identifier.")
+
+    settings = payload.get("stack")
+    if not isinstance(settings, dict):
+        raise ValueError("MONAN-JEDI runtime contract has no stack block.")
+    for key in ("env_name", "env_module", "site_setup", "module_root_template"):
+        if not isinstance(settings.get(key), str) or not settings[key]:
+            raise ValueError(f"Runtime contract stack.{key} must be a non-empty string.")
+
+    module_root = stack / settings["module_root_template"].format(
+        env_name=settings["env_name"]
+    )
+    return {
+        "stack_env_name": settings["env_name"],
+        "stack_env_module": settings["env_module"],
+        "stack_site_setup": settings["site_setup"],
+        "stack_module_root": str(module_root),
+    }
 
 
 def _quote_shell(value: Any) -> str:
@@ -125,15 +177,27 @@ def render_site_environment_block(path: str | Path) -> str:
 
     if stack.get("load", False):
         stack_root = require_key(stack, "root", "site.yaml stack")
-        stack_env_name = str(stack.get("env_name", "jaci-mpas-jedi-gcc12-craympich"))
-        stack_module_root = stack.get(
-            "module_root",
-            str(Path(str(stack_root)) / "envs" / stack_env_name / "modules"),
-        )
-        stack_env_module = require_key(stack, "env_module", "site.yaml stack")
-        stack_site_setup = stack.get(
-            "site_setup",
-            str(Path(str(stack_root)) / "configs" / "sites" / "tier2" / "jaci" / "setup.sh"),
+        contract = runtime_contract_context(install_root, stack_root)
+
+        for key, derived_key in (
+            ("env_name", "stack_env_name"),
+            ("env_module", "stack_env_module"),
+            ("module_root", "stack_module_root"),
+        ):
+            explicit = stack.get(key)
+            if explicit is not None and str(explicit) != contract[derived_key]:
+                warnings.warn(
+                    f"site.yaml stack.{key} is deprecated and differs from the "
+                    "installed runtime contract; the installed contract wins.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
+        stack_env_name = contract["stack_env_name"]
+        stack_module_root = contract["stack_module_root"]
+        stack_env_module = contract["stack_env_module"]
+        stack_site_setup = str(
+            Path(str(stack_root)) / contract["stack_site_setup"]
         )
 
         lines.append(_export("MONAN_LOAD_STACK", "true"))
@@ -147,6 +211,7 @@ def render_site_environment_block(path: str | Path) -> str:
         lines.extend(
             [
                 "",
+                "module purge",
                 "case \"$-\" in",
                 "  *u*) monan_had_nounset=1 ;;",
                 "  *) monan_had_nounset=0 ;;",

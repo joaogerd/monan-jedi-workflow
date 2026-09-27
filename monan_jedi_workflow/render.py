@@ -11,6 +11,7 @@ from typing import Any
 from .config import ExperimentConfig, require_key
 from .pbs_directives import pbs_header_lines
 from .runtime import get_rendered_dir, get_runtime_dir
+from .site import runtime_contract_context
 
 
 def _quote(value: str) -> str:
@@ -240,6 +241,7 @@ def render_pbs(config: ExperimentConfig) -> str:
         anchors.get("stack_root"),
         "pbs.environment_anchors.stack_root",
     )
+    contract_context = runtime_contract_context(install_root, stack_root)
 
     runtime_env = pbs.get("runtime", {})
     export_map = {
@@ -261,7 +263,13 @@ def render_pbs(config: ExperimentConfig) -> str:
         isinstance(item, str) and item.strip() for item in bootstrap
     ):
         raise ValueError("pbs.bootstrap must be a list of non-empty shell commands")
-    bootstrap_block = "\n".join(bootstrap)
+    rendered_bootstrap: list[str] = []
+    for item in bootstrap:
+        rendered = item
+        for name, value in contract_context.items():
+            rendered = rendered.replace("{" + name + "}", value)
+        rendered_bootstrap.append(rendered)
+    bootstrap_block = "\n".join(rendered_bootstrap)
     if bootstrap_block:
         bootstrap_block += "\n\n"
 

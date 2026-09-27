@@ -72,6 +72,19 @@ computação.
 Os YAMLs cycle-aware podem referenciar essas âncoras dentro de `variables:`.
 Referências de ambiente não definidas falham durante a resolução do caso.
 
+A identidade compatível do stack não é repetida nos YAMLs do workflow. O
+workflow lê:
+
+```text
+${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/install-manifest.json
+```
+
+e usa `ecosystem_contract_version: 2` para obter `env_name`, `env_module`,
+`site_setup` e o layout da árvore de módulos. Assim, trocar `STACK_ROOT`
+troca o checkout selecionado sem criar uma segunda fonte de verdade para o
+módulo JEDI. Instalações antigas sem o contrato v2 entram apenas no fallback
+JACI depreciado e emitem `DeprecationWarning`.
+
 ## Primeiro ciclo
 
 Um caso cíclico contém, no mínimo:

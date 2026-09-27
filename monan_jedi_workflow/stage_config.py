@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .cycle_context import CycleContext
+from .site import runtime_contract_context
 from .yaml_utils import load_yaml_file
 
 
@@ -84,6 +85,16 @@ def render_declared_variables(
             )
         expanded = _expand_environment(value, label=variable_label)
         rendered[name] = render_text(expanded, rendered, label=variable_label)
+
+    # Once the two public anchors are known, derive stack/module settings from
+    # the installed MONAN-JEDI contract. Maintained stage YAMLs must not copy
+    # those values independently.
+    install_root = rendered.get("monan_jedi_install_root")
+    stack_root = rendered.get("stack_root")
+    if install_root and stack_root:
+        for name, value in runtime_contract_context(install_root, stack_root).items():
+            rendered.setdefault(name, value)
+
     return rendered
 
 

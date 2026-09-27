@@ -106,6 +106,22 @@ background/mpasout.2018-04-14_21.00.00.nc: 2018-04-14_21:00:00
 templateFields.10242.nc: 2018-04-15_00:00:00
 ```
 
+As observações de 2018 são **dados científicos do caso**. Elas não são obtidas
+do `MONAN_JEDI_INSTALL_ROOT`. O `data_root` deste baseline deve conter:
+
+```text
+ufo/testinput_tier_1/
+  sondes_obs_2018041500_m.nc4
+  gnssro_obs_2018041500_s.nc4
+  sfc_obs_2018041500_m.nc4
+```
+
+Se esses arquivos estiverem em outra área de referência, ajuste
+`paths.data_root` ou prepare uma árvore de dados equivalente antes de
+`prepare-runtime`. Não aponte o workflow para
+`share/monan-jedi/ufo/testinput_tier_1`: esse caminho existe apenas como
+fixture legado do validador do produtor e não faz parte da API v2.
+
 ### `validation.yaml`
 
 Define o que precisa ser validado antes de executar o baseline:
@@ -218,6 +234,11 @@ rendered_pbs:  /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow_v2/b
 ```
 
 ## 7. Execução validada no JACI
+
+> **Registro histórico de proveniência:** os caminhos absolutos desta seção
+> registram a execução original validada em 2026. Eles não são defaults, não
+> devem ser copiados para configuração atual e não fazem parte do contrato do
+> ecossistema. Use os caminhos com `$USER` e os dois anchors descritos acima.
 
 O baseline foi validado com sucesso no JACI com o seguinte registro:
 

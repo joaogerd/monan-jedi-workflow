@@ -76,6 +76,7 @@ runtime:
 
     assert 'export MONAN_JEDI_INSTALL_ROOT="/runtime/monan-jedi"' in rendered
     assert 'export STACK_ROOT="/runtime/spack-stack"' in rendered
+    assert "module purge" in rendered
     assert (
         'export STACK_MODULE_ROOT="/runtime/spack-stack/envs/'
         'jaci-mpas-jedi-gcc12-craympich/modules"'
@@ -176,7 +177,7 @@ def test_legacy_static_pbs_requires_and_bootstraps_shared_anchors(monkeypatch) -
     assert "export MONAN_JEDI_INSTALL_ROOT=/runtime/monan-jedi" in rendered
     assert "export STACK_ROOT=/runtime/spack-stack" in rendered
     assert 'pushd "${STACK_ROOT}" >/dev/null' in rendered
-    assert 'module use "${STACK_ROOT}/envs/jaci-mpas-jedi-gcc12-craympich/modules"' in rendered
+    assert 'module use "/runtime/spack-stack/envs/jaci-mpas-jedi-gcc12-craympich/modules"' in rendered
     assert rendered.index("set +u") < rendered.index("source configs/sites/tier2/jaci/setup.sh")
     assert rendered.index('if [[ "${monan_had_nounset}" == "1" ]]') > rendered.index(
         "source configs/sites/tier2/jaci/setup.sh"
@@ -209,7 +210,8 @@ def test_maintained_jaci_bootstraps_protect_setup_from_nounset() -> None:
         text = path.read_text(encoding="utf-8")
         assert "set +u" in text
         assert "monan_had_nounset" in text
-        assert text.index("set +u") < text.index("source configs/sites/tier2/jaci/setup.sh")
+        assert "source {stack_site_setup}" in text
+        assert text.index("set +u") < text.index("source {stack_site_setup}")
 
 
 
@@ -222,8 +224,14 @@ def test_cycle_jaci_bootstrap_shell_braces_survive_template_rendering() -> None:
     ):
         document = yaml.safe_load((ROOT / relative).read_text(encoding="utf-8"))
         bootstrap = document[root_key]["pbs"]["bootstrap"]
+        context = {
+            "stack_root": "/runtime/spack-stack",
+            "stack_site_setup": "configs/sites/tier2/jaci/setup.sh",
+            "stack_module_root": "/runtime/spack-stack/envs/jaci-test/modules",
+            "stack_env_module": "test/jedi-mpas-env/2.0.0",
+        }
         rendered = [
-            render_text(item, {"stack_root": "/runtime/spack-stack"}, label=relative)
+            render_text(item, context, label=relative)
             for item in bootstrap
         ]
         restore = next(item for item in rendered if "monan_had_nounset" in item and "if [[" in item)
@@ -252,7 +260,8 @@ def test_static_baseline_runtime_uses_installed_support_only() -> None:
     assert installed_sources
     assert all("/share/" in source for source in installed_sources)
     assert any("/share/monan-jedi/mpas-jedi/namelists/" in source for source in installed_sources)
-    assert any("/share/monan-jedi/ufo/testinput_tier_1" in source for source in installed_sources)
+    assert not any("/share/monan-jedi/ufo/" in source for source in installed_sources)
+    assert any(item["source"] == "ufo/testinput_tier_1" for item in runtime["required_links"])
 
 
 def test_runtime_paths_expand_install_anchor(monkeypatch, tmp_path: Path) -> None:
