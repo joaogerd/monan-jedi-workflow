@@ -235,6 +235,11 @@ rendered_pbs:  /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow_v2/b
 
 ## 7. Execução validada no JACI
 
+> **Registro histórico de proveniência:** os caminhos absolutos desta seção
+> registram a execução original validada em 2026. Eles não são defaults, não
+> devem ser copiados para configuração atual e não fazem parte do contrato do
+> ecossistema. Use os caminhos com `$USER` e os dois anchors descritos acima.
+
 O baseline foi validado com sucesso no JACI com o seguinte registro:
 
 | Campo | Valor |
