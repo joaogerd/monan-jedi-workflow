@@ -176,7 +176,7 @@ def test_legacy_static_pbs_requires_and_bootstraps_shared_anchors(monkeypatch) -
     assert "export MONAN_JEDI_INSTALL_ROOT=/runtime/monan-jedi" in rendered
     assert "export STACK_ROOT=/runtime/spack-stack" in rendered
     assert 'pushd "${STACK_ROOT}" >/dev/null' in rendered
-    assert 'module use "${STACK_ROOT}/envs/jaci-mpas-jedi-gcc12-craympich/modules"' in rendered
+    assert 'module use "/runtime/spack-stack/envs/jaci-mpas-jedi-gcc12-craympich/modules"' in rendered
     assert rendered.index("set +u") < rendered.index("source configs/sites/tier2/jaci/setup.sh")
     assert rendered.index('if [[ "${monan_had_nounset}" == "1" ]]') > rendered.index(
         "source configs/sites/tier2/jaci/setup.sh"
