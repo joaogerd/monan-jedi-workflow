@@ -154,11 +154,13 @@ afterward, as shown by the maintained examples.
 ### Static baseline runtime support
 
 The maintained `3dfgat_mpastatic_x1.10242_2018041500` experiment does not
-read files from a MONAN-JEDI source checkout. Stream lists, `geovars.yaml`,
-`keptvars.yaml`, `obsop_name_map.yaml`, the three baseline UFO observation
-files, and MPAS physics tables are resolved below
+read files from a MONAN-JEDI source checkout. Version-coupled runtime support
+(stream lists, `geovars.yaml`, `keptvars.yaml`, `obsop_name_map.yaml` and
+MPAS physics tables) is resolved below
 `${MONAN_JEDI_INSTALL_ROOT}/share`.
 
-Relative scientific inputs such as the 2018 background states, invariant and
-mesh partition remain rooted in the experiment's configured `paths.data_root`.
-This keeps software/runtime ownership separate from experiment data ownership.
+Scientific case inputs remain under the experiment's configured
+`paths.data_root`: the 2018 background states, invariant, mesh/partition and
+the date-specific UFO observation directory are case data, not installed
+software. This boundary is part of the ecosystem runtime standard and prevents
+a generic MONAN-JEDI installation from becoming tied to one historical cycle.
