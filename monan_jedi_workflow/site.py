@@ -39,8 +39,8 @@ def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -
 
     if not isinstance(payload, dict):
         raise ValueError("MONAN-JEDI runtime contract root must be a JSON object.")
-    if payload.get("schema_version") != 2:
-        raise ValueError("MONAN-JEDI runtime contract schema_version must be 2.")
+    # schema_version=1 is the producer compatibility envelope. The normative
+    # cross-repository API is selected only by ecosystem_contract_version.
     if payload.get("ecosystem_contract_version") != 2:
         raise ValueError(
             "MONAN-JEDI installation does not provide ecosystem contract v2; "
@@ -52,15 +52,16 @@ def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -
     settings = payload.get("stack")
     if not isinstance(settings, dict):
         raise ValueError("MONAN-JEDI runtime contract has no stack block.")
-    for key in ("env_name", "env_module", "site_setup", "module_root"):
+    for key in ("env_name", "env_module", "site_setup", "module_root_template"):
         if not isinstance(settings.get(key), str) or not settings[key]:
             raise ValueError(f"Runtime contract stack.{key} must be a non-empty string.")
-    if "{" in settings["module_root"] or "}" in settings["module_root"]:
-        raise ValueError("Runtime contract stack.module_root must be a concrete path.")
     if Path(settings["site_setup"]).is_absolute():
         raise ValueError("Runtime contract stack.site_setup must be relative to STACK_ROOT.")
 
-    module_value = Path(settings["module_root"]).expanduser()
+    module_relative = settings["module_root_template"].format(
+        env_name=settings["env_name"]
+    )
+    module_value = Path(module_relative).expanduser()
     module_root = module_value if module_value.is_absolute() else stack / module_value
     return {
         "stack_env_name": settings["env_name"],
