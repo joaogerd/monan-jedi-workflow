@@ -32,7 +32,7 @@ def _write_runtime_contract(
     manifest.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "ecosystem_contract_version": 2,
                 "contract": "monan-jedi-runtime-v2",
                 "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
