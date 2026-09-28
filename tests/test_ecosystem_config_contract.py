@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -19,9 +20,33 @@ from monan_jedi_workflow.stage_config import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_stage_variables_expand_ecosystem_environment(monkeypatch) -> None:
-    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", "/runtime/monan-jedi")
-    monkeypatch.setenv("STACK_ROOT", "/runtime/spack-stack")
+def _write_runtime_contract(install_root: Path) -> None:
+    manifest = install_root / "share" / "monan-jedi" / "install-manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "ecosystem_contract_version": 2,
+                "contract": "monan-jedi-runtime-v2",
+                "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
+                "stack": {
+                    "env_name": "jaci-test",
+                    "env_module": "test/jedi-mpas-env/2.0.0",
+                    "site_setup": "configs/sites/tier2/jaci/setup.sh",
+                    "module_root_template": "envs/{env_name}/modules",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_stage_variables_expand_ecosystem_environment(monkeypatch, tmp_path: Path) -> None:
+    install = tmp_path / "monan-jedi"
+    stack = tmp_path / "spack-stack"
+    _write_runtime_contract(install)
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(stack))
 
     context = render_declared_variables(
         {
@@ -35,9 +60,10 @@ def test_stage_variables_expand_ecosystem_environment(monkeypatch) -> None:
         label="jedi",
     )
 
-    assert context["monan_jedi_install_root"] == "/runtime/monan-jedi"
-    assert context["stack_root"] == "/runtime/spack-stack"
-    assert context["variational"] == "/runtime/monan-jedi/bin/mpasjedi_variational.x"
+    assert context["monan_jedi_install_root"] == str(install)
+    assert context["stack_root"] == str(stack)
+    assert context["variational"] == str(install / "bin" / "mpasjedi_variational.x")
+    assert context["stack_env_module"] == "test/jedi-mpas-env/2.0.0"
 
 
 def test_stage_variables_reject_missing_environment(monkeypatch) -> None:
@@ -52,8 +78,11 @@ def test_stage_variables_reject_missing_environment(monkeypatch) -> None:
 
 
 def test_site_profile_uses_install_and_stack_roots(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", "/runtime/monan-jedi")
-    monkeypatch.setenv("STACK_ROOT", "/runtime/spack-stack")
+    install = tmp_path / "monan-jedi"
+    stack_root = tmp_path / "spack-stack"
+    _write_runtime_contract(install)
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(stack_root))
     site = tmp_path / "site.yaml"
     site.write_text(
         """
@@ -74,15 +103,14 @@ runtime:
 
     rendered = render_site_environment_block(site)
 
-    assert 'export MONAN_JEDI_INSTALL_ROOT="/runtime/monan-jedi"' in rendered
-    assert 'export STACK_ROOT="/runtime/spack-stack"' in rendered
+    assert f'export MONAN_JEDI_INSTALL_ROOT="{install}"' in rendered
+    assert f'export STACK_ROOT="{stack_root}"' in rendered
     assert "module purge" in rendered
     assert (
-        'export STACK_MODULE_ROOT="/runtime/spack-stack/envs/'
-        'jaci-mpas-jedi-gcc12-craympich/modules"'
+        f'export STACK_MODULE_ROOT="{stack_root}/envs/jaci-test/modules"'
     ) in rendered
     assert (
-        'export STACK_SITE_SETUP="/runtime/spack-stack/configs/sites/tier2/jaci/setup.sh"'
+        f'export STACK_SITE_SETUP="{stack_root}/configs/sites/tier2/jaci/setup.sh"'
     ) in rendered
     assert 'export PATH="${MONAN_JEDI_INSTALL_ROOT}/bin:${PATH}"' in rendered
     assert "MPAS_BUNDLE_BUILD" not in rendered
@@ -166,19 +194,26 @@ def test_legacy_renderer_no_longer_derives_source_or_build_roots() -> None:
     assert "pbs.environment_anchors.stack_root" in source
 
 
-def test_legacy_static_pbs_requires_and_bootstraps_shared_anchors(monkeypatch) -> None:
-    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", "/runtime/monan-jedi")
-    monkeypatch.setenv("STACK_ROOT", "/runtime/spack-stack")
+def test_legacy_static_pbs_requires_and_bootstraps_shared_anchors(
+    monkeypatch, tmp_path: Path
+) -> None:
+    install = tmp_path / "monan-jedi"
+    stack_root = tmp_path / "spack-stack"
+    _write_runtime_contract(install)
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(stack_root))
     config = load_experiment_config(
         ROOT / "configs/experiments/3dfgat_mpastatic_x1.10242_2018041500"
     )
     rendered = render_pbs(config)
 
-    assert "export MONAN_JEDI_INSTALL_ROOT=/runtime/monan-jedi" in rendered
-    assert "export STACK_ROOT=/runtime/spack-stack" in rendered
+    assert f"export MONAN_JEDI_INSTALL_ROOT={install}" in rendered
+    assert f"export STACK_ROOT={stack_root}" in rendered
     assert 'pushd "${STACK_ROOT}" >/dev/null' in rendered
-    assert 'module use "/runtime/spack-stack/envs/jaci-mpas-jedi-gcc12-craympich/modules"' in rendered
-    assert rendered.index("set +u") < rendered.index("source configs/sites/tier2/jaci/setup.sh")
+    assert f'module use "{stack_root}/envs/jaci-test/modules"' in rendered
+    assert rendered.index("set +u") < rendered.index(
+        "source configs/sites/tier2/jaci/setup.sh"
+    )
     assert rendered.index('if [[ "${monan_had_nounset}" == "1" ]]') > rendered.index(
         "source configs/sites/tier2/jaci/setup.sh"
     )
