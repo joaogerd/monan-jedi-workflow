@@ -54,7 +54,8 @@ jobs:
           mkdir -p "$STACK_ROOT"
           cat > "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi/install-manifest.json" <<'JSON'
           {
-            "ecosystem_contract_version": 2,
+            "schema_version": 2,
+                "ecosystem_contract_version": 2,
             "contract": "monan-jedi-runtime-v2",
             "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
             "stack": {
