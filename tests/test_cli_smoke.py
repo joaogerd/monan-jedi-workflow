@@ -20,7 +20,7 @@ def run_cli(monkeypatch, tmp_path: Path, *args: str) -> int:
     manifest.write_text(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "ecosystem_contract_version": 2,
                 "contract": "monan-jedi-runtime-v2",
                 "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
