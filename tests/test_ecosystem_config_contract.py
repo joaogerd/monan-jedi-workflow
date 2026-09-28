@@ -20,7 +20,11 @@ from monan_jedi_workflow.stage_config import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _write_runtime_contract(install_root: Path) -> None:
+def _write_runtime_contract(
+    install_root: Path,
+    *,
+    public_anchors: list[str] | None = None,
+) -> None:
     manifest = install_root / "share" / "monan-jedi" / "install-manifest.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text(
@@ -28,7 +32,9 @@ def _write_runtime_contract(install_root: Path) -> None:
             {
                 "ecosystem_contract_version": 2,
                 "contract": "monan-jedi-runtime-v2",
-                "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
+                "public_anchors": public_anchors
+                if public_anchors is not None
+                else ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
                 "stack": {
                     "env_name": "jaci-test",
                     "env_module": "test/jedi-mpas-env/2.0.0",
@@ -74,6 +80,30 @@ def test_stage_variables_require_installed_runtime_contract(
     monkeypatch.setenv("STACK_ROOT", str(tmp_path / "spack-stack"))
 
     with pytest.raises(StageConfigurationError, match="ecosystem contract v2"):
+        render_declared_variables(
+            {
+                "variables": {
+                    "monan_jedi_install_root": "${MONAN_JEDI_INSTALL_ROOT}",
+                    "stack_root": "${STACK_ROOT}",
+                }
+            },
+            {"cycle_id": "20180415T000000Z"},
+            label="jedi",
+        )
+
+
+def test_stage_variables_reject_unexpected_runtime_public_anchors(
+    monkeypatch, tmp_path: Path
+) -> None:
+    install = tmp_path / "monan-jedi"
+    _write_runtime_contract(
+        install,
+        public_anchors=["MONAN_JEDI_INSTALL_ROOT"],
+    )
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(tmp_path / "spack-stack"))
+
+    with pytest.raises(StageConfigurationError, match="public anchors"):
         render_declared_variables(
             {
                 "variables": {
