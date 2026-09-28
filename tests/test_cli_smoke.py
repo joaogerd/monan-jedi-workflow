@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -11,15 +12,45 @@ EXPERIMENT_DIR = (
 EXPERIMENT_NAME = "3dfgat_mpastatic_x1.10242_2018041500"
 
 
-def run_cli(monkeypatch, *args: str) -> int:
-    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", "/runtime/monan-jedi")
-    monkeypatch.setenv("STACK_ROOT", "/runtime/spack-stack")
+def run_cli(monkeypatch, tmp_path: Path, *args: str) -> int:
+    install = tmp_path / "runtime" / "monan-jedi"
+    stack = tmp_path / "runtime" / "spack-stack"
+    manifest = install / "share" / "monan-jedi" / "install-manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "ecosystem_contract_version": 2,
+                "contract": "monan-jedi-runtime-v2",
+                "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
+                "layout": {},
+                "runtime_support": [],
+                "capabilities": {
+                    "mpas": True,
+                    "mpas_jedi": True,
+                    "wps": False,
+                    "obs2ioda": False,
+                },
+                "canonical_executables": [],
+                "stack": {
+                    "env_name": "test-env",
+                    "env_module": "test/jedi-mpas-env/2.0.0",
+                    "site_setup": "configs/sites/test/setup.sh",
+                    "module_root_template": "envs/{env_name}/modules",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(stack))
     monkeypatch.setattr(sys, "argv", ["monan-jedi-workflow", *args])
     return cli.main()
 
 
-def test_validate_config_cli_reports_baseline_contract(monkeypatch, capsys):
-    status = run_cli(monkeypatch, "validate-config", str(EXPERIMENT_DIR))
+def test_validate_config_cli_reports_baseline_contract(monkeypatch, tmp_path, capsys):
+    status = run_cli(monkeypatch, tmp_path, "validate-config", str(EXPERIMENT_DIR))
 
     captured = capsys.readouterr()
 
@@ -30,7 +61,7 @@ def test_validate_config_cli_reports_baseline_contract(monkeypatch, capsys):
 def test_render_yaml_cli_writes_expected_file(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
 
-    status = run_cli(monkeypatch, "render-yaml", str(EXPERIMENT_DIR))
+    status = run_cli(monkeypatch, tmp_path, "render-yaml", str(EXPERIMENT_DIR))
 
     captured = capsys.readouterr()
     rendered = tmp_path / "build/rendered" / f"{EXPERIMENT_NAME}.yaml"
@@ -44,7 +75,7 @@ def test_render_yaml_cli_writes_expected_file(monkeypatch, tmp_path, capsys):
 def test_render_pbs_cli_writes_executable_script(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
 
-    status = run_cli(monkeypatch, "render-pbs", str(EXPERIMENT_DIR))
+    status = run_cli(monkeypatch, tmp_path, "render-pbs", str(EXPERIMENT_DIR))
 
     captured = capsys.readouterr()
     rendered = tmp_path / "build/rendered" / f"{EXPERIMENT_NAME}.pbs"
@@ -63,7 +94,7 @@ def test_render_pbs_cli_avoids_legacy_workflow_environment_source(
 ):
     monkeypatch.chdir(tmp_path)
 
-    status = run_cli(monkeypatch, "render-pbs", str(EXPERIMENT_DIR))
+    status = run_cli(monkeypatch, tmp_path, "render-pbs", str(EXPERIMENT_DIR))
 
     capsys.readouterr()
     rendered = tmp_path / "build/rendered" / f"{EXPERIMENT_NAME}.pbs"
@@ -80,7 +111,7 @@ def test_render_pbs_cli_detects_mpi_layout_from_pbs_nodefile(
 ):
     monkeypatch.chdir(tmp_path)
 
-    status = run_cli(monkeypatch, "render-pbs", str(EXPERIMENT_DIR))
+    status = run_cli(monkeypatch, tmp_path, "render-pbs", str(EXPERIMENT_DIR))
 
     capsys.readouterr()
     rendered = tmp_path / "build/rendered" / f"{EXPERIMENT_NAME}.pbs"
