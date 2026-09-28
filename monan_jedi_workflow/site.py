@@ -21,16 +21,32 @@ from .config import require_key
 _ENV_REFERENCE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
 
 
-def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -> dict[str, str]:
-    """Resolve stack settings from the MONAN-JEDI ecosystem contract v2."""
+def runtime_contract_context(
+    install_root: str | Path,
+    stack_root: str | Path,
+    *,
+    allow_legacy: bool = False,
+) -> dict[str, str]:
+    """Resolve stack settings from the MONAN-JEDI ecosystem contract v2.
+
+    Maintained paths require a valid installed v2 manifest. The legacy JACI
+    fallback is available only to callers that explicitly opt in while reading
+    an old site profile.
+    """
     install = Path(install_root)
     stack = Path(stack_root)
     manifest = install / "share" / "monan-jedi" / "install-manifest.json"
     if not manifest.is_file():
+        if not allow_legacy:
+            raise ValueError(
+                "MONAN-JEDI install does not publish ecosystem contract v2: "
+                f"{manifest}. Reinstall/update MONAN-JEDI before using maintained "
+                "workflow cases."
+            )
         warnings.warn(
-            "MONAN-JEDI install has no ecosystem contract v2; using the "
-            "legacy JACI stack defaults. Reinstall MONAN-JEDI before the "
-            "next compatibility window.",
+            "Legacy site profile is using JACI stack defaults because the "
+            "MONAN-JEDI install has no ecosystem contract v2. Migrate the site "
+            "profile to jedi.install_root backed by a current MONAN-JEDI install.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -148,6 +164,7 @@ def render_site_environment_block(path: str | Path) -> str:
 
     install_root = jedi.get("install_root")
     legacy_bundle = jedi.get("mpas_bundle_build")
+    using_legacy_bundle = install_root is None and legacy_bundle is not None
     if install_root is None:
         if legacy_bundle is None:
             raise KeyError("site.yaml jedi.install_root is required")
@@ -177,7 +194,11 @@ def render_site_environment_block(path: str | Path) -> str:
 
     if stack.get("load", False):
         stack_root = require_key(stack, "root", "site.yaml stack")
-        contract = runtime_contract_context(install_root, stack_root)
+        contract = runtime_contract_context(
+            install_root,
+            stack_root,
+            allow_legacy=using_legacy_bundle,
+        )
 
         for key, derived_key in (
             ("env_name", "stack_env_name"),
