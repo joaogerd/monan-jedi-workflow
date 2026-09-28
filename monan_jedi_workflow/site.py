@@ -69,6 +69,8 @@ def runtime_contract_context(
         )
     if payload.get("contract") != "monan-jedi-runtime-v2":
         raise ValueError("Unsupported MONAN-JEDI runtime contract identifier.")
+    if payload.get("public_anchors") != ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"]:
+        raise ValueError("Unexpected MONAN-JEDI runtime contract public anchors.")
 
     settings = payload.get("stack")
     if not isinstance(settings, dict):
