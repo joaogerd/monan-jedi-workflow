@@ -39,8 +39,8 @@ def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -
 
     if not isinstance(payload, dict):
         raise ValueError("MONAN-JEDI runtime contract root must be a JSON object.")
-    # schema_version=1 is the producer compatibility envelope. The normative
-    # cross-repository API is selected only by ecosystem_contract_version.
+    if payload.get("schema_version") != 2:
+        raise ValueError("MONAN-JEDI runtime contract schema_version must be 2.")
     if payload.get("ecosystem_contract_version") != 2:
         raise ValueError(
             "MONAN-JEDI installation does not provide ecosystem contract v2; "
