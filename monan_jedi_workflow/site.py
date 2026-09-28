@@ -43,19 +43,30 @@ def runtime_contract_context(
                 f"{manifest}. Reinstall/update MONAN-JEDI before using maintained "
                 "workflow cases."
             )
+        env_name = os.environ.get("STACK_ENV_NAME")
+        env_module = os.environ.get("STACK_ENV_MODULE")
+        site_setup = os.environ.get("STACK_SITE_SETUP")
+        if not env_name or not env_module or not site_setup:
+            raise ValueError(
+                "Legacy site profile has no runtime contract v2. Explicitly set "
+                "STACK_ENV_NAME, STACK_ENV_MODULE and STACK_SITE_SETUP, or migrate "
+                "to a current MONAN-JEDI installation."
+            )
         warnings.warn(
-            "Legacy site profile is using JACI stack defaults because the "
-            "MONAN-JEDI install has no ecosystem contract v2. Migrate the site "
-            "profile to jedi.install_root backed by a current MONAN-JEDI install.",
+            "Legacy site profile is using explicitly supplied stack identity. "
+            "This compatibility path is deprecated; migrate to the installed "
+            "MONAN-JEDI runtime contract v2.",
             DeprecationWarning,
             stacklevel=2,
         )
-        env_name = "jaci-mpas-jedi-gcc12-craympich"
+        module_root = os.environ.get("STACK_MODULE_ROOT")
+        if not module_root:
+            module_root = str(stack / "envs" / env_name / "modules")
         return {
             "stack_env_name": env_name,
-            "stack_env_module": "cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0",
-            "stack_site_setup": "configs/sites/tier2/jaci/setup.sh",
-            "stack_module_root": str(stack / "envs" / env_name / "modules"),
+            "stack_env_module": env_module,
+            "stack_site_setup": site_setup,
+            "stack_module_root": module_root,
         }
     try:
         payload = json.loads(manifest.read_text(encoding="utf-8"))
