@@ -46,7 +46,11 @@ def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"Invalid MONAN-JEDI runtime contract: {manifest}: {error}") from error
 
-    if not isinstance(payload, dict) or payload.get("ecosystem_contract_version") != 2:
+    if not isinstance(payload, dict):
+        raise ValueError("MONAN-JEDI runtime contract root must be a JSON object.")
+    if payload.get("schema_version") != 2:
+        raise ValueError("MONAN-JEDI runtime contract schema_version must be 2.")
+    if payload.get("ecosystem_contract_version") != 2:
         raise ValueError(
             "MONAN-JEDI installation does not provide ecosystem contract v2; "
             "reinstall the producer before using maintained workflow cases."
