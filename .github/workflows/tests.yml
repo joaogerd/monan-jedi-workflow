@@ -47,9 +47,24 @@ jobs:
 
       - name: Check safe workflow targets
         env:
-          MONAN_JEDI_INSTALL_ROOT: /runtime/monan-jedi
-          STACK_ROOT: /runtime/spack-stack
+          MONAN_JEDI_INSTALL_ROOT: ${{ runner.temp }}/monan-jedi
+          STACK_ROOT: ${{ runner.temp }}/spack-stack
         run: |
+          mkdir -p "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi"
+          mkdir -p "$STACK_ROOT"
+          cat > "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi/install-manifest.json" <<'JSON'
+          {
+            "ecosystem_contract_version": 2,
+            "contract": "monan-jedi-runtime-v2",
+            "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
+            "stack": {
+              "env_name": "jaci-test",
+              "env_module": "test/jedi-mpas-env/2.0.0",
+              "site_setup": "configs/sites/tier2/jaci/setup.sh",
+              "module_root_template": "envs/{env_name}/modules"
+            }
+          }
+          JSON
           make validate
           make render-yaml
           make render-pbs
