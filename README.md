@@ -85,9 +85,14 @@ troca o checkout selecionado sem criar uma segunda fonte de verdade para o
 módulo JEDI.
 
 **Casos mantidos exigem esse manifesto v2.** Se o arquivo não existir ou estiver
-inválido, a preparação/renderização falha antes de gerar/submeter PBS. O fallback
-JACI antigo existe somente para perfis de site que ainda declaram explicitamente
-o campo depreciado `jedi.mpas_bundle_build`; ele não é usado por casos atuais.
+inválido, a preparação/renderização falha antes de gerar/submeter PBS.
+
+Perfis legados que ainda usam `jedi.mpas_bundle_build` não recebem mais
+defaults JACI embutidos no código. Para esse caminho depreciado, a identidade do
+stack precisa ser fornecida explicitamente por `STACK_ENV_NAME`,
+`STACK_ENV_MODULE` e `STACK_SITE_SETUP` (e opcionalmente
+`STACK_MODULE_ROOT`). Isso preserva compatibilidade sem criar uma segunda
+fonte de verdade silenciosa.
 
 ## Primeiro ciclo
 
