@@ -27,20 +27,11 @@ def runtime_contract_context(install_root: str | Path, stack_root: str | Path) -
     stack = Path(stack_root)
     manifest = install / "share" / "monan-jedi" / "install-manifest.json"
     if not manifest.is_file():
-        warnings.warn(
-            "MONAN-JEDI install has no ecosystem contract v2; using the "
-            "legacy JACI stack defaults. Reinstall MONAN-JEDI before the "
-            "next compatibility window.",
-            DeprecationWarning,
-            stacklevel=2,
+        raise FileNotFoundError(
+            "MONAN-JEDI ecosystem runtime contract v2 not found: "
+            f"{manifest}. Reinstall MONAN-JEDI or use an explicitly declared "
+            "legacy site profile during the compatibility window."
         )
-        env_name = "jaci-mpas-jedi-gcc12-craympich"
-        return {
-            "stack_env_name": env_name,
-            "stack_env_module": "cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0",
-            "stack_site_setup": "configs/sites/tier2/jaci/setup.sh",
-            "stack_module_root": str(stack / "envs" / env_name / "modules"),
-        }
     try:
         payload = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -181,21 +172,54 @@ def render_site_environment_block(path: str | Path) -> str:
 
     if stack.get("load", False):
         stack_root = require_key(stack, "root", "site.yaml stack")
-        contract = runtime_contract_context(install_root, stack_root)
-
-        for key, derived_key in (
-            ("env_name", "stack_env_name"),
-            ("env_module", "stack_env_module"),
-            ("module_root", "stack_module_root"),
-        ):
-            explicit = stack.get(key)
-            if explicit is not None and str(explicit) != contract[derived_key]:
-                warnings.warn(
-                    f"site.yaml stack.{key} is deprecated and differs from the "
-                    "installed runtime contract; the installed contract wins.",
-                    DeprecationWarning,
-                    stacklevel=2,
+        try:
+            contract = runtime_contract_context(install_root, stack_root)
+        except FileNotFoundError:
+            # Compatibility is explicit: old site files may carry the complete
+            # stack identity themselves for one migration window. Maintained
+            # site profiles omit these keys and therefore require contract v2.
+            legacy_env_name = stack.get("env_name")
+            legacy_env_module = stack.get("env_module")
+            if not legacy_env_name or not legacy_env_module:
+                raise
+            warnings.warn(
+                "site.yaml stack.env_name/env_module fallback is deprecated; "
+                "install MONAN-JEDI with ecosystem contract v2.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            legacy_site_setup = str(
+                stack.get("site_setup", "configs/sites/tier2/jaci/setup.sh")
+            )
+            legacy_module_root = str(
+                stack.get(
+                    "module_root",
+                    Path(str(stack_root))
+                    / "envs"
+                    / str(legacy_env_name)
+                    / "modules",
                 )
+            )
+            contract = {
+                "stack_env_name": str(legacy_env_name),
+                "stack_env_module": str(legacy_env_module),
+                "stack_site_setup": legacy_site_setup,
+                "stack_module_root": legacy_module_root,
+            }
+        else:
+            for key, derived_key in (
+                ("env_name", "stack_env_name"),
+                ("env_module", "stack_env_module"),
+                ("module_root", "stack_module_root"),
+            ):
+                explicit = stack.get(key)
+                if explicit is not None and str(explicit) != contract[derived_key]:
+                    warnings.warn(
+                        f"site.yaml stack.{key} is deprecated and differs from the "
+                        "installed runtime contract; the installed contract wins.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
 
         stack_env_name = contract["stack_env_name"]
         stack_module_root = contract["stack_module_root"]
