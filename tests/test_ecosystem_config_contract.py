@@ -66,6 +66,26 @@ def test_stage_variables_expand_ecosystem_environment(monkeypatch, tmp_path: Pat
     assert context["stack_env_module"] == "test/jedi-mpas-env/2.0.0"
 
 
+def test_stage_variables_require_installed_runtime_contract(
+    monkeypatch, tmp_path: Path
+) -> None:
+    install = tmp_path / "missing-contract"
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(tmp_path / "spack-stack"))
+
+    with pytest.raises(StageConfigurationError, match="ecosystem contract v2"):
+        render_declared_variables(
+            {
+                "variables": {
+                    "monan_jedi_install_root": "${MONAN_JEDI_INSTALL_ROOT}",
+                    "stack_root": "${STACK_ROOT}",
+                }
+            },
+            {"cycle_id": "20180415T000000Z"},
+            label="jedi",
+        )
+
+
 def test_stage_variables_reject_missing_environment(monkeypatch) -> None:
     monkeypatch.delenv("MISSING_MONAN_RUNTIME", raising=False)
 
@@ -91,8 +111,6 @@ site:
 stack:
   load: true
   root: ${STACK_ROOT}
-  env_name: jaci-mpas-jedi-gcc12-craympich
-  env_module: cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0
 jedi:
   install_root: ${MONAN_JEDI_INSTALL_ROOT}
 runtime:
@@ -220,6 +238,20 @@ def test_legacy_static_pbs_requires_and_bootstraps_shared_anchors(
     assert "MONAN_JEDI_RUN_ID" not in rendered
     assert "/builds/" not in rendered
 
+
+
+def test_static_pbs_rejects_install_without_runtime_contract(
+    monkeypatch, tmp_path: Path
+) -> None:
+    install = tmp_path / "missing-contract"
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(tmp_path / "spack-stack"))
+    config = load_experiment_config(
+        ROOT / "configs/experiments/3dfgat_mpastatic_x1.10242_2018041500"
+    )
+
+    with pytest.raises(ValueError, match="ecosystem contract v2"):
+        render_pbs(config)
 
 
 def test_legacy_static_pbs_rejects_missing_submission_anchor(monkeypatch) -> None:
