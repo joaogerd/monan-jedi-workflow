@@ -155,10 +155,11 @@ afterward, as shown by the maintained examples.
 
 The maintained `3dfgat_mpastatic_x1.10242_2018041500` experiment does not
 read files from a MONAN-JEDI source checkout. Stream lists, `geovars.yaml`,
-`keptvars.yaml`, `obsop_name_map.yaml`, the three baseline UFO observation
-files, and MPAS physics tables are resolved below
-`${MONAN_JEDI_INSTALL_ROOT}/share`.
+`keptvars.yaml`, `obsop_name_map.yaml` and MPAS physics tables are resolved
+below `${MONAN_JEDI_INSTALL_ROOT}/share`.
 
-Relative scientific inputs such as the 2018 background states, invariant and
-mesh partition remain rooted in the experiment's configured `paths.data_root`.
-This keeps software/runtime ownership separate from experiment data ownership.
+Date-specific observations are **scientific case data**, not software runtime.
+The three 2018 UFO observation files, background states, invariant and mesh
+partition therefore remain rooted in the experiment's configured
+`paths.data_root`. This is the same ownership boundary used by the rest of the
+ecosystem.
