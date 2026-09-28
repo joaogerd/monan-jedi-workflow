@@ -32,6 +32,18 @@ regra é intencional: strings de runtime que pertencem ao Shell/PBS, como
 referência declarada em `variables:` que não esteja definida é erro de
 configuração.
 
+As duas âncoras não são suficientes sozinhas: o diretório apontado por
+`MONAN_JEDI_INSTALL_ROOT` deve conter o contrato instalado:
+
+```text
+share/monan-jedi/install-manifest.json
+```
+
+com `ecosystem_contract_version: 2`. O workflow lê desse manifesto
+`env_name`, `env_module`, `site_setup` e o layout da árvore de módulos.
+Casos mantidos não usam defaults JACI copiados localmente quando esse manifesto
+está ausente ou inválido.
+
 ## `jedi.yaml`
 
 Contém o contrato da análise: horários, runtime, background, links, templates, PBS e validação.
