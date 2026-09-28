@@ -82,8 +82,8 @@ ${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/install-manifest.json
 e usa `ecosystem_contract_version: 2` para obter `env_name`, `env_module`,
 `site_setup` e o layout da árvore de módulos. Assim, trocar `STACK_ROOT`
 troca o checkout selecionado sem criar uma segunda fonte de verdade para o
-módulo JEDI. Instalações antigas sem o contrato v2 entram apenas no fallback
-JACI depreciado e emitem `DeprecationWarning`.
+módulo JEDI. Os casos mantidos exigem o contrato v2. Uma instalação antiga deve ser
+reinstalada/atualizada pelo MONAN-JEDI antes de preparar ou submeter novos ciclos.
 
 ## Primeiro ciclo
 
