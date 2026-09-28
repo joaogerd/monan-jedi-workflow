@@ -70,6 +70,19 @@ def render_declared_variables(
     if not isinstance(variables, dict):
         raise StageConfigurationError(f"{label}.variables must be a mapping.")
 
+    contract_owned = {
+        "stack_env_name",
+        "stack_env_module",
+        "stack_site_setup",
+        "stack_module_root",
+    }
+    declared_contract_fields = sorted(contract_owned.intersection(variables))
+    if declared_contract_fields:
+        raise StageConfigurationError(
+            f"{label}.variables may not configure contract-owned stack fields: "
+            + ", ".join(declared_contract_fields)
+        )
+
     rendered = dict(context)
     for name, value in variables.items():
         if not isinstance(name, str) or not name:
@@ -93,7 +106,7 @@ def render_declared_variables(
     stack_root = rendered.get("stack_root")
     if install_root and stack_root:
         for name, value in runtime_contract_context(install_root, stack_root).items():
-            rendered.setdefault(name, value)
+            rendered[name] = value
 
     return rendered
 
