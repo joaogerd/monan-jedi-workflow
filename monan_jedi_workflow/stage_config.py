@@ -92,7 +92,13 @@ def render_declared_variables(
     install_root = rendered.get("monan_jedi_install_root")
     stack_root = rendered.get("stack_root")
     if install_root and stack_root:
-        for name, value in runtime_contract_context(install_root, stack_root).items():
+        try:
+            contract_context = runtime_contract_context(install_root, stack_root)
+        except ValueError as error:
+            raise StageConfigurationError(
+                f"{label} cannot resolve the MONAN-JEDI runtime contract: {error}"
+            ) from error
+        for name, value in contract_context.items():
             rendered.setdefault(name, value)
 
     return rendered
