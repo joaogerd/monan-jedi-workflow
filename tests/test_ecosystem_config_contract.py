@@ -32,7 +32,7 @@ def _write_runtime_contract(
     manifest.write_text(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "ecosystem_contract_version": 2,
                 "contract": "monan-jedi-runtime-v2",
                 "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
@@ -49,7 +49,7 @@ def _write_runtime_contract(
                     "env_name": env_name,
                     "env_module": env_module,
                     "site_setup": site_setup,
-                    "module_root": f"envs/{env_name}/modules",
+                    "module_root_template": "envs/{env_name}/modules",
                 },
             }
         ),
@@ -121,8 +121,16 @@ def test_stage_variables_reject_missing_environment(monkeypatch) -> None:
 
 
 def test_site_profile_uses_install_and_stack_roots(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", "/runtime/monan-jedi")
-    monkeypatch.setenv("STACK_ROOT", "/runtime/spack-stack")
+    install = tmp_path / "runtime" / "monan-jedi"
+    stack = tmp_path / "runtime" / "spack-stack"
+    _write_runtime_contract(
+        install,
+        env_name="jaci-mpas-jedi-gcc12-craympich",
+        env_module="test/jedi-mpas-env/2.0.0",
+        site_setup="configs/sites/tier2/jaci/setup.sh",
+    )
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(stack))
     site = tmp_path / "site.yaml"
     site.write_text(
         """
@@ -131,8 +139,6 @@ site:
 stack:
   load: true
   root: ${STACK_ROOT}
-  env_name: jaci-mpas-jedi-gcc12-craympich
-  env_module: cray-mpich/8.1.31/none/none/jedi-mpas-env/1.0.0
 jedi:
   install_root: ${MONAN_JEDI_INSTALL_ROOT}
 runtime:
@@ -141,19 +147,13 @@ runtime:
         encoding="utf-8",
     )
 
-    with pytest.warns(DeprecationWarning, match="stack.env_name/env_module"):
-        rendered = render_site_environment_block(site)
+    rendered = render_site_environment_block(site)
 
-    assert 'export MONAN_JEDI_INSTALL_ROOT="/runtime/monan-jedi"' in rendered
-    assert 'export STACK_ROOT="/runtime/spack-stack"' in rendered
+    assert f'export MONAN_JEDI_INSTALL_ROOT="{install}"' in rendered
+    assert f'export STACK_ROOT="{stack}"' in rendered
     assert "module purge" in rendered
-    assert (
-        'export STACK_MODULE_ROOT="/runtime/spack-stack/envs/'
-        'jaci-mpas-jedi-gcc12-craympich/modules"'
-    ) in rendered
-    assert (
-        'export STACK_SITE_SETUP="/runtime/spack-stack/configs/sites/tier2/jaci/setup.sh"'
-    ) in rendered
+    assert f'export STACK_MODULE_ROOT="{stack / "envs/jaci-mpas-jedi-gcc12-craympich/modules"}"' in rendered
+    assert f'export STACK_SITE_SETUP="{stack / "configs/sites/tier2/jaci/setup.sh"}"' in rendered
     assert 'export PATH="${MONAN_JEDI_INSTALL_ROOT}/bin:${PATH}"' in rendered
     assert "MPAS_BUNDLE_BUILD" not in rendered
 
