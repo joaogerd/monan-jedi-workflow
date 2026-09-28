@@ -131,10 +131,12 @@ case YAML files do not need to declare `place: excl` themselves.
 
 ## Ambiente PBS
 
-Os stages JEDI e MPAS aceitam `pbs.bootstrap` como lista ordenada de comandos
-Shell executados no nó de computação antes das variáveis específicas do job e do
-`mpiexec`. Use esse bloco para reconstruir o Spack-Stack selecionado por
-`STACK_ROOT`.
+Os stages JEDI e MPAS usam `pbs.bootstrap` como lista ordenada de comandos
+Shell no nó de computação. Nos exemplos mantidos, `STACK_ROOT` e
+`MONAN_JEDI_INSTALL_ROOT` são as únicas âncoras declaradas pelo caso; a
+identidade do stack (`env_name`, `env_module`, `site_setup` e module root)
+é derivada do manifesto v2 instalado pelo MONAN-JEDI. Não copie o nome do módulo
+JEDI para o YAML do caso.
 
 `pbs.setup`, quando presente, continua aceito para compatibilidade com casos que
 fazem `source` de um script local. Os exemplos mantidos não dependem mais de
