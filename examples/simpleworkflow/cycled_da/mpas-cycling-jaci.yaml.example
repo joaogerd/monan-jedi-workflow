@@ -71,3 +71,22 @@ mpas:
     required_outputs:
       - "mpasout.{mpas_t_plus_3_file_time}.nc"
       - "mpasout.{mpas_valid_file_time}.nc"
+    # A existência do arquivo não basta para a fronteira científica do ciclo.
+    # Verifique que cada da_state contém o horário que seu nome representa.
+    # Não fixamos aqui nCells/variáveis adicionais sem evidência do baseline
+    # operacional; esses requisitos devem ser acrescentados quando auditados.
+    netcdf:
+      - path: "mpasout.{mpas_t_plus_3_file_time}.nc"
+        consumer: "FGAT / analysis base-state hand-off"
+        required_variables: [xtime]
+        required_dimensions:
+          Time: 1
+        time_variable: xtime
+        expected_time: "{mpas_t_plus_3_time}"
+      - path: "mpasout.{mpas_valid_file_time}.nc"
+        consumer: "next MONAN-JEDI cycle"
+        required_variables: [xtime]
+        required_dimensions:
+          Time: 1
+        time_variable: xtime
+        expected_time: "{mpas_valid_time}"

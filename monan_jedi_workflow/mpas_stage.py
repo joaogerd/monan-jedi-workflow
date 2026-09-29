@@ -154,6 +154,7 @@ def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
     context = {
         **context,
         "mpas_t_plus_3_file_time": intermediate.strftime("%Y-%m-%d_%H.%M.%S"),
+        "mpas_t_plus_3_time": intermediate.strftime("%Y-%m-%d_%H:%M:%S"),
     }
     context = render_declared_variables(config, context, label="mpas")
 
