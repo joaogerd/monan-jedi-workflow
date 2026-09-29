@@ -66,6 +66,8 @@ Ela **não é adotada integralmente nesta fase** porque isso implicaria migrar u
 
 Os conceitos devem ser minerados progressivamente. Se a implementação simples começar a duplicar serviços gerais (artifact model, platform abstraction, workflow-spec rendering), a V2 é a primeira fonte a consultar antes de criar nova abstração.
 
+A classificação componente por componente e a ordem de recuperação estão em [Auditoria da linha V2 e matriz de migração](v2-migration-audit.md). Esse documento é a referência para encerrar os PRs históricos sem perder os contratos que ainda não existem na `main`.
+
 ### Teste V2 órfão na `main`
 
 O commit final da `main` antes deste trabalho adicionou `tests/test_v2_jaci_wait_progress.py`, mas não adicionou os módulos `monan_jedi_workflow.platforms` e `core.progress` dos quais o teste depende. Isso deixava o CI da `main` sem coletar a suíte.
