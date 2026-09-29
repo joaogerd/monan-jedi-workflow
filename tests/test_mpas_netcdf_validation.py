@@ -62,7 +62,7 @@ def test_validate_mpas_reports_wrong_scientific_time(tmp_path: Path) -> None:
   validation:
     log: stdout.log
     required_log_markers: [Finished]
-    required_outputs: [mpasout.{{mpas_valid_file_time}}.nc]
+    required_outputs: ["mpasout.{{mpas_valid_file_time}}.nc"]
     netcdf:
       - path: mpasout.{{mpas_valid_file_time}}.nc
         consumer: next MPAS-JEDI cycle
