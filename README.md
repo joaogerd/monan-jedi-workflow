@@ -158,6 +158,7 @@ A documentação interna registra arquitetura, contratos e decisões:
 - [Estágio JEDI](docs/developer/jedi-stage.md)
 - [Modelo conceitual do ciclo](docs/developer/reference-cycle-model.md)
 - [Reaproveitamento de workflows anteriores](docs/developer/legacy-and-reuse-analysis.md)
+- [Auditoria e matriz de migração da linha V2](docs/developer/v2-migration-audit.md)
 - [Política de documentação](docs/developer/documentation-policy.md)
 - [ADRs](docs/developer/adr/README.md)
 
