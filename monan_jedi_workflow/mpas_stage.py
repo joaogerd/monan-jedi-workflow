@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .cycle_context import CycleContext, parse_cycle_time
+from .netcdf_validation import NetcdfStructureContract, validate_netcdf_structure
 from .pbs_directives import pbs_header_lines
 from .scheduler import PBSError, query
 from .stage_config import (
@@ -478,6 +479,55 @@ def wait_mpas(
         time.sleep(poll_seconds)
 
 
+def _netcdf_contract(raw: Any, run: MPASRun, label: str) -> tuple[Path, NetcdfStructureContract]:
+    """Compile one declarative MPAS NetCDF validation entry."""
+    value = _require_mapping(raw, label)
+    path_value = value.get("path")
+    if not isinstance(path_value, str) or not path_value:
+        raise StageConfigurationError(f"{label}.path must be a non-empty string.")
+    path_text = render_text(path_value, run.context, label=f"{label}.path")
+    path = Path(path_text)
+    path = path if path.is_absolute() else run.run_dir / path
+
+    consumer = value.get("consumer", "next MONAN-JEDI workflow stage")
+    if not isinstance(consumer, str) or not consumer:
+        raise StageConfigurationError(f"{label}.consumer must be a non-empty string.")
+
+    variables = _require_list(value.get("required_variables", []), f"{label}.required_variables")
+    if any(not isinstance(item, str) or not item for item in variables):
+        raise StageConfigurationError(f"{label}.required_variables must contain non-empty strings.")
+
+    dimensions = _require_mapping(value.get("required_dimensions", {}), f"{label}.required_dimensions")
+    for name, size in dimensions.items():
+        if not isinstance(name, str) or not name or (size is not None and (not isinstance(size, int) or size < 1)):
+            raise StageConfigurationError(f"{label}.required_dimensions must map names to positive integers or null.")
+
+    attributes = _require_mapping(value.get("required_global_attributes", {}), f"{label}.required_global_attributes")
+    for name, expected in attributes.items():
+        if not isinstance(name, str) or not name or (expected is not None and not isinstance(expected, str)):
+            raise StageConfigurationError(f"{label}.required_global_attributes must map names to strings or null.")
+
+    time_variable = value.get("time_variable")
+    if time_variable is not None and (not isinstance(time_variable, str) or not time_variable):
+        raise StageConfigurationError(f"{label}.time_variable must be a non-empty string when set.")
+    expected_time = value.get("expected_time")
+    if expected_time is not None:
+        if not isinstance(expected_time, str) or not expected_time:
+            raise StageConfigurationError(f"{label}.expected_time must be a non-empty string when set.")
+        expected_time = render_text(expected_time, run.context, label=f"{label}.expected_time")
+        if time_variable is None:
+            raise StageConfigurationError(f"{label}.expected_time requires time_variable.")
+
+    return path, NetcdfStructureContract(
+        consumer=consumer,
+        required_variables=tuple(variables),
+        required_dimensions=dimensions,
+        required_global_attributes=attributes,
+        time_variable=time_variable,
+        expected_time=expected_time,
+    )
+
+
 def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
     """Validate the MPAS log and products declared for one submitted cycle."""
     run = load_mpas_run(config_dir, cycle_time)
@@ -510,16 +560,23 @@ def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
         if not path.is_file() or path.stat().st_size == 0:
             missing_outputs.append(value)
 
+    netcdf_issues: list[str] = []
+    netcdf_checks = _require_list(validation.get("netcdf", []), "mpas.validation.netcdf")
+    for index, raw in enumerate(netcdf_checks):
+        path, contract = _netcdf_contract(raw, run, f"mpas.validation.netcdf[{index}]")
+        netcdf_issues.extend(validate_netcdf_structure(path, contract))
+
     report = {
         "schema_version": 1,
         "validated_at": _timestamp(),
         "cycle_time": run.cycle.cycle_time,
         "cycle_id": run.cycle.cycle_id,
         "job_id": manifest["job_id"],
-        "valid": not missing_markers and not missing_outputs,
+        "valid": not missing_markers and not missing_outputs and not netcdf_issues,
         "log": str(log_path),
         "missing_log_markers": missing_markers,
         "missing_outputs": missing_outputs,
+        "netcdf_issues": netcdf_issues,
     }
     report_path = run.manifest_path.with_name("mpas-validation.json")
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -529,6 +586,8 @@ def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
             details.append("missing log marker(s): " + ", ".join(missing_markers))
         if missing_outputs:
             details.append("missing output(s): " + ", ".join(missing_outputs))
+        if netcdf_issues:
+            details.append("NetCDF contract violation(s): " + "; ".join(netcdf_issues))
         raise MPASValidationError("MPAS validation failed: " + "; ".join(details))
     print(f"[OK] validated MPAS cycle: {report_path}")
     return report_path

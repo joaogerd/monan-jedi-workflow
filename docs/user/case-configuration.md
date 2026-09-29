@@ -98,6 +98,41 @@ Define como uma análise já validada inicializa o MPAS e qual produto do foreca
 
 `lead_hours` controla o tempo utilizado pelo template MPAS e os placeholders `valid_*`. Ajuste-o ao caso atual validado. Não suponha que a duração de forecast de um tutorial antigo é correta para a instalação atual.
 
+### Validação científica dos produtos NetCDF
+
+`required_outputs` garante apenas que o arquivo existe e não está vazio. Para
+um produto que alimentará outro stage, `mpas.validation.netcdf` pode declarar
+também o contrato estrutural/científico:
+
+```yaml
+validation:
+  log: log.atmosphere.0000.out
+  required_log_markers: ["Finished running the atmosphere core"]
+  required_outputs:
+    - "mpasout.{mpas_valid_file_time}.nc"
+  netcdf:
+    - path: "mpasout.{mpas_valid_file_time}.nc"
+      consumer: "next MPAS-JEDI cycle"
+      required_variables: [xtime]
+      required_dimensions:
+        Time: 1
+        nCells: null
+      time_variable: xtime
+      expected_time: "{mpas_valid_time}"
+```
+
+`required_dimensions` aceita um tamanho exato ou `null` para exigir apenas a
+presença. `required_global_attributes` funciona da mesma forma: uma string
+exige valor exato e `null` exige apenas o atributo. `expected_time` é
+renderizado com o contexto normal do ciclo; para MPAS, `xtime` em caracteres é
+tratado como timestamp MPAS mesmo quando possui um atributo informativo
+`units`.
+
+Use esse contrato para propriedades que o consumidor realmente exige. Não
+duplique no YAML detalhes internos que não fazem parte da interface científica.
+A validação ocorre em `mpas-validate`, depois do término do scheduler e antes
+de o produto ser aceito como válido para o próximo stage.
+
 ## `obs2ioda.yaml`
 
 Define conversores, inputs, outputs e validação das coleções IODA.
