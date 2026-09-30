@@ -14,6 +14,8 @@ campaign:
   name: monan-jedi-2025-3d
   start: 2025-01-01T00:00:00Z
   duration: P3D
+  # Cadencia das analises. Pertence ao experimento, nao ao codigo do workflow.
+  cycle_interval_hours: 6
   destination: cases/monan-jedi-2025-3d
 
 # O profile seleciona os casos cientificos e os dados do site. O profile de
