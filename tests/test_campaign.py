@@ -91,6 +91,46 @@ def test_load_campaign_spec_resolves_profile_environment_and_duration(
     assert spec.swf_command == ("swf",)
 
 
+@pytest.mark.parametrize(
+    ("duration", "expected_hours", "expected_end"),
+    [
+        ("P3D", 72, "2025-01-04T00:00:00Z"),
+        ("P7D", 168, "2025-01-08T00:00:00Z"),
+        ("P30D", 720, "2025-01-31T00:00:00Z"),
+        ("P365D", 8760, "2026-01-01T00:00:00Z"),
+    ],
+)
+def test_campaign_accepts_natural_day_durations(
+    tmp_path: Path, duration: str, expected_hours: int, expected_end: str
+) -> None:
+    config = tmp_path / "campaign.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "campaign": {
+                    "name": "2025-duration-test",
+                    "start": "2025-01-01T00:00:00Z",
+                    "duration": duration,
+                    "destination": str(tmp_path / "run"),
+                },
+                "profile": {
+                    "cycling_jedi_case": str(tmp_path / "cycling"),
+                    "initial_mpas_case": str(tmp_path / "initial-mpas"),
+                    "mpas_case": str(tmp_path / "mpas"),
+                    "obs2ioda_config": str(tmp_path / "obs2ioda.yaml"),
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    spec = load_campaign_spec(config)
+
+    assert spec.duration_hours == expected_hours
+    assert spec.end_cycle == expected_end
+
+
 def test_load_campaign_spec_resolves_case_root_without_environment(
     tmp_path: Path, monkeypatch,
 ) -> None:
