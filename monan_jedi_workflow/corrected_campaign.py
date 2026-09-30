@@ -25,9 +25,6 @@ from .corrected_replay import (
 )
 from .stage_config import StageConfigurationError
 
-_CYCLE_STEP = timedelta(hours=6)
-
-
 def _parse_cycle(value: str) -> datetime:
     try:
         cycle = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -36,10 +33,6 @@ def _parse_cycle(value: str) -> datetime:
     if cycle.tzinfo is None:
         cycle = cycle.replace(tzinfo=timezone.utc)
     cycle = cycle.astimezone(timezone.utc)
-    if cycle.minute or cycle.second or cycle.microsecond or cycle.hour not in {0, 6, 12, 18}:
-        raise StageConfigurationError(
-            "corrected campaign cycles must be aligned to 00/06/12/18Z"
-        )
     return cycle
 
 
@@ -51,17 +44,24 @@ def _cycle_id(cycle: datetime) -> str:
     return cycle.strftime("%Y%m%dT%H%M%SZ")
 
 
-def _cycles(start_cycle: str, end_cycle: str) -> list[datetime]:
-    """Return the inclusive six-hourly campaign cycle range."""
+def _cycles(
+    start_cycle: str, end_cycle: str, cycle_interval_hours: int = 6
+) -> list[datetime]:
+    """Return the inclusive campaign cycle range using the declared interval."""
+    if cycle_interval_hours <= 0:
+        raise StageConfigurationError("cycle_interval_hours must be positive")
+    step = timedelta(hours=cycle_interval_hours)
     start = _parse_cycle(start_cycle)
     end = _parse_cycle(end_cycle)
     if end < start:
         raise StageConfigurationError("campaign end cycle precedes the first cycle")
     span = end - start
-    if span % _CYCLE_STEP:
-        raise StageConfigurationError("campaign duration must be a multiple of 6 hours")
-    count = int(span / _CYCLE_STEP) + 1
-    return [start + index * _CYCLE_STEP for index in range(count)]
+    if span % step:
+        raise StageConfigurationError(
+            "campaign duration must be a multiple of cycle_interval_hours"
+        )
+    count = int(span / step) + 1
+    return [start + index * step for index in range(count)]
 
 
 def _validation_gate(
@@ -83,8 +83,10 @@ def _validation_gate(
     return task
 
 
-def _initialization_tasks(start_cycle: datetime) -> list[dict[str, Any]]:
-    source_cycle = start_cycle - _CYCLE_STEP
+def _initialization_tasks(
+    start_cycle: datetime, cycle_interval_hours: int
+) -> list[dict[str, Any]]:
+    source_cycle = start_cycle - timedelta(hours=cycle_interval_hours)
     source_iso = _iso(source_cycle)
     source_id = _cycle_id(source_cycle)
     target_iso = _iso(start_cycle)
@@ -435,18 +437,19 @@ def build_corrected_campaign_workflow(
     end_cycle: str,
     experiment_dir: str,
     run_mpas_on_last_cycle: bool = False,
+    cycle_interval_hours: int = 6,
 ) -> dict[str, Any]:
     """Build a constant-size native-cycle workflow for a corrected campaign."""
-    cycles = _cycles(start_cycle, end_cycle)
+    cycles = _cycles(start_cycle, end_cycle, cycle_interval_hours)
     return {
         "format_version": 1,
         "workflow": {"name": "monan_jedi_corrected_campaign"},
         "context": {"experiment_dir": experiment_dir},
-        "initialization": {"tasks": _initialization_tasks(cycles[0])},
+        "initialization": {"tasks": _initialization_tasks(cycles[0], cycle_interval_hours)},
         "cycle": {
             "start": _iso(cycles[0]),
             "end": _iso(cycles[-1]),
-            "step": "PT6H",
+            "step": f"PT{cycle_interval_hours}H",
         },
         "tasks": _cycle_tasks(run_mpas_on_last_cycle=run_mpas_on_last_cycle),
     }
@@ -631,6 +634,7 @@ def materialize_corrected_campaign(
     end_cycle: str,
     run_mpas_on_last_cycle: bool = False,
     initial_jedi_case: Path | None = None,
+    cycle_interval_hours: int = 6,
 ) -> Path:
     """Create a clean compact campaign without executing scientific work.
 
@@ -640,7 +644,7 @@ def materialize_corrected_campaign(
     Obs2IODA tasks produce those inputs inside the campaign.
     """
     del initial_jedi_case
-    cycles = _cycles(start_cycle, end_cycle)
+    cycles = _cycles(start_cycle, end_cycle, cycle_interval_hours)
     destination = destination.resolve()
     if destination.exists():
         raise FileExistsError(f"campaign destination already exists: {destination}")
@@ -658,6 +662,7 @@ def materialize_corrected_campaign(
             end_cycle=end_cycle,
             experiment_dir=str(destination),
             run_mpas_on_last_cycle=run_mpas_on_last_cycle,
+            cycle_interval_hours=cycle_interval_hours,
         )
         (destination / "workflow.yaml").write_text(
             yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
@@ -668,7 +673,7 @@ def materialize_corrected_campaign(
                     "campaign": {
                         "start_cycle": _iso(cycles[0]),
                         "end_cycle": _iso(cycles[-1]),
-                        "cycle_interval_hours": 6,
+                        "cycle_interval_hours": cycle_interval_hours,
                         "analysis_cycles": len(cycles),
                         "forecast_legs_for_cycling": len(cycles) - 1,
                         "run_mpas_on_last_cycle": run_mpas_on_last_cycle,
