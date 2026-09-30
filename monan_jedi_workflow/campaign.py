@@ -30,7 +30,7 @@ from .mpas_stage import load_mpas_run
 from .obs2ioda_stage import _build_plan, load_obs2ioda_run
 from .stage_config import StageConfigurationError
 
-_DURATION = re.compile(r"^PT(?P<hours>[1-9][0-9]*)H$")
+_DURATION = re.compile(r"^(?:P(?P<days>[1-9][0-9]*)D|PT(?P<hours>[1-9][0-9]*)H)$")
 _UNRESOLVED_ENV = re.compile(
     r"\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
 )
@@ -169,9 +169,14 @@ def _parse_duration(value: str) -> int:
     match = _DURATION.fullmatch(value)
     if match is None:
         raise StageConfigurationError(
-            "campaign.duration must use an hourly ISO-8601 form such as PT72H"
+            "campaign.duration must use an ISO-8601 day or hourly form "
+            "such as P3D or PT72H"
         )
-    hours = int(match.group("hours"))
+    hours = (
+        int(match.group("days")) * 24
+        if match.group("days") is not None
+        else int(match.group("hours"))
+    )
     if hours % 6:
         raise StageConfigurationError("campaign duration must be a multiple of 6 hours")
     return hours
@@ -211,7 +216,7 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     duration_hours: int
     if duration_value is not None:
         if not isinstance(duration_value, str):
-            raise StageConfigurationError("campaign.duration must be a string such as PT72H")
+            raise StageConfigurationError("campaign.duration must be a string such as P3D or PT72H")
         duration_hours = _parse_duration(duration_value)
         calculated_end = start + timedelta(hours=duration_hours)
     else:
