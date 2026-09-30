@@ -52,6 +52,7 @@ class CampaignSpec:
     obs2ioda_config: Path
     swf_command: tuple[str, ...]
     run_mpas_on_last_cycle: bool = False
+    cycle_interval_hours: int = 6
     # Retained as cheap source compatibility for older profile tooling.  The
     # compact campaign no longer consumes a precomputed first-cycle JEDI case.
     initial_jedi_case: Path | None = None
@@ -212,6 +213,11 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     if duration_value is None and end_value is None:
         raise StageConfigurationError("campaign must define duration or end")
 
+    interval_value = campaign.get("cycle_interval_hours", 6)
+    if not isinstance(interval_value, int) or isinstance(interval_value, bool) or interval_value <= 0:
+        raise StageConfigurationError("campaign.cycle_interval_hours must be a positive integer")
+    cycle_interval_hours = interval_value
+
     start = _parse_cycle(start_cycle)
     duration_hours: int
     if duration_value is not None:
@@ -222,9 +228,10 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     else:
         calculated_end = _parse_cycle(str(end_value))
         duration_hours = int((calculated_end - start).total_seconds() // 3600)
-        if duration_hours < 0 or duration_hours % 6:
+        if duration_hours < 0 or duration_hours % cycle_interval_hours:
             raise StageConfigurationError(
-                "campaign end must be on or after start and aligned to 6 hours"
+                "campaign end must be on or after start and aligned to "
+                "campaign.cycle_interval_hours"
             )
 
     if end_value is not None:
@@ -267,7 +274,11 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
     if not swf_command:
         raise StageConfigurationError("execution.swf_command cannot be empty")
 
-    _cycles(start_cycle, end_cycle)
+    if duration_hours % cycle_interval_hours:
+        raise StageConfigurationError(
+            "campaign duration must be a multiple of campaign.cycle_interval_hours"
+        )
+    _cycles(start_cycle, end_cycle, cycle_interval_hours)
     return CampaignSpec(
         config_path=config_path,
         name=name,
@@ -281,6 +292,7 @@ def load_campaign_spec(config_path: Path) -> CampaignSpec:
         obs2ioda_config=obs2ioda_config,
         swf_command=swf_command,
         run_mpas_on_last_cycle=_forecast_config(document),
+        cycle_interval_hours=cycle_interval_hours,
         initial_jedi_case=initial_jedi_case,
     )
 
@@ -382,7 +394,7 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
         )
     )
 
-    cycles = _cycles(spec.start_cycle, spec.end_cycle)
+    cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)
     missing_obs: list[str] = []
     missing_tools: set[str] = set()
     if spec.obs2ioda_config.is_file():
@@ -433,6 +445,7 @@ def _request_document(spec: CampaignSpec) -> dict[str, Any]:
             "start": spec.start_cycle,
             "end": spec.end_cycle,
             "duration_hours": spec.duration_hours,
+            "cycle_interval_hours": spec.cycle_interval_hours,
             "destination": str(spec.destination),
         },
         "profile": profile,
@@ -473,6 +486,7 @@ def materialize_campaign(spec: CampaignSpec) -> Path:
         end_cycle=spec.end_cycle,
         destination=spec.destination,
         run_mpas_on_last_cycle=spec.run_mpas_on_last_cycle,
+        cycle_interval_hours=spec.cycle_interval_hours,
     )
     (spec.destination / "campaign-request.yaml").write_text(
         yaml.safe_dump(_request_document(spec), sort_keys=False), encoding="utf-8"
@@ -482,7 +496,7 @@ def materialize_campaign(spec: CampaignSpec) -> Path:
 
 def print_preflight(report: PreflightReport) -> None:
     spec = report.spec
-    cycles = _cycles(spec.start_cycle, spec.end_cycle)
+    cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)
     mpas_cycles = len(cycles) if spec.run_mpas_on_last_cycle else max(0, len(cycles) - 1)
     print("MONAN-JEDI Campaign")
     print()
