@@ -359,7 +359,7 @@ def acquire_campaign_observations(config_path: Path) -> list[AcquisitionRecord |
     roots = _search_roots(config) if config else []
     results: list[AcquisitionRecord | InputResolution] = []
 
-    for cycle_dt in _cycles(spec.start_cycle, spec.end_cycle)[1:]:
+    for cycle_dt in _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)[1:]:
         cycle_time = _iso(cycle_dt)
         run = load_obs2ioda_run(spec.obs2ioda_config.parent, cycle_time)
         plan = _build_plan(run)
