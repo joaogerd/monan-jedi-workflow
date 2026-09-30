@@ -1,5 +1,46 @@
 # Running a campaign
 
+> **Current transition:** the 2018 M3 campaign remains the historical validated
+> baseline. The maintained operational target is now a 2025 experiment. Do not
+> interpret the 2018 profile as a scientifically validated 2025 configuration;
+> the 2025 MONAN, observation and JEDI inputs must be validated explicitly.
+
+## Mental model: science versus period
+
+A campaign has two independent layers:
+
+```text
+scientific configuration                 campaign request
+------------------------                 ----------------
+MONAN/MPAS                               start
+observations / Obs2IODA                  duration
+MPAS-JEDI                                destination
+initialization                           forecast on last cycle
+```
+
+Changing a validated experiment from 3 to 7, 30 or 365 days must not require
+rewriting the MONAN, observation or JEDI configuration. With a 6-hour cycle,
+use the same scientific profile and change only the campaign identity,
+destination and duration:
+
+```yaml
+# validation
+duration: P3D
+
+# extensions after validation
+duration: P7D
+duration: P30D
+duration: P365D
+```
+
+The older hourly notation (`PT72H`, `PT168H`, ...) remains supported.
+
+The intended validation ladder is **3 -> 7 -> 30 -> 365 days**. Each extension
+reuses the scientific configuration that passed the previous stage. A longer
+period is not evidence that the science is configured correctly; inspect the
+analysis, forecast, observation usage and cycle hand-offs before extending it.
+
+
 The normal user interface is one campaign YAML plus one command. Researchers do not need to remember the individual JEDI, MPAS and Obs2IODA stage commands.
 
 After entering the standard MONAN-JEDI environment on JACI, the validated three-day M3 experiment is checked or started directly with:
