@@ -456,36 +456,45 @@ def build_corrected_campaign_workflow(
 
 
 def _validate_cycling_contract(mpas: dict[str, Any]) -> None:
+    """Validate internal consistency without imposing one scientific case."""
     lead_hours = int(mpas.get("lead_hours", -1))
-    if lead_hours < 6 or lead_hours % 3:
-        raise StageConfigurationError(
-            "corrected campaign requires mpas.lead_hours >= 6 and divisible by 3"
-        )
+    if lead_hours <= 0:
+        raise StageConfigurationError("mpas.lead_hours must be a positive integer")
     contract = mpas.get("forecast_contract")
-    expected = {
-        "da_state_interval_hours": 3,
-        "mpi_ranks": 128,
-        "partition": "x1.10242.graph.info.part.128",
-        "do_restart": False,
-        "do_DAcycling": True,
-        "IAU": "off",
-    }
     if not isinstance(contract, dict):
         raise StageConfigurationError("source MPAS case must declare forecast_contract")
-    differences = [
-        f"{key}={contract.get(key)!r} (expected {value!r})"
-        for key, value in expected.items()
-        if contract.get(key) != value
-    ]
-    if int(contract.get("run_hours", -1)) != lead_hours:
-        differences.append(
-            f"run_hours={contract.get('run_hours')!r} (expected {lead_hours!r})"
-        )
-    if differences:
+
+    run_hours = int(contract.get("run_hours", -1))
+    if run_hours != lead_hours:
         raise StageConfigurationError(
-            "source MPAS case does not satisfy the corrected forecast_contract: "
-            + "; ".join(differences)
+            "mpas.forecast_contract.run_hours must equal mpas.lead_hours"
         )
+
+    interval = int(contract.get("da_state_interval_hours", -1))
+    if interval <= 0 or lead_hours % interval:
+        raise StageConfigurationError(
+            "mpas.forecast_contract.da_state_interval_hours must be positive "
+            "and divide mpas.lead_hours"
+        )
+
+    mpi_ranks = int(contract.get("mpi_ranks", -1))
+    if mpi_ranks <= 0:
+        raise StageConfigurationError(
+            "mpas.forecast_contract.mpi_ranks must be a positive integer"
+        )
+    partition = contract.get("partition")
+    if not isinstance(partition, str) or not partition.strip():
+        raise StageConfigurationError(
+            "mpas.forecast_contract.partition must be a non-empty string"
+        )
+
+    for key in ("do_restart", "do_DAcycling"):
+        if not isinstance(contract.get(key), bool):
+            raise StageConfigurationError(
+                f"mpas.forecast_contract.{key} must be boolean"
+            )
+    if "IAU" not in contract:
+        raise StageConfigurationError("mpas.forecast_contract must declare IAU")
 
 
 def _absolutize_mpas_assets(mpas: dict[str, Any], source_case: Path) -> None:
@@ -531,8 +540,12 @@ def _patch_cycling_mpas(source_case: Path, destination: Path) -> None:
         raise StageConfigurationError("mpas.yaml must define mpas mapping")
     _validate_cycling_contract(mpas)
     pbs = mpas.get("pbs")
-    if not isinstance(pbs, dict) or int(pbs.get("mpiprocs", 0)) != 128:
-        raise StageConfigurationError("corrected campaign requires MPAS pbs.mpiprocs=128")
+    if not isinstance(pbs, dict):
+        raise StageConfigurationError("MPAS configuration must define pbs")
+    if int(pbs.get("mpiprocs", 0)) != int(mpas["forecast_contract"]["mpi_ranks"]):
+        raise StageConfigurationError(
+            "mpas.pbs.mpiprocs must match mpas.forecast_contract.mpi_ranks"
+        )
     pbs["setup"] = []
     mpas["run_dir"] = str(destination.resolve() / "work/mpas/{cycle_id}")
     _absolutize_mpas_assets(mpas, source_case)
@@ -618,8 +631,10 @@ def _patch_jedi_native(destination: Path, start_cycle: str = _FIRST_CYCLE) -> No
             "cycling JEDI case must declare sondes, sfc and gnssro links"
         )
     pbs = jedi.get("pbs")
-    if not isinstance(pbs, dict) or int(pbs.get("mpiprocs", 0)) != 128:
-        raise StageConfigurationError("corrected campaign requires JEDI pbs.mpiprocs=128")
+    if not isinstance(pbs, dict):
+        raise StageConfigurationError("JEDI configuration must define pbs")
+    if int(pbs.get("mpiprocs", 0)) <= 0:
+        raise StageConfigurationError("jedi.pbs.mpiprocs must be a positive integer")
     _write_yaml(path, data)
 
 
