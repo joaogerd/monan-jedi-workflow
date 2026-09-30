@@ -25,7 +25,7 @@ def test_august_2025_seven_day_campaign_has_29_inclusive_cycles() -> None:
 
 
 def test_initialization_for_august_2025_starts_six_hours_before_first_analysis() -> None:
-    tasks = _initialization_tasks(_parse_cycle("2025-08-01T00:00:00Z"))
+    tasks = _initialization_tasks(_parse_cycle("2025-08-01T00:00:00Z"), 6)
     by_name = {task["name"]: task for task in tasks}
 
     prepare = by_name["mpas_initial_prepare"]
