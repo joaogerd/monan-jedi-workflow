@@ -67,6 +67,28 @@ There is no extra `export CASE=...` step. Site/profile paths needed by the campa
 
 The example campaign requests 72 hours beginning at 2018-04-15 00Z. This gives 13 analyses and 12 six-hour MPAS forecast legs, ending at 2018-04-18 00Z.
 
+
+## Regra: nenhum parâmetro científico pertence ao motor
+
+O gerador de campanhas não deve conhecer valores particulares de um
+experimento. Em especial, não deve fixar data/ano, malha, número de níveis,
+cadência de análise, intervalo de estado DA/FGAT, número de MPI ranks,
+partição da malha, famílias de observação ou nome do arquivo de análise.
+
+Essas escolhas pertencem aos contratos declarativos:
+
+| Escolha | Fonte |
+| --- | --- |
+| início, duração e cadência | `campaign.yaml` |
+| forecast, DA-state, MPI e partição | `mpas.yaml` |
+| produtos observacionais | `obs2ioda.yaml -> converters[*].outputs` |
+| estado/análise e configuração variacional | `jedi.yaml` e template JEDI |
+| caminhos do runtime instalado | manifesto do MONAN-JEDI + perfil do site |
+
+Arquivos históricos de reprodução podem, por definição, conter valores do
+experimento que reproduzem (por exemplo 2018/x1.10242). Eles não são defaults
+do motor nem devem ser copiados como baseline científico de 2025.
+
 ## Campaign file
 
 ```yaml
