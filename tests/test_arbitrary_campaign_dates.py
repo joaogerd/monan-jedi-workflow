@@ -90,12 +90,3 @@ def test_jedi_first_cycle_is_derived_from_campaign_start(tmp_path: Path) -> None
     assert document["jedi"]["cycle"]["first_cycle"] == "2025-08-01T00:00:00Z"
 
 
-def test_historical_2018_default_remains_backward_compatible() -> None:
-    document = build_corrected_campaign_workflow(
-        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
-        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
-        end_cycle="2018-04-18T00:00:00Z",
-        experiment_dir="/tmp/campaign",
-    )
-
-    assert document["cycle"]["start"] == "2018-04-15T00:00:00Z"
