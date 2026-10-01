@@ -31,6 +31,8 @@ def main() -> int:
             start_cycle=START,
             end_cycle=end,
             experiment_dir="/tmp/campaign",
+            observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+            analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         )
         initialization = tuple(task["name"] for task in document["initialization"]["tasks"])
         tasks = tuple(task["name"] for task in document["tasks"])
