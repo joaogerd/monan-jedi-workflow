@@ -245,4 +245,4 @@ def test_native_initial_background_uses_mpas_output_state_count(tmp_path: Path) 
     config = yaml.safe_load((case / "jedi.yaml").read_text())["jedi"]
     # The materializer preserves the scientific state contract declared by
     # the source case instead of replacing it with a campaign-engine constant.
-    assert config["analysis_base_state"]["expected_variable_count"] == 62
+    assert "expected_variable_count" not in config["analysis_base_state"]
