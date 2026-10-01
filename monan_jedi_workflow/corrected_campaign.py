@@ -180,11 +180,15 @@ def _initialization_tasks(
     ]
 
 
-def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
+def _cycle_tasks(
+    *,
+    run_mpas_on_last_cycle: bool,
+    observation_outputs: list[str] | None = None,
+    analysis_output: str = "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc",
+) -> list[dict[str, Any]]:
     root = "{experiment_dir}"
     cycle_id = "{cycle_id}"
     obs_id = "{cycle_yyyymmddhh}"
-    analysis_file_time = "{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}.00.00"
 
     background_dir = f"{root}/work/background/{cycle_id}"
     background_validation = f"{background_dir}/background-validation.json"
@@ -192,15 +196,25 @@ def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
     obs_doctor = f"{obs_dir}/.monan-jedi-workflow/obs2ioda-doctor.json"
     obs_plan = f"{obs_dir}/.monan-jedi-workflow/obs2ioda.json"
     obs_validation = f"{obs_dir}/.monan-jedi-workflow/obs2ioda-validation.json"
-    sondes = f"{obs_dir}/sondes_obs_{obs_id}.h5"
-    sfc = f"{obs_dir}/sfc_obs_{obs_id}.h5"
-    gnssro = f"{obs_dir}/gnssro_obs_{obs_id}.h5"
+    obs_products = observation_outputs or [
+        "sondes_obs_{cycle_yyyymmddhh}.h5",
+        "sfc_obs_{cycle_yyyymmddhh}.h5",
+        "gnssro_obs_{cycle_yyyymmddhh}.h5",
+    ]
+    obs_files = [
+        item if item.startswith("/") else f"{obs_dir}/{item}"
+        for item in obs_products
+    ]
 
     jedi_run = f"{root}/work/jedi/{cycle_id}"
     jedi_submission = f"{jedi_run}/.monan-jedi-workflow/jedi-submission.json"
     jedi_validation = f"{jedi_run}/.monan-jedi-workflow/jedi-validation.json"
     jedi_artifacts = f"{jedi_run}/.monan-jedi-workflow/jedi-artifacts.json"
-    analysis = f"{jedi_run}/Data/states/mpas.3dvar.{analysis_file_time}.nc"
+    analysis = (
+        analysis_output
+        if analysis_output.startswith("/")
+        else f"{jedi_run}/{analysis_output}"
+    )
 
     mpas_run = f"{root}/work/mpas/{cycle_id}"
     mpas_submission = f"{mpas_run}/.monan-jedi-workflow/mpas-submission.json"
@@ -262,7 +276,7 @@ def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
                 "--cycle",
                 "{cycle_time}",
             ],
-            "outputs": {"required": [sondes, sfc, gnssro]},
+            "outputs": {"required": obs_files},
         },
         {
             "name": "observations_validate",
@@ -295,9 +309,7 @@ def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
                     f"{root}/jedi.yaml",
                     f"{background_dir}/trajectory.nc",
                     f"{background_dir}/state.nc",
-                    sondes,
-                    sfc,
-                    gnssro,
+                    *obs_files,
                 ]
             },
             "outputs": {
@@ -438,6 +450,8 @@ def build_corrected_campaign_workflow(
     experiment_dir: str,
     run_mpas_on_last_cycle: bool = False,
     cycle_interval_hours: int = 6,
+    observation_outputs: list[str] | None = None,
+    analysis_output: str = "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc",
 ) -> dict[str, Any]:
     """Build a constant-size native-cycle workflow for a corrected campaign."""
     cycles = _cycles(start_cycle, end_cycle, cycle_interval_hours)
@@ -451,7 +465,11 @@ def build_corrected_campaign_workflow(
             "end": _iso(cycles[-1]),
             "step": f"PT{cycle_interval_hours}H",
         },
-        "tasks": _cycle_tasks(run_mpas_on_last_cycle=run_mpas_on_last_cycle),
+        "tasks": _cycle_tasks(
+            run_mpas_on_last_cycle=run_mpas_on_last_cycle,
+            observation_outputs=observation_outputs,
+            analysis_output=analysis_output,
+        ),
     }
 
 
