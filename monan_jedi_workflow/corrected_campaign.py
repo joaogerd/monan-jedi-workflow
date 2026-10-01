@@ -591,17 +591,20 @@ def _patch_jedi_native(destination: Path, start_cycle: str = _FIRST_CYCLE) -> No
     if not isinstance(base, dict):
         raise StageConfigurationError("jedi.analysis_base_state must be a mapping")
     base["source"] = str(root / "background/{cycle_id}/state.nc")
-    base["target"] = "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"
-    prior_expected_count = base.get("expected_variable_count")
-    allowed_existing_counts = (None, 62, {"first_cycle": 62, "cycling": 63})
-    if prior_expected_count not in allowed_existing_counts:
+    target = base.get("target")
+    if not isinstance(target, str) or not target:
         raise StageConfigurationError(
-            "corrected campaign expected the validated JEDI state-count contract; "
-            f"found {prior_expected_count!r}"
+            "jedi.analysis_base_state.target must declare the analysis-state filename"
         )
-    # Both first and later backgrounds now come from the MPAS DA output stream.
-    # Its refl10cm field is absent only from the legacy precomputed background.
-    base["expected_variable_count"] = {"first_cycle": 63, "cycling": 63}
+    expected_count = base.get("expected_variable_count")
+    if expected_count is not None and not (
+        isinstance(expected_count, int) and not isinstance(expected_count, bool)
+        or isinstance(expected_count, dict)
+    ):
+        raise StageConfigurationError(
+            "jedi.analysis_base_state.expected_variable_count must be an integer "
+            "or a first_cycle/cycling mapping when declared"
+        )
 
     found = set()
     links = jedi.get("links", [])
