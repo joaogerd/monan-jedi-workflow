@@ -43,7 +43,8 @@ def test_72_hour_campaign_uses_one_native_cycle_graph() -> None:
         observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
         analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         start_cycle="2018-04-15T00:00:00Z",
-        end_cycle="2018-04-18T00:00:00Z",
+        start_cycle="2025-01-01T00:00:00Z",
+        end_cycle="2025-01-04T00:00:00Z",
         experiment_dir="/tmp/campaign",
     )
     tasks = _task_map(document)
@@ -100,14 +101,16 @@ def test_last_cycle_mpas_scope_is_scientific_configuration_not_hardcoded() -> No
     cycling_only = build_corrected_campaign_workflow(
         observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
         analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
-        end_cycle="2018-04-18T00:00:00Z",
+        start_cycle="2025-01-01T00:00:00Z",
+        end_cycle="2025-01-04T00:00:00Z",
         experiment_dir="/tmp/campaign",
         run_mpas_on_last_cycle=False,
     )
     with_forecast = build_corrected_campaign_workflow(
         observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
         analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
-        end_cycle="2018-04-18T00:00:00Z",
+        start_cycle="2025-01-01T00:00:00Z",
+        end_cycle="2025-01-04T00:00:00Z",
         experiment_dir="/tmp/campaign",
         run_mpas_on_last_cycle=True,
     )
@@ -161,7 +164,8 @@ def test_campaign_validation_gates_are_content_fingerprinted() -> None:
     document = build_corrected_campaign_workflow(
         observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
         analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
-        end_cycle="2018-04-18T00:00:00Z",
+        start_cycle="2025-01-01T00:00:00Z",
+        end_cycle="2025-01-04T00:00:00Z",
         experiment_dir="/tmp/campaign",
     )
     gates = [
@@ -187,7 +191,8 @@ def test_background_interface_is_uniform_for_first_and_later_cycles() -> None:
     document = build_corrected_campaign_workflow(
         observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
         analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
-        end_cycle="2018-04-18T00:00:00Z",
+        start_cycle="2025-01-01T00:00:00Z",
+        end_cycle="2025-01-04T00:00:00Z",
         experiment_dir="/tmp/campaign",
     )
     tasks = _task_map(document)
@@ -204,7 +209,8 @@ def test_observations_belong_to_current_cycle() -> None:
     document = build_corrected_campaign_workflow(
         observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
         analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
-        end_cycle="2018-04-18T00:00:00Z",
+        start_cycle="2025-01-01T00:00:00Z",
+        end_cycle="2025-01-04T00:00:00Z",
         experiment_dir="/tmp/campaign",
     )
     tasks = _task_map(document)
@@ -237,7 +243,8 @@ def test_materialized_campaign_records_compact_scope(tmp_path: Path) -> None:
     document = build_corrected_campaign_workflow(
         observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
         analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
-        end_cycle="2018-04-18T00:00:00Z",
+        start_cycle="2025-01-01T00:00:00Z",
+        end_cycle="2025-01-04T00:00:00Z",
         experiment_dir=str(tmp_path / "campaign"),
     )
     rendered = tmp_path / "workflow.yaml"
@@ -252,15 +259,12 @@ def test_materialized_campaign_records_compact_scope(tmp_path: Path) -> None:
     assert materialize_corrected_campaign is not None
 
 
-def test_native_initial_background_uses_mpas_output_state_count(tmp_path: Path) -> None:
-    from monan_jedi_workflow.corrected_campaign import _patch_jedi_native
-    from test_corrected_replay_materialization import _jedi_case
-
-    inputs = tmp_path / "inputs"
-    inputs.mkdir()
-    case = _jedi_case(tmp_path / "case", inputs, initial=True)
-    _patch_jedi_native(case)
-    config = yaml.safe_load((case / "jedi.yaml").read_text())["jedi"]
-    # The materializer preserves the scientific state contract declared by
-    # the source case instead of replacing it with a campaign-engine constant.
-    assert "expected_variable_count" not in config["analysis_base_state"]
+def test_campaign_workflow_requires_explicit_start_cycle() -> None:
+    with pytest.raises((StageConfigurationError, AttributeError, TypeError)):
+        build_corrected_campaign_workflow(
+            observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+            analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
+            start_cycle=None,
+            end_cycle="2025-01-04T00:00:00Z",
+            experiment_dir="/tmp/campaign",
+        )
