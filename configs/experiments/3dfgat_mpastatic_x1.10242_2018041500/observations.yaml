@@ -1,5 +1,0 @@
-observations:
-  use:
-    - radiosonde
-    - gnssro_ref_ncep
-    - sfc_corrected
