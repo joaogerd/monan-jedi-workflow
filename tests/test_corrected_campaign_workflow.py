@@ -251,8 +251,8 @@ def test_materialized_campaign_records_compact_scope(tmp_path: Path) -> None:
     loaded = yaml.safe_load(rendered.read_text(encoding="utf-8"))
 
     assert loaded["context"]["experiment_dir"] == str(tmp_path / "campaign")
-    assert loaded["cycle"]["start"] == "2018-04-15T00:00:00Z"
-    assert loaded["cycle"]["end"] == "2018-04-18T00:00:00Z"
+    assert loaded["cycle"]["start"] == "2025-01-01T00:00:00Z"
+    assert loaded["cycle"]["end"] == "2025-01-04T00:00:00Z"
     assert len(loaded["initialization"]["tasks"]) == 6
     assert len(loaded["tasks"]) == 17
     assert materialize_corrected_campaign is not None
