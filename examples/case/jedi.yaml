@@ -1,0 +1,66 @@
+# PASSO 5 — análise JEDI.
+# Este é um TEMPLATE; a ciência deve ser preenchida com o baseline validado.
+# Veja docs/configuration/jedi.md.
+jedi:
+  cycle:
+    step_hours: 6
+    background_offset_hours: -3
+    window_hours: 6
+
+  variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    stack_root: ${STACK_ROOT}
+    bmatrix_root: EDITAR-caminho-B
+
+  run_dir: "work/jedi/{cycle_id}"
+
+  background:
+    initial_source: "work/background/{cycle_id}/trajectory.nc"
+    source: "work/background/{cycle_id}/trajectory.nc"
+    target: "background/background.nc"
+
+  analysis_base_state:
+    source: "work/background/{cycle_id}/state.nc"
+    # Este target é a fonte de verdade do nome da análise.
+    target: "Data/states/EDITAR-analysis.{analysis_mpas_file_time}.nc"
+    required_variables: []
+
+  links:
+    - source: "{bmatrix_root}"
+      target: B_Matrix
+    # Adicione aqui um link para cada output de obs2ioda.yaml usado pelos
+    # observers do YAML variacional.
+    - source: "work/obs/{analysis_yyyymmddhh}/EDITAR-output-{analysis_yyyymmddhh}.h5"
+      target: "Data/ufo/testinput_tier_1/EDITAR-output-{analysis_yyyymmddhh}.h5"
+
+  templates:
+    - source: templates/variational.yaml
+      target: variational.yaml
+    - source: templates/namelist.atmosphere.jedi
+      target: namelist.atmosphere.outer
+
+  nonlinear_trajectory:
+    yaml: variational.yaml
+    outer_namelist: namelist.atmosphere.outer
+
+  pbs:
+    filename: run_jedi.pbs
+    job_name: "jedi_{analysis_yyyymmddhh}"
+    queue: EDITAR-fila
+    select: 1
+    ncpus: EDITAR-INTEIRO
+    mpiprocs: EDITAR-INTEIRO
+    walltime: "EDITAR-HH:MM:SS"
+    launcher: mpiexec
+    command:
+      - "{monan_jedi_install_root}/bin/mpasjedi_variational.x"
+      - variational.yaml
+    environment:
+      OMP_NUM_THREADS: "1"
+
+  validation:
+    log: jedi.stdout.log
+    required_log_markers: ["OOPS Ending"]
+    required_outputs:
+      - role: analysis
+        path: "Data/states/EDITAR-analysis.{analysis_mpas_file_time}.nc"
