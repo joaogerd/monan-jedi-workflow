@@ -2,24 +2,18 @@
 
 Este é o caminho normal do usuário. Não é necessário procurar outros exemplos.
 
-## 1. Pré-requisitos
+## 1. O que você precisa
 
-Você precisa ter:
+A campanha usa três componentes:
 
-- MONAN-JEDI instalado;
-- simpleWorkflow instalado;
-- este repositório instalado;
-- acesso aos dados científicos do experimento.
+- **MONAN-JEDI**: runtime científico instalado, incluindo MONAN/MPAS,
+  MPAS-JEDI e Obs2IODA;
+- **simpleWorkflow**: orquestrador que executa e acompanha as tarefas;
+- **monan-jedi-workflow**: interface que transforma a configuração científica
+  da campanha em um workflow executável.
 
-Selecione o runtime:
-
-```bash
-export MONAN_JEDI_INSTALL_ROOT=/caminho/para/monan-jedi
-export STACK_ROOT=/caminho/para/spack-stack
-
-monan-jedi-workflow --help
-swf --help
-```
+Você também precisa de acesso aos dados científicos do experimento. As seções
+abaixo mostram a ordem correta de preparação no JACI.
 
 ## 2. Comece em um shell JACI limpo
 
@@ -98,6 +92,76 @@ printf 'PYTHONPATH=%s\n' "${PYTHONPATH:-<not set>}"
 Neste ponto, o Python e o NumPy devem resolver abaixo de `$CONDA_PREFIX`.
 O spack-stack científico será carregado somente depois que esse checkpoint
 estiver correto.
+
+### 2.3 Instale os comandos Python
+
+Com `monan-jedi` ativo, instale o simpleWorkflow e esta interface:
+
+```bash
+pip install simpleworkflow
+
+git clone https://github.com/joaogerd/monan-jedi-workflow.git
+cd monan-jedi-workflow
+python -m pip install -e .
+```
+
+Se o repositório já existir, não o clone novamente. Entre no checkout correto e
+instale-o com `python -m pip install -e .`.
+
+Verifique:
+
+```bash
+command -v swf
+command -v monan-jedi-workflow
+swf --help
+monan-jedi-workflow --help
+```
+
+Os dois comandos devem resolver dentro do mesmo ambiente Conda ativo.
+
+### 2.4 Selecione o runtime científico MONAN-JEDI
+
+Defina as duas âncoras públicas do ecossistema:
+
+```bash
+export MONAN_JEDI_INSTALL_ROOT=/caminho/para/monan-jedi-instalado
+export STACK_ROOT=/caminho/para/spack-stack-validado
+```
+
+O `MONAN_JEDI_INSTALL_ROOT` deve apontar para uma instalação MONAN-JEDI que
+contenha:
+
+```text
+bin/
+share/monan-jedi/install-manifest.json
+```
+
+O `STACK_ROOT` deve apontar para o spack-stack usado por essa instalação.
+
+O workflow lê o manifesto instalado para descobrir o ambiente científico. Não
+copie caminhos internos do spack-stack para os YAMLs do caso.
+
+### Checkpoint 2 — comandos e runtime
+
+Execute:
+
+```bash
+test -f "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi/install-manifest.json"
+
+command -v python
+command -v swf
+command -v monan-jedi-workflow
+
+python -c "import sys, numpy; print(sys.executable); print(numpy.__file__)"
+```
+
+Esperado:
+
+- Python, `swf` e `monan-jedi-workflow` pertencem ao ambiente Conda
+  `monan-jedi`;
+- NumPy também vem desse ambiente;
+- o manifesto MONAN-JEDI instalado existe;
+- `MONAN_JEDI_INSTALL_ROOT` e `STACK_ROOT` estão definidos.
 
 ## 3. Crie a configuração do experimento
 
