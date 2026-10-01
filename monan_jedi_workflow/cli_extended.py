@@ -15,7 +15,6 @@ from .campaign import (
     tui_campaign,
 )
 from .corrected_campaign import materialize_corrected_campaign
-from .corrected_replay import materialize_corrected_replay
 from .init_stage import (
     prepare_mpas_init,
     submit_mpas_init,
@@ -36,8 +35,6 @@ _NEW = {
     "mpas-init-validate",
     "compare-netcdf",
     "validation-gate",
-    "materialize-corrected-replay",
-    "materialize-corrected-campaign",
     "campaign",
 }
 
@@ -75,52 +72,6 @@ def _parser() -> argparse.ArgumentParser:
         help="require one stage validation manifest to contain valid=true",
     )
     gate.add_argument("manifest", type=Path)
-
-    replay = sub.add_parser(
-        "materialize-corrected-replay",
-        help="create a clean 2018-04-15 00Z->18Z simpleWorkflow replay case",
-    )
-    replay.add_argument("--initial-jedi-case", required=True, type=Path)
-    replay.add_argument("--cycling-jedi-case", required=True, type=Path)
-    replay.add_argument("--mpas-case", required=True, type=Path)
-    replay.add_argument("--obs2ioda-config", required=True, type=Path)
-    replay.add_argument("--workflow-template", required=True, type=Path)
-    replay.add_argument("--destination", required=True, type=Path)
-
-    materialize = sub.add_parser(
-        "materialize-corrected-campaign",
-        help=(
-            "developer command: create a compact native-cycle campaign for an "
-            "arbitrary 6-hourly analysis period"
-        ),
-    )
-    materialize.add_argument(
-        "--initial-jedi-case",
-        type=Path,
-        default=None,
-        help="legacy source-compatibility argument; no precomputed first background is consumed",
-    )
-    materialize.add_argument("--cycling-jedi-case", required=True, type=Path)
-    materialize.add_argument(
-        "--initial-mpas-case",
-        required=True,
-        type=Path,
-        help="standalone MPAS case whose integration creates the first background",
-    )
-    materialize.add_argument("--mpas-case", required=True, type=Path)
-    materialize.add_argument("--obs2ioda-config", required=True, type=Path)
-    materialize.add_argument(
-        "--start-cycle",
-        default="2018-04-15T00:00:00Z",
-        help="first analysis cycle (must be aligned to 00/06/12/18Z)",
-    )
-    materialize.add_argument("--end-cycle", required=True)
-    materialize.add_argument("--destination", required=True, type=Path)
-    materialize.add_argument(
-        "--run-mpas-on-last-cycle",
-        action="store_true",
-        help="run MPAS from the final analysis when a forecast is scientifically requested",
-    )
 
     campaign = sub.add_parser(
         "campaign",
@@ -170,29 +121,6 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "validation-gate":
         require_valid_manifest(args.manifest)
         print(f"[OK] validation manifest accepted: {args.manifest}")
-    elif args.command == "materialize-corrected-replay":
-        path = materialize_corrected_replay(
-            initial_jedi_case=args.initial_jedi_case,
-            cycling_jedi_case=args.cycling_jedi_case,
-            mpas_case=args.mpas_case,
-            obs2ioda_config=args.obs2ioda_config,
-            workflow_template=args.workflow_template,
-            destination=args.destination,
-        )
-        print(f"[OK] materialized corrected replay case: {path}")
-    elif args.command == "materialize-corrected-campaign":
-        path = materialize_corrected_campaign(
-            initial_jedi_case=args.initial_jedi_case,
-            cycling_jedi_case=args.cycling_jedi_case,
-            initial_mpas_case=args.initial_mpas_case,
-            mpas_case=args.mpas_case,
-            obs2ioda_config=args.obs2ioda_config,
-            start_cycle=args.start_cycle,
-            end_cycle=args.end_cycle,
-            destination=args.destination,
-            run_mpas_on_last_cycle=args.run_mpas_on_last_cycle,
-        )
-        print(f"[OK] materialized corrected campaign: {path}")
     elif args.command == "campaign":
         if args.campaign_command == "check":
             report = check_campaign(args.config)
