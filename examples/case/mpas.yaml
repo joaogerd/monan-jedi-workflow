@@ -1,0 +1,60 @@
+# PASSO 3 — forecast MONAN/MPAS.
+# Este é um TEMPLATE, não um baseline científico pronto.
+# Substitua todo EDITAR. Veja docs/configuration/mpas.md.
+mpas:
+  variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    stack_root: ${STACK_ROOT}
+    static_root: EDITAR-caminho-dados-estaticos
+
+  # Deve ser coerente com forecast_contract.run_hours.
+  lead_hours: 6
+  run_dir: "work/mpas/{cycle_id}"
+
+  forecast_contract:
+    run_hours: 6
+    # Frequência dos estados usados pela DA/FGAT.
+    da_state_interval_hours: 3
+    mpi_ranks: EDITAR-INTEIRO
+    partition: EDITAR-arquivo-de-particao
+    do_restart: false
+    do_DAcycling: true
+    IAU: "off"
+
+  links:
+    # Produto do JEDI deste ciclo. O nome deve ser o mesmo de
+    # jedi.analysis_base_state.target.
+    - source: "work/jedi/{cycle_id}/EDITAR-caminho-do-estado-de-analise"
+      target: init.nc
+    - source: "{monan_jedi_install_root}/bin/mpas_atmosphere"
+      target: mpas_atmosphere
+    - source: "{static_root}/EDITAR-invariant.nc"
+      target: EDITAR-invariant.nc
+    - source: "{static_root}/{forecast_contract_partition}"
+      target: "{forecast_contract_partition}"
+
+  templates:
+    - source: templates/namelist.atmosphere
+      target: namelist.atmosphere
+    - source: templates/streams.atmosphere
+      target: streams.atmosphere
+
+  pbs:
+    filename: run_mpas.pbs
+    job_name: "mpas_{cycle_yyyymmddhh}"
+    queue: EDITAR-fila
+    select: 1
+    ncpus: EDITAR-INTEIRO
+    mpiprocs: EDITAR-MESMO-VALOR-DE-mpi_ranks
+    walltime: "EDITAR-HH:MM:SS"
+    launcher: mpiexec
+    command: ["./mpas_atmosphere"]
+    environment:
+      OMP_NUM_THREADS: "1"
+
+  validation:
+    log: log.atmosphere.0000.out
+    required_log_markers: ["Finished running the atmosphere core"]
+    required_outputs:
+      - "mpasout.{mpas_da_state_file_time}.nc"
+      - "mpasout.{mpas_valid_file_time}.nc"
