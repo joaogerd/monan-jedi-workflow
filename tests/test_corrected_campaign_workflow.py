@@ -42,7 +42,6 @@ def test_72_hour_campaign_uses_one_native_cycle_graph() -> None:
     document = build_corrected_campaign_workflow(
         observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
         analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
-        start_cycle="2018-04-15T00:00:00Z",
         start_cycle="2025-01-01T00:00:00Z",
         end_cycle="2025-01-04T00:00:00Z",
         experiment_dir="/tmp/campaign",
@@ -52,8 +51,8 @@ def test_72_hour_campaign_uses_one_native_cycle_graph() -> None:
 
     assert document["workflow"]["name"] == "monan_jedi_corrected_campaign"
     assert document["cycle"] == {
-        "start": "2018-04-15T00:00:00Z",
-        "end": "2018-04-18T00:00:00Z",
+        "start": "2025-01-01T00:00:00Z",
+        "end": "2025-01-04T00:00:00Z",
         "step": "PT6H",
     }
     assert set(initialization) == {
