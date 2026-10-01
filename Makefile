@@ -1,19 +1,15 @@
 PYTHON ?= python
-CONFIG_DIR ?= configs/experiments/3dfgat_mpastatic_x1.10242_2018041500
 PYTEST_REPORT ?= build/pytest.xml
 
-.PHONY: help install test validate render-yaml render-pbs
+.PHONY: help install test check
 
 help:
 	@echo "Available targets:"
-	@echo "  install      Install the package in editable mode with pytest"
-	@echo "  test         Run the pytest suite"
-	@echo "  validate     Validate the baseline experiment configuration"
-	@echo "  render-yaml  Render the MPAS-JEDI YAML file"
-	@echo "  render-pbs   Render the PBS script"
+	@echo "  install  Install the package in editable mode with pytest"
+	@echo "  test     Run the pytest suite"
+	@echo "  check    Run tests and the duration-independent workflow structure check"
 	@echo ""
-	@echo "Override CONFIG_DIR to use another experiment directory."
-	@echo "Example: make validate CONFIG_DIR=configs/experiments/my_experiment"
+	@echo "User workflow: copy examples/case and use 'monan-jedi-workflow campaign ...'."
 
 install:
 	$(PYTHON) -m pip install --upgrade pip
@@ -23,11 +19,5 @@ test:
 	mkdir -p $(dir $(PYTEST_REPORT))
 	$(PYTHON) -m pytest -q --tb=short --junitxml=$(PYTEST_REPORT)
 
-validate:
-	$(PYTHON) -m monan_jedi_workflow.cli validate-config $(CONFIG_DIR)
-
-render-yaml:
-	$(PYTHON) -m monan_jedi_workflow.cli render-yaml $(CONFIG_DIR)
-
-render-pbs:
-	$(PYTHON) -m monan_jedi_workflow.cli render-pbs $(CONFIG_DIR)
+check: test
+	$(PYTHON) scripts/report_native_cycle_structure.py
