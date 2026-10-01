@@ -64,6 +64,7 @@ def test_jedi_first_cycle_is_derived_from_campaign_start(tmp_path: Path) -> None
                     },
                     "analysis_base_state": {
                         "source": "/old/state.nc",
+                        "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
                         "expected_variable_count": 62,
                     },
                     "links": [
