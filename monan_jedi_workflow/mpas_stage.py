@@ -150,48 +150,55 @@ def load_mpas_run(config_dir: Path, cycle_time: str) -> MPASRun:
     if lead_hours < 0:
         raise StageConfigurationError("mpas.lead_hours must not be negative.")
     context = cycle_render_context(cycle, lead_hours=lead_hours)
-    intermediate = cycle.value + timedelta(hours=3)
+    contract = _require_mapping(config.get("forecast_contract", {}), "mpas.forecast_contract")
+    interval = 0
+    if contract:
+        try:
+            run_hours = int(contract.get("run_hours"))
+            interval = int(contract.get("da_state_interval_hours"))
+            mpi_ranks = int(contract.get("mpi_ranks"))
+        except (TypeError, ValueError) as error:
+            raise StageConfigurationError(
+                "MPAS forecast_contract run_hours, da_state_interval_hours and "
+                "mpi_ranks must be integers"
+            ) from error
+        if run_hours != lead_hours:
+            raise StageConfigurationError(
+                "mpas.forecast_contract.run_hours must match mpas.lead_hours"
+            )
+        if interval <= 0 or lead_hours <= 0 or lead_hours % interval:
+            raise StageConfigurationError(
+                "mpas.forecast_contract.da_state_interval_hours must be positive "
+                "and divide mpas.lead_hours"
+            )
+        if mpi_ranks <= 0:
+            raise StageConfigurationError(
+                "mpas.forecast_contract.mpi_ranks must be positive"
+            )
+        partition = contract.get("partition")
+        if not isinstance(partition, str) or not partition:
+            raise StageConfigurationError(
+                "mpas.forecast_contract.partition must be a non-empty string"
+            )
+        for key in ("do_restart", "do_DAcycling"):
+            if not isinstance(contract.get(key), bool):
+                raise StageConfigurationError(
+                    f"mpas.forecast_contract.{key} must be boolean"
+                )
+        if "IAU" not in contract:
+            raise StageConfigurationError("mpas.forecast_contract must declare IAU")
+
+    intermediate_hours = interval if interval else lead_hours
+    intermediate = cycle.value + timedelta(hours=intermediate_hours)
     context = {
         **context,
+        "mpas_da_state_file_time": intermediate.strftime("%Y-%m-%d_%H.%M.%S"),
+        "mpas_da_state_time": intermediate.strftime("%Y-%m-%d_%H:%M:%S"),
+        # Backward-compatible aliases for existing six-hour FGAT case templates.
         "mpas_t_plus_3_file_time": intermediate.strftime("%Y-%m-%d_%H.%M.%S"),
         "mpas_t_plus_3_time": intermediate.strftime("%Y-%m-%d_%H:%M:%S"),
     }
     context = render_declared_variables(config, context, label="mpas")
-
-    contract = _require_mapping(config.get("forecast_contract", {}), "mpas.forecast_contract")
-    if contract:
-        expected = {
-            "da_state_interval_hours": 3,
-            "mpi_ranks": 128,
-            "partition": "x1.10242.graph.info.part.128",
-            "do_restart": False,
-            "do_DAcycling": True,
-            "IAU": "off",
-        }
-        differences = [
-            f"{key}={contract.get(key)!r} (expected {value!r})"
-            for key, value in expected.items()
-            if contract.get(key) != value
-        ]
-        try:
-            run_hours = int(contract.get("run_hours"))
-        except (TypeError, ValueError):
-            differences.append(
-                f"run_hours={contract.get('run_hours')!r} (expected integer {lead_hours})"
-            )
-        else:
-            if run_hours != lead_hours:
-                differences.append(
-                    f"run_hours={run_hours!r} (expected {lead_hours!r} to match lead_hours)"
-                )
-        if lead_hours < 6:
-            differences.append(
-                f"lead_hours={lead_hours!r} (expected at least 6 for DA cycling)"
-            )
-        if differences:
-            raise StageConfigurationError(
-                "MPAS cycling forecast contract mismatch: " + "; ".join(differences)
-            )
 
     run_dir_value = config.get("run_dir")
     if not isinstance(run_dir_value, str) or not run_dir_value:
