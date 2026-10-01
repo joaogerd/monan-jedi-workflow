@@ -536,8 +536,6 @@ def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
     if not isinstance(mpas, dict):
         raise StageConfigurationError("initial MPAS mpas.yaml must define mpas mapping")
     lead_hours = int(mpas.get("lead_hours", -1))
-    if lead_hours < 6:
-        raise StageConfigurationError("initial MPAS integration must cover at least 6 hours")
     pbs = mpas.get("pbs")
     if not isinstance(pbs, dict):
         raise StageConfigurationError("initial MPAS configuration must define pbs")
