@@ -51,6 +51,22 @@ configuração do experimento ou ao contrato instalado do MONAN-JEDI.
 
 ## Instalação
 
+A campanha usa três componentes, com responsabilidades diferentes:
+
+1. **MONAN-JEDI** fornece o runtime científico instalado: MONAN/MPAS,
+   MPAS-JEDI e Obs2IODA.
+2. **simpleWorkflow** executa o grafo de tarefas e mantém estado/restart.
+3. **monan-jedi-workflow** traduz o caso científico para esse grafo.
+
+Instale o orquestrador:
+
+```bash
+pip install simpleworkflow
+swf --help
+```
+
+Instale esta interface:
+
 ```bash
 git clone https://github.com/joaogerd/monan-jedi-workflow.git
 cd monan-jedi-workflow
@@ -58,8 +74,8 @@ python -m pip install -e .
 monan-jedi-workflow --help
 ```
 
-O runtime científico é fornecido pelo MONAN-JEDI. No JACI, o usuário seleciona
-explicitamente:
+O MONAN-JEDI deve estar previamente instalado e validado no site. No JACI, o
+usuário seleciona explicitamente:
 
 ```bash
 export MONAN_JEDI_INSTALL_ROOT=/caminho/para/monan-jedi-instalado
