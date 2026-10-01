@@ -30,7 +30,7 @@ cp -r examples/case my-experiment
 cd my-experiment
 ```
 
-Você encontrará:
+Você encontrará um único conjunto de arquivos de usuário:
 
 ```text
 my-experiment/
@@ -40,7 +40,7 @@ my-experiment/
   mpas.yaml           forecast MONAN/MPAS
   obs2ioda.yaml       observações
   initialization/     configuração do primeiro estado MPAS
-  templates/          namelists, streams e YAML variacional
+  templates/          namelists, streams e YAML variacional (a preencher)
 ```
 
 Não crie `workflow.yaml` manualmente. Ele é produto da materialização.
@@ -152,3 +152,14 @@ ser tratado como defeito do workflow, não como procedimento do usuário.
 O template `examples/case` será fechado com o baseline científico 2025 antes
 de ser declarado pronto para produção. Até lá, nenhum valor científico de
 exemplo deve ser interpretado como recomendação universal.
+
+
+## O que NÃO usar
+
+Não há um segundo diretório de exemplos para escolher. O caminho mantido é
+`examples/case/`. Material de reprodução histórica foi retirado da árvore
+ativa e permanece preservado em `archive/pre-cleanup-2026-10-01`.
+
+Os comandos de stage (`jedi-prepare`, `mpas-prepare`, `obs2ioda-run` etc.)
+são usados pelo workflow e servem para diagnóstico/desenvolvimento. Para uma
+campanha normal, use a interface `campaign`.
