@@ -45,30 +45,10 @@ jobs:
           path: pytest-results.xml
           if-no-files-found: error
 
-      - name: Check safe workflow targets
-        env:
-          MONAN_JEDI_INSTALL_ROOT: ${{ runner.temp }}/monan-jedi
-          STACK_ROOT: ${{ runner.temp }}/spack-stack
+      - name: Check public CLI
         run: |
-          mkdir -p "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi"
-          mkdir -p "$STACK_ROOT"
-          cat > "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi/install-manifest.json" <<'JSON'
-          {
-            "schema_version": 2,
-                "ecosystem_contract_version": 2,
-            "contract": "monan-jedi-runtime-v2",
-            "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
-            "stack": {
-              "env_name": "jaci-test",
-              "env_module": "test/jedi-mpas-env/2.0.0",
-              "site_setup": "configs/sites/tier2/jaci/setup.sh",
-              "module_root_template": "envs/{env_name}/modules"
-            }
-          }
-          JSON
-          make validate
-          make render-yaml
-          make render-pbs
+          monan-jedi-workflow --help
+          monan-jedi-workflow campaign --help
 
       - name: Report native-cycle structure
         run: python scripts/report_native_cycle_structure.py

@@ -1,182 +1,109 @@
 # MONAN-JEDI Workflow
 
-Workflow Python-first para executar e validar etapas do MONAN/MPAS-JEDI sem acoplar a ciência a um orquestrador específico.
+Interface para configurar e executar experimentos cíclicos MONAN + JEDI usando
+simpleWorkflow.
 
-O projeto separa duas responsabilidades:
+## Por onde começar
+
+Se você quer **rodar um experimento**, não navegue pelos diretórios procurando
+YAMLs. Siga apenas esta sequência:
+
+1. [Tutorial: criar e rodar um caso](docs/tutorial.md)
+2. [Configuração da campanha](docs/configuration/campaign.md)
+3. [Configuração MONAN/MPAS](docs/configuration/mpas.md)
+4. [Configuração das observações](docs/configuration/observations.md)
+5. [Configuração JEDI](docs/configuration/jedi.md)
+6. [Diagnóstico, status e restart](docs/troubleshooting.md)
+
+O tutorial parte de um template único e mostra **qual arquivo copiar, o que
+editar, como validar e como executar**.
+
+## Modelo mental
+
+O usuário configura a ciência; o workflow automatiza a mecânica:
 
 ```text
-monan-jedi-workflow                 orquestrador
--------------------                 -----------
-como preparar/executar              quando executar
-como validar                        dependências
-inputs/outputs do domínio           ciclos, restart, estado
-
-                                    simpleWorkflow (pesquisa)
-                                    ecFlow (operação INPE)
-                                    Cylc (possível alternativa)
+campaign.yaml
+     |
+     +-- período e cadência
+     +-- profile científico
+              |
+              +-- JEDI
+              +-- observações
+              +-- MONAN/MPAS
+              +-- inicialização
+     |
+     v
+monan-jedi-workflow
+     |
+     v
+simpleWorkflow
+     |
+     +-- Obs2IODA
+     +-- JEDI
+     +-- MONAN/MPAS
+     +-- próximo ciclo
 ```
 
-A regra principal é simples: **as etapas de domínio devem funcionar sozinhas pela CLI**. `simpleWorkflow`, ecFlow ou Cylc apenas organizam essas mesmas etapas.
-
-## Estado atual
-
-O repositório possui estágios cycle-aware para:
-
-- MPAS;
-- Obs2IODA;
-- MPAS-JEDI (análise);
-- preparação WPS/condição inicial MPAS já existente no fluxo de dados.
-
-A nova interface JEDI é:
-
-```bash
-monan-jedi-workflow jedi-prepare  CASE --cycle 2018-04-15T00:00:00Z
-monan-jedi-workflow jedi-submit   CASE --cycle 2018-04-15T00:00:00Z
-monan-jedi-workflow jedi-wait     CASE --cycle 2018-04-15T00:00:00Z
-monan-jedi-workflow jedi-validate CASE --cycle 2018-04-15T00:00:00Z
-```
-
-Esses comandos não executam o workflow completo. Isso é intencional.
+Nenhuma escolha científica deve estar escondida no código. Data, malha,
+níveis, timestep, observações, B, recursos MPI/PBS e caminhos pertencem à
+configuração do experimento ou ao contrato instalado do MONAN-JEDI.
 
 ## Instalação
 
+A campanha usa três componentes, com responsabilidades diferentes:
+
+1. **MONAN-JEDI** fornece o runtime científico instalado: MONAN/MPAS,
+   MPAS-JEDI e Obs2IODA.
+2. **simpleWorkflow** executa o grafo de tarefas e mantém estado/restart.
+3. **monan-jedi-workflow** traduz o caso científico para esse grafo.
+
+Instale o orquestrador:
+
 ```bash
-python -m pip install --upgrade pip
+pip install simpleworkflow
+swf --help
+```
+
+Instale esta interface:
+
+```bash
+git clone https://github.com/joaogerd/monan-jedi-workflow.git
+cd monan-jedi-workflow
 python -m pip install -e .
+monan-jedi-workflow --help
 ```
 
-Para desenvolvimento:
+O MONAN-JEDI deve estar previamente instalado e validado no site. No JACI, o
+usuário seleciona explicitamente:
 
 ```bash
-python -m pip install -e ".[dev]"
-python -m pytest
+export MONAN_JEDI_INSTALL_ROOT=/caminho/para/monan-jedi-instalado
+export STACK_ROOT=/caminho/para/spack-stack
 ```
 
-## Contrato de runtime do ecossistema
+O workflow lê
+`${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/install-manifest.json`; não
+repete internamente a identidade do stack.
 
-O workflow é consumidor do runtime publicado pelo `MONAN-JEDI`. Para os casos
-mantidos no JACI, selecione explicitamente as duas âncoras compartilhadas antes
-de preparar ou submeter ciclos:
+## Interface normal
+
+Depois de configurar o experimento:
 
 ```bash
-export MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/$USER/build/monan-jedi
-export STACK_ROOT=/path/to/validated/spack-stack
+monan-jedi-workflow campaign check campaign.yaml
+monan-jedi-workflow campaign create campaign.yaml
+monan-jedi-workflow campaign run campaign.yaml
+monan-jedi-workflow campaign status campaign.yaml
 ```
 
-`MONAN_JEDI_INSTALL_ROOT` é o prefixo instalado público; não é checkout nem
-árvore de build. Os stages derivam dele `mpasjedi_variational.x`,
-`mpas_atmosphere`, `mpas_init_atmosphere`, WPS e Obs2IODA. `STACK_ROOT`
-seleciona o ambiente de dependências/MPI que os PBS devem reconstruir no nó de
-computação.
+Comece com `P3D`. Depois de validar cientificamente os três dias, mantenha a
+mesma configuração científica e altere somente o período para `P7D`,
+`P30D` ou `P365D`.
 
-Os YAMLs cycle-aware podem referenciar essas âncoras dentro de `variables:`.
-Referências de ambiente não definidas falham durante a resolução do caso.
+## Desenvolvimento
 
-A identidade compatível do stack não é repetida nos YAMLs do workflow. O
-workflow lê:
-
-```text
-${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/install-manifest.json
-```
-
-e usa `ecosystem_contract_version: 2` para obter `env_name`, `env_module`,
-`site_setup` e o layout da árvore de módulos. Assim, trocar `STACK_ROOT`
-troca o checkout selecionado sem criar uma segunda fonte de verdade para o
-módulo JEDI.
-
-**Casos mantidos exigem esse manifesto v2.** Se o arquivo não existir ou estiver
-inválido, a preparação/renderização falha antes de gerar/submeter PBS.
-
-Perfis legados que ainda usam `jedi.mpas_bundle_build` não recebem mais
-defaults JACI embutidos no código. Para esse caminho depreciado, a identidade do
-stack precisa ser fornecida explicitamente por `STACK_ENV_NAME`,
-`STACK_ENV_MODULE` e `STACK_SITE_SETUP` (e opcionalmente
-`STACK_MODULE_ROOT`). Isso preserva compatibilidade sem criar uma segunda
-fonte de verdade silenciosa.
-
-## Primeiro ciclo
-
-Um caso cíclico contém, no mínimo:
-
-```text
-CASE/
-  jedi.yaml
-  mpas.yaml
-  obs2ioda.yaml
-  workflow.yaml
-```
-
-Antes de executar:
-
-```bash
-monan-jedi-workflow cycle-doctor CASE \
-  --cycle 2018-04-15T00:00:00Z
-```
-
-Com `simpleWorkflow` instalado:
-
-```bash
-swf plan CASE/workflow.yaml
-
-swf run CASE/workflow.yaml \
-  --cycle-time 2018-04-15T00:00:00Z
-
-swf status CASE/workflow.yaml
-```
-
-O exemplo de referência está em:
-
-```text
-examples/simpleworkflow/cycled_da/
-```
-
-> Os arquivos científicos do exemplo são templates. Caminhos, nomes de outputs, YAML variacional, namelists, streams e arquivos de malha devem ser ajustados ao **baseline atual validado** antes da primeira execução no JACI.
-
-## Matriz B
-
-A geração da B não faz parte do workflow de cycling. O ciclo consome uma B previamente construída e validada. Isso permite que `MPAS-BMatrix` e a campanha de assimilação evoluam independentemente e preserva a identidade da B usada em cada experimento.
-
-## Documentação
-
-### Usuário
-
-Comece por:
-
-- [Primeiro experimento cíclico](docs/user/first-cycling-experiment.md)
-- [Configuração de um caso](docs/user/case-configuration.md)
-- [Status e restart](docs/user/restart-and-status.md)
-- [Troubleshooting](docs/user/troubleshooting.md)
-
-A documentação de usuário é propositalmente curta e orientada a tarefas.
-
-### Desenvolvedor
-
-A documentação interna registra arquitetura, contratos e decisões:
-
-- [Orquestração](docs/developer/orchestration.md)
-- [Modelo temporal](docs/developer/cycle-time-model.md)
-- [Estágio JEDI](docs/developer/jedi-stage.md)
-- [Modelo conceitual do ciclo](docs/developer/reference-cycle-model.md)
-- [Reaproveitamento de workflows anteriores](docs/developer/legacy-and-reuse-analysis.md)
-- [Auditoria e matriz de migração da linha V2](docs/developer/v2-migration-audit.md)
-- [Política de documentação](docs/developer/documentation-policy.md)
-- [ADRs](docs/developer/adr/README.md)
-
-## Baseline estático anterior
-
-Os comandos anteriores (`validate-config`, `prepare-runtime`, `render-yaml`, `render-pbs`, `submit`, `wait`, `validate-run`) continuam disponíveis para reproduzir e depurar o baseline estático. O caminho cíclico novo não remove essa interface; ele acrescenta stages explícitos por ciclo.
-
-## Segurança operacional
-
-Preparação e renderização não submetem jobs implicitamente. A primeira operação que chama `qsub` é sempre um comando de submissão explícito (`*-submit`). Término no PBS e sucesso científico são estados diferentes: use sempre `*-validate`.
-
-
-### PBS runtime anchors
-
-Cycle-aware examples resolve `MONAN_JEDI_INSTALL_ROOT` and `STACK_ROOT` through
-their declared stage variables. The retained static baseline declares the same two
-values under `pbs.environment_anchors`; the renderer embeds them directly in the
-PBS script, so jobs do not depend on `qsub -V` or login-shell inheritance.
-
-The maintained JACI bootstrap temporarily disables Bash `nounset` only while
-sourcing the site `setup.sh`, then restores the previous state before MPI starts.
+Detalhes internos do motor não fazem parte do caminho normal do usuário. O
+código e os testes preservam os contratos dos stages e da integração com
+simpleWorkflow. O estado anterior à simplificação foi preservado na branch
+`archive/pre-cleanup-2026-10-01`.

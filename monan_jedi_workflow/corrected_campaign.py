@@ -15,13 +15,11 @@ from typing import Any
 
 import yaml
 
-from .corrected_replay import (
-    _FIRST_CYCLE,
-    _absolutize_case_path,
-    _copy_clean_case,
-    _load_yaml,
-    _patch_obs,
-    _write_yaml,
+from .case_utils import (
+    absolutize_case_path,
+    copy_clean_case,
+    load_yaml,
+    write_yaml,
 )
 from .stage_config import StageConfigurationError
 
@@ -445,7 +443,7 @@ def _cycle_tasks(
 
 def build_corrected_campaign_workflow(
     *,
-    start_cycle: str = _FIRST_CYCLE,
+    start_cycle: str = None,
     end_cycle: str,
     experiment_dir: str,
     run_mpas_on_last_cycle: bool = False,
@@ -518,28 +516,26 @@ def _validate_cycling_contract(mpas: dict[str, Any]) -> None:
 def _absolutize_mpas_assets(mpas: dict[str, Any], source_case: Path) -> None:
     for entry in mpas.get("templates", []):
         if isinstance(entry, dict):
-            entry["source"] = _absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
     directories = mpas.get("link_directories", [])
     for index, entry in enumerate(directories):
         if isinstance(entry, dict):
-            entry["source"] = _absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
         elif isinstance(entry, str):
-            directories[index] = _absolutize_case_path(entry, source_case)
+            directories[index] = absolutize_case_path(entry, source_case)
     for entry in mpas.get("links", []):
         if isinstance(entry, dict):
-            entry["source"] = _absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
 
 
 def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
     """Materialize a standalone MPAS integration that produces the first background."""
     source_case = source_case.resolve()
-    data = _load_yaml(source_case / "mpas.yaml")
+    data = load_yaml(source_case / "mpas.yaml")
     mpas = data.get("mpas")
     if not isinstance(mpas, dict):
         raise StageConfigurationError("initial MPAS mpas.yaml must define mpas mapping")
     lead_hours = int(mpas.get("lead_hours", -1))
-    if lead_hours < 6:
-        raise StageConfigurationError("initial MPAS integration must cover at least 6 hours")
     pbs = mpas.get("pbs")
     if not isinstance(pbs, dict):
         raise StageConfigurationError("initial MPAS configuration must define pbs")
@@ -547,12 +543,12 @@ def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
         destination.resolve() / "work/initialization/mpas/{cycle_id}"
     )
     _absolutize_mpas_assets(mpas, source_case)
-    _write_yaml(destination / "initialization/mpas.yaml", data)
+    write_yaml(destination / "initialization/mpas.yaml", data)
 
 
 def _patch_cycling_mpas(source_case: Path, destination: Path) -> None:
     source_case = source_case.resolve()
-    data = _load_yaml(source_case / "mpas.yaml")
+    data = load_yaml(source_case / "mpas.yaml")
     mpas = data.get("mpas")
     if not isinstance(mpas, dict):
         raise StageConfigurationError("mpas.yaml must define mpas mapping")
@@ -568,28 +564,15 @@ def _patch_cycling_mpas(source_case: Path, destination: Path) -> None:
     mpas["run_dir"] = str(destination.resolve() / "work/mpas/{cycle_id}")
     _absolutize_mpas_assets(mpas, source_case)
 
-    analysis_link_found = False
-    for entry in mpas.get("links", []):
-        if not isinstance(entry, dict):
-            continue
-        target = str(entry.get("target", ""))
-        if target.startswith("mpas.analysis-full.") or target == "init.nc":
-            entry["source"] = str(
-                destination.resolve()
-                / "work/jedi/{cycle_id}/Data/states/mpas.3dvar.{mpas_file_time}.nc"
-            )
-            entry["target"] = "mpas.analysis-full.{mpas_file_time}.nc"
-            analysis_link_found = True
-    if not analysis_link_found:
-        raise StageConfigurationError(
-            "source MPAS case does not declare the analysis initial-condition link"
-        )
-    _write_yaml(destination / "mpas.yaml", data)
+    # The analysis-to-forecast handoff is declared by the MPAS case itself.
+    # The materializer only relocates relative assets; it does not infer a
+    # scientific product from filenames or method names.
+    write_yaml(destination / "mpas.yaml", data)
 
 
-def _patch_jedi_native(destination: Path, start_cycle: str = _FIRST_CYCLE) -> None:
+def _patch_jedi_native(destination: Path, start_cycle: str) -> None:
     path = destination / "jedi.yaml"
-    data = _load_yaml(path)
+    data = load_yaml(path)
     jedi = data.get("jedi")
     if not isinstance(jedi, dict):
         raise StageConfigurationError("jedi.yaml must define jedi mapping")
@@ -624,43 +607,19 @@ def _patch_jedi_native(destination: Path, start_cycle: str = _FIRST_CYCLE) -> No
             "or a first_cycle/cycling mapping when declared"
         )
 
-    found = set()
     links = jedi.get("links", [])
     if not isinstance(links, list):
         raise StageConfigurationError("jedi.links must be a list")
-    for entry in links:
-        if not isinstance(entry, dict):
-            continue
-        target = str(entry.get("target", "")).lower()
-        if "sondes_obs" in target:
-            entry["source"] = str(
-                root / "obs/{analysis_yyyymmddhh}/sondes_obs_{analysis_yyyymmddhh}.h5"
-            )
-            found.add("sondes")
-        elif "sfc_obs" in target:
-            entry["source"] = str(
-                root / "obs/{analysis_yyyymmddhh}/sfc_obs_{analysis_yyyymmddhh}.h5"
-            )
-            found.add("sfc")
-        elif "gnssro_obs" in target:
-            entry["source"] = str(
-                root / "obs/{analysis_yyyymmddhh}/gnssro_obs_{analysis_yyyymmddhh}.h5"
-            )
-            found.add("gnssro")
-    if found != {"sondes", "sfc", "gnssro"}:
-        raise StageConfigurationError(
-            "cycling JEDI case must declare sondes, sfc and gnssro links"
-        )
     pbs = jedi.get("pbs")
     if not isinstance(pbs, dict):
         raise StageConfigurationError("JEDI configuration must define pbs")
     if int(pbs.get("mpiprocs", 0)) <= 0:
         raise StageConfigurationError("jedi.pbs.mpiprocs must be a positive integer")
-    _write_yaml(path, data)
+    write_yaml(path, data)
 
 
 def _declared_observation_outputs(path: Path) -> list[str]:
-    data = _load_yaml(path)
+    data = load_yaml(path)
     obs = data.get("obs2ioda")
     if not isinstance(obs, dict):
         raise StageConfigurationError("obs2ioda.yaml must define obs2ioda mapping")
@@ -689,7 +648,7 @@ def _declared_observation_outputs(path: Path) -> list[str]:
 
 
 def _declared_analysis_output(path: Path) -> str:
-    data = _load_yaml(path)
+    data = load_yaml(path)
     jedi = data.get("jedi")
     if not isinstance(jedi, dict):
         raise StageConfigurationError("jedi.yaml must define jedi mapping")
@@ -711,7 +670,7 @@ def materialize_corrected_campaign(
     mpas_case: Path,
     obs2ioda_config: Path,
     destination: Path,
-    start_cycle: str = _FIRST_CYCLE,
+    start_cycle: str = None,
     end_cycle: str,
     run_mpas_on_last_cycle: bool = False,
     initial_jedi_case: Path | None = None,
@@ -731,12 +690,17 @@ def materialize_corrected_campaign(
         raise FileExistsError(f"campaign destination already exists: {destination}")
 
     try:
-        _copy_clean_case(cycling_jedi_case.resolve(), destination)
+        copy_clean_case(cycling_jedi_case.resolve(), destination)
         (destination / "initialization").mkdir(parents=True, exist_ok=True)
         _patch_jedi_native(destination, start_cycle)
         _patch_initial_mpas(initial_mpas_case.resolve(), destination)
         _patch_cycling_mpas(mpas_case.resolve(), destination)
-        _patch_obs(obs2ioda_config.resolve(), destination, destination / "work")
+        obs_data = load_yaml(obs2ioda_config.resolve())
+        obs = obs_data.get("obs2ioda")
+        if not isinstance(obs, dict):
+            raise StageConfigurationError("obs2ioda.yaml must define obs2ioda mapping")
+        obs["work_dir"] = str(destination.resolve() / "work/obs/{cycle_yyyymmddhh}")
+        write_yaml(destination / "obs2ioda.yaml", obs_data)
 
         workflow = build_corrected_campaign_workflow(
             start_cycle=start_cycle,

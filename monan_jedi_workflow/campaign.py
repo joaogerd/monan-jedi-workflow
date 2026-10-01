@@ -178,8 +178,6 @@ def _parse_duration(value: str) -> int:
         if match.group("days") is not None
         else int(match.group("hours"))
     )
-    if hours % 6:
-        raise StageConfigurationError("campaign duration must be a multiple of 6 hours")
     return hours
 
 
@@ -338,17 +336,18 @@ def _initial_mpas_detail(spec: CampaignSpec) -> PreflightItem:
     config = spec.initial_mpas_case / "mpas.yaml"
     if not config.is_file():
         return PreflightItem("initial MPAS case", False, f"missing {config}")
-    source_cycle = _parse_cycle(spec.start_cycle) - timedelta(hours=6)
+    source_cycle = _parse_cycle(spec.start_cycle) - timedelta(hours=spec.cycle_interval_hours)
     try:
         run = load_mpas_run(spec.initial_mpas_case, _iso(source_cycle))
     except Exception as exc:
         return PreflightItem("initial MPAS case", False, str(exc))
     lead_hours = int(run.config.get("lead_hours", 0))
-    if lead_hours < 6:
+    if lead_hours < spec.cycle_interval_hours:
         return PreflightItem(
             "initial MPAS case",
             False,
-            f"lead_hours={lead_hours}; at least 6 hours are required",
+            f"lead_hours={lead_hours}; at least {spec.cycle_interval_hours} hours "
+            "are required by campaign.cycle_interval_hours",
         )
     return PreflightItem(
         "initial MPAS case",

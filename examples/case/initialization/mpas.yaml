@@ -1,0 +1,39 @@
+# PASSO 6 — integração que produz o primeiro background.
+# Configure um estado MPAS válido antes da primeira análise. Esta integração
+# precisa alcançar pelo menos o horário da primeira análise.
+mpas:
+  variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    initial_data_root: EDITAR-caminho-inicializacao
+
+  lead_hours: 6
+  run_dir: "work/initialization/mpas/{cycle_id}"
+
+  links:
+    - source: "{monan_jedi_install_root}/bin/mpas_atmosphere"
+      target: mpas_atmosphere
+    - source: "{initial_data_root}/EDITAR-estado-inicial.nc"
+      target: init.nc
+
+  templates:
+    - source: ../templates/namelist.atmosphere.initial
+      target: namelist.atmosphere
+    - source: ../templates/streams.atmosphere.initial
+      target: streams.atmosphere
+
+  pbs:
+    filename: run_mpas.pbs
+    job_name: "mpas_initial_{cycle_yyyymmddhh}"
+    queue: EDITAR-fila
+    select: 1
+    ncpus: EDITAR-INTEIRO
+    mpiprocs: EDITAR-INTEIRO
+    walltime: "EDITAR-HH:MM:SS"
+    launcher: mpiexec
+    command: ["./mpas_atmosphere"]
+
+  validation:
+    log: log.atmosphere.0000.out
+    required_log_markers: ["Finished running the atmosphere core"]
+    required_outputs:
+      - "mpasout.{mpas_valid_file_time}.nc"

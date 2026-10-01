@@ -1,0 +1,16 @@
+# PASSO 1 — período da campanha.
+# Leia docs/configuration/campaign.md.
+campaign:
+  name: EDITAR-nome
+  start: EDITAR-AAAA-MM-DDT00:00:00Z
+  duration: P3D
+  cycle_interval_hours: 6
+  destination: EDITAR-cases/nome
+
+profile: profile.yaml
+
+forecast:
+  run_on_last_cycle: true
+
+execution:
+  swf_command: swf

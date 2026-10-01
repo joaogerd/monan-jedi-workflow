@@ -259,24 +259,3 @@ def test_new_submission_archives_previous_logs_without_touching_products(
     assert product.read_bytes() == b"scientific state"
 
 
-def test_jaci_cycling_templates_pin_scientific_forecast_contract() -> None:
-    template_dir = REPOSITORY / "examples/simpleworkflow/cycled_da/templates"
-    namelist = (template_dir / "namelist.atmosphere.cycling.in").read_text()
-    streams = (template_dir / "streams.atmosphere.cycling.in").read_text()
-    assert "config_run_duration = '{mpas_run_duration}'" in namelist
-    assert "config_do_restart = .false." in namelist
-    assert "config_do_DAcycling = .true." in namelist
-    assert "config_IAU_option = 'off'" in namelist
-    assert 'name="da_state"' in streams
-    assert 'output_interval="03:00:00"' in streams
-    assert 'name="restart" type="output"' in streams
-    assert 'output_interval="24:00:00"' in streams
-
-
-def test_jaci_cycling_example_validates_mpas_output_times() -> None:
-    example = (REPOSITORY / "examples/simpleworkflow/cycled_da/mpas-cycling-jaci.yaml.example").read_text()
-    assert 'path: "mpasout.{mpas_t_plus_3_file_time}.nc"' in example
-    assert 'expected_time: "{mpas_t_plus_3_time}"' in example
-    assert 'path: "mpasout.{mpas_valid_file_time}.nc"' in example
-    assert 'expected_time: "{mpas_valid_time}"' in example
-    assert example.count("required_variables: [xtime]") == 2

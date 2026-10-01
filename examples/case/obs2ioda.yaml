@@ -1,0 +1,36 @@
+# PASSO 4 — observações.
+# Declare somente famílias realmente assimiladas pelo JEDI.
+# Veja docs/configuration/observations.md.
+obs2ioda:
+  variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    raw_obs_root: EDITAR-caminho-dados-brutos
+    converter: EDITAR-executavel-ou-wrapper
+
+  work_dir: "work/obs/{cycle_yyyymmddhh}"
+
+  runtime:
+    library_paths: []
+    dependency_checks:
+      - "{converter}"
+
+  inspection:
+    argv: [ncdump, -h, "{output}"]
+    timeout_seconds: 60
+    required_header_markers: [MetaData, ObsValue, ObsError, PreQC]
+
+  provenance:
+    sha256: true
+
+  converters:
+    # Duplique este bloco para cada conversor necessário.
+    - name: EDITAR-nome
+      inputs:
+        - "EDITAR-input-{cycle_yyyymmddhh}"
+      outputs:
+        # Estes nomes são consumidos pelo workflow; não existem famílias
+        # observacionais hardcoded no motor.
+        - "{work_dir}/EDITAR-output-{cycle_yyyymmddhh}.h5"
+      argv:
+        - "{converter}"
+        - EDITAR-argumentos
