@@ -183,8 +183,8 @@ def _initialization_tasks(
 def _cycle_tasks(
     *,
     run_mpas_on_last_cycle: bool,
-    observation_outputs: list[str] | None = None,
-    analysis_output: str = "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc",
+    observation_outputs: list[str],
+    analysis_output: str,
 ) -> list[dict[str, Any]]:
     root = "{experiment_dir}"
     cycle_id = "{cycle_id}"
@@ -196,11 +196,11 @@ def _cycle_tasks(
     obs_doctor = f"{obs_dir}/.monan-jedi-workflow/obs2ioda-doctor.json"
     obs_plan = f"{obs_dir}/.monan-jedi-workflow/obs2ioda.json"
     obs_validation = f"{obs_dir}/.monan-jedi-workflow/obs2ioda-validation.json"
-    obs_products = observation_outputs or [
-        "sondes_obs_{cycle_yyyymmddhh}.h5",
-        "sfc_obs_{cycle_yyyymmddhh}.h5",
-        "gnssro_obs_{cycle_yyyymmddhh}.h5",
-    ]
+    if not observation_outputs:
+        raise StageConfigurationError(
+            "campaign requires at least one observation output declared by Obs2IODA"
+        )
+    obs_products = observation_outputs
     obs_files = [
         item if item.startswith("/") else f"{obs_dir}/{item}"
         for item in obs_products
@@ -450,8 +450,8 @@ def build_corrected_campaign_workflow(
     experiment_dir: str,
     run_mpas_on_last_cycle: bool = False,
     cycle_interval_hours: int = 6,
-    observation_outputs: list[str] | None = None,
-    analysis_output: str = "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc",
+    observation_outputs: list[str],
+    analysis_output: str,
 ) -> dict[str, Any]:
     """Build a constant-size native-cycle workflow for a corrected campaign."""
     cycles = _cycles(start_cycle, end_cycle, cycle_interval_hours)
@@ -659,6 +659,51 @@ def _patch_jedi_native(destination: Path, start_cycle: str = _FIRST_CYCLE) -> No
     _write_yaml(path, data)
 
 
+def _declared_observation_outputs(path: Path) -> list[str]:
+    data = _load_yaml(path)
+    obs = data.get("obs2ioda")
+    if not isinstance(obs, dict):
+        raise StageConfigurationError("obs2ioda.yaml must define obs2ioda mapping")
+    converters = obs.get("converters")
+    if not isinstance(converters, list) or not converters:
+        raise StageConfigurationError("obs2ioda.converters must be a non-empty list")
+    outputs: list[str] = []
+    for index, converter in enumerate(converters):
+        if not isinstance(converter, dict):
+            raise StageConfigurationError(
+                f"obs2ioda.converters[{index}] must be a mapping"
+            )
+        declared = converter.get("outputs")
+        if not isinstance(declared, list) or not declared:
+            raise StageConfigurationError(
+                f"obs2ioda.converters[{index}].outputs must be a non-empty list"
+            )
+        for output in declared:
+            if not isinstance(output, str) or not output:
+                raise StageConfigurationError(
+                    f"obs2ioda.converters[{index}].outputs must contain strings"
+                )
+            prefix = "{work_dir}/"
+            outputs.append(output[len(prefix):] if output.startswith(prefix) else output)
+    return outputs
+
+
+def _declared_analysis_output(path: Path) -> str:
+    data = _load_yaml(path)
+    jedi = data.get("jedi")
+    if not isinstance(jedi, dict):
+        raise StageConfigurationError("jedi.yaml must define jedi mapping")
+    base = jedi.get("analysis_base_state")
+    if not isinstance(base, dict):
+        raise StageConfigurationError("jedi.analysis_base_state must be a mapping")
+    target = base.get("target")
+    if not isinstance(target, str) or not target:
+        raise StageConfigurationError(
+            "jedi.analysis_base_state.target must declare the analysis-state filename"
+        )
+    return target
+
+
 def materialize_corrected_campaign(
     *,
     cycling_jedi_case: Path,
@@ -699,6 +744,8 @@ def materialize_corrected_campaign(
             experiment_dir=str(destination),
             run_mpas_on_last_cycle=run_mpas_on_last_cycle,
             cycle_interval_hours=cycle_interval_hours,
+            observation_outputs=_declared_observation_outputs(destination / "obs2ioda.yaml"),
+            analysis_output=_declared_analysis_output(destination / "jedi.yaml"),
         )
         (destination / "workflow.yaml").write_text(
             yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
