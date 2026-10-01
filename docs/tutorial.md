@@ -21,7 +21,85 @@ monan-jedi-workflow --help
 swf --help
 ```
 
-## 2. Crie a configuração do experimento
+## 2. Comece em um shell JACI limpo
+
+Não reutilize um shell no qual outro ambiente Conda, outro spack-stack ou outra
+instalação MONAN-JEDI já tenha sido carregada. Misturar ambientes pode fazer o
+Python do Conda importar bibliotecas Python vindas do spack-stack, o que torna
+erros difíceis de diagnosticar.
+
+### 2.1 Torne o Conda disponível
+
+Em cada novo login no JACI:
+
+```bash
+module load anaconda
+start_conda
+```
+
+### 2.2 Crie o ambiente Python uma única vez
+
+Na primeira instalação:
+
+```bash
+conda create -n monan-jedi -c conda-forge \
+  python=3.11 pip \
+  pyyaml numpy=1.26 netcdf4 cftime xarray matplotlib \
+  esmpy windspharm pytest ruff -y
+
+conda activate monan-jedi
+```
+
+A criação do ambiente é feita **uma única vez**.
+
+Nos logins seguintes, não recrie o ambiente. Apenas inicialize o Conda no shell
+novo e ative o ambiente existente:
+
+```bash
+module load anaconda
+start_conda
+conda activate monan-jedi
+```
+
+A sequência `module load anaconda` + `start_conda` precisa ser repetida em
+um shell JACI novo; `conda create` não.
+
+Para a estratégia completa de isolamento entre Conda e spack-stack, incluindo
+diagnóstico de mistura de NumPy/Python, veja também
+[Installation on JACI no MPAS-BMatrix](https://github.com/joaogerd/MPAS-BMatrix/blob/main/docs/install-jaci.md).
+
+### Checkpoint 1 — ambiente Python
+
+Execute:
+
+```bash
+command -v python
+
+python -c "import sys, numpy; \
+print(sys.version); \
+print(sys.executable); \
+print(numpy.__file__)"
+```
+
+O resultado esperado é:
+
+- Python 3.11;
+- `sys.executable` dentro do ambiente `monan-jedi`;
+- NumPy carregado do mesmo ambiente Conda;
+- nenhum NumPy vindo de `spack-stack/.../site-packages`.
+
+Uma verificação adicional útil é:
+
+```bash
+printf 'CONDA_PREFIX=%s\n' "$CONDA_PREFIX"
+printf 'PYTHONPATH=%s\n' "${PYTHONPATH:-<not set>}"
+```
+
+Neste ponto, o Python e o NumPy devem resolver abaixo de `$CONDA_PREFIX`.
+O spack-stack científico será carregado somente depois que esse checkpoint
+estiver correto.
+
+## 3. Crie a configuração do experimento
 
 Copie o template mantido:
 
@@ -45,9 +123,9 @@ my-experiment/
 
 Não crie `workflow.yaml` manualmente. Ele é produto da materialização.
 
-## 3. Configure na ordem correta
+## 4. Configure na ordem correta
 
-### 3.1 Campanha
+### 4.1 Campanha
 
 Abra `campaign.yaml`. Para o primeiro teste escolha uma data para a qual todos
 os dados estejam disponíveis e use:
@@ -58,14 +136,14 @@ duration: P3D
 
 Veja [campaign](configuration/campaign.md).
 
-### 3.2 MONAN/MPAS
+### 4.2 MONAN/MPAS
 
 Abra `mpas.yaml` e confira malha, partição, forecast, intervalo dos estados
 DA, namelist/streams e PBS.
 
 Veja [MONAN/MPAS](configuration/mpas.md).
 
-### 3.3 Observações
+### 4.3 Observações
 
 Abra `obs2ioda.yaml`. Para cada observação confirme origem, conversor e output
 IODA. A lista `converters[*].outputs` é a lista de produtos que a campanha
@@ -73,7 +151,7 @@ espera.
 
 Veja [observações](configuration/observations.md).
 
-### 3.4 JEDI
+### 4.4 JEDI
 
 Abra `jedi.yaml` e confira ciclo/janela, background, B, links das observações,
 YAML variacional, recursos PBS e validação.
@@ -83,7 +161,7 @@ B, observers, operadores, QC, erros e minimização.
 
 Veja [JEDI](configuration/jedi.md).
 
-## 4. Verifique antes de executar
+## 5. Verifique antes de executar
 
 Da raiz do repositório:
 
@@ -94,7 +172,7 @@ monan-jedi-workflow campaign check my-experiment/campaign.yaml
 Corrija tudo que aparecer como erro. Não prossiga enquanto o preflight não
 estiver limpo.
 
-## 5. Materialize sem submeter
+## 6. Materialize sem submeter
 
 ```bash
 monan-jedi-workflow campaign create my-experiment/campaign.yaml
@@ -111,7 +189,7 @@ swf plan CAMPAIGN_DESTINATION/workflow.yaml
 
 Até aqui nenhum experimento científico deve ter sido submetido.
 
-## 6. Execute
+## 7. Execute
 
 ```bash
 monan-jedi-workflow campaign run my-experiment/campaign.yaml
@@ -123,7 +201,7 @@ Acompanhe:
 monan-jedi-workflow campaign status my-experiment/campaign.yaml
 ```
 
-## 7. Valide três dias
+## 8. Valide três dias
 
 Antes de ampliar o período, confirme:
 
@@ -136,7 +214,7 @@ Antes de ampliar o período, confirme:
 - horários NetCDF são coerentes;
 - logs não mostram erro científico silencioso.
 
-## 8. Amplie sem mudar a ciência
+## 9. Amplie sem mudar a ciência
 
 Crie uma nova campanha/destination e altere apenas a duração:
 
