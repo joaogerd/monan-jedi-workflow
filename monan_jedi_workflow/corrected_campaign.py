@@ -289,7 +289,7 @@ def _cycle_tasks(
                 "--cycle",
                 "{cycle_time}",
             ],
-            "outputs": {"required": [obs_validation, sondes, sfc, gnssro]},
+            "outputs": {"required": [obs_validation, *obs_files]},
         },
         _validation_gate(
             "observations_gate", "observations_validate", obs_validation, cycle_scope="all"
