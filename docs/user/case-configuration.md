@@ -4,10 +4,54 @@ O caso separa três domínios e a orquestração:
 
 ```text
 jedi.yaml       análise MPAS-JEDI
-mpas.yaml       previsão que produz o próximo background
-obs2ioda.yaml   preparação das observações
+mpas.yaml       MONAN/MPAS e previsão que produz o próximo background
+obs2ioda.yaml   seleção/preparação das observações
 workflow.yaml   dependências e período (simpleWorkflow)
 ```
+
+## O que o usuário deve configurar conscientemente
+
+O workflow automatiza a mecânica do ciclo, mas não escolhe a ciência pelo
+usuário. Antes da primeira campanha, revise explicitamente:
+
+**MONAN/MPAS (`mpas.yaml` e templates referenciados)**
+
+- malha/resolução e níveis verticais;
+- condição inicial e arquivos estáticos;
+- timestep e duração da integração;
+- namelist, streams e configuração física;
+- frequência e nomes dos estados que alimentam o FGAT e o próximo ciclo;
+- recursos PBS necessários para essa configuração.
+
+**Observações (`obs2ioda.yaml`)**
+
+- quais famílias de observações entram no experimento;
+- origem dos dados para todos os ciclos do período;
+- conversores Obs2IODA e coleções IODA produzidas;
+- horários/janelas e validações de cada produto;
+- dependências adicionais, por exemplo GNSSRO quando sua aquisição for
+  independente do PREPBUFR convencional.
+
+**MPAS-JEDI (`jedi.yaml` e YAML variacional referenciado)**
+
+- método de assimilação (no baseline atual, 3DVar/FGAT);
+- geometria e variáveis de estado/controle;
+- background e trajetória FGAT;
+- matriz B e sua compatibilidade com a geometria;
+- observadores, operadores, QC e erros de observação;
+- janela de assimilação;
+- minimização e saídas da análise.
+
+**Campanha (`campaign.yaml`)**
+
+- data inicial;
+- duração (`P3D`, `P7D`, `P30D`, `P365D`);
+- diretório/nome do experimento;
+- se haverá forecast a partir da última análise.
+
+A regra de arquitetura é: se uma mudança altera a ciência de um único ciclo,
+ela pertence ao caso MONAN/observações/JEDI. Se apenas amplia quantas vezes o
+mesmo ciclo validado será executado, ela pertence à campanha.
 
 ## Âncoras compartilhadas de runtime
 

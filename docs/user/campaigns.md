@@ -1,5 +1,46 @@
 # Running a campaign
 
+> **Current transition:** the 2018 M3 campaign remains the historical validated
+> baseline. The maintained operational target is now a 2025 experiment. Do not
+> interpret the 2018 profile as a scientifically validated 2025 configuration;
+> the 2025 MONAN, observation and JEDI inputs must be validated explicitly.
+
+## Mental model: science versus period
+
+A campaign has two independent layers:
+
+```text
+scientific configuration                 campaign request
+------------------------                 ----------------
+MONAN/MPAS                               start
+observations / Obs2IODA                  duration
+MPAS-JEDI                                destination
+initialization                           forecast on last cycle
+```
+
+Changing a validated experiment from 3 to 7, 30 or 365 days must not require
+rewriting the MONAN, observation or JEDI configuration. With a 6-hour cycle,
+use the same scientific profile and change only the campaign identity,
+destination and duration:
+
+```yaml
+# validation
+duration: P3D
+
+# extensions after validation
+duration: P7D
+duration: P30D
+duration: P365D
+```
+
+The older hourly notation (`PT72H`, `PT168H`, ...) remains supported.
+
+The intended validation ladder is **3 -> 7 -> 30 -> 365 days**. Each extension
+reuses the scientific configuration that passed the previous stage. A longer
+period is not evidence that the science is configured correctly; inspect the
+analysis, forecast, observation usage and cycle hand-offs before extending it.
+
+
 The normal user interface is one campaign YAML plus one command. Researchers do not need to remember the individual JEDI, MPAS and Obs2IODA stage commands.
 
 After entering the standard MONAN-JEDI environment on JACI, the validated three-day M3 experiment is checked or started directly with:
@@ -25,6 +66,28 @@ There is no extra `export CASE=...` step. Site/profile paths needed by the campa
 7. on a later invocation, reuses the same campaign state and continues safely instead of rebuilding the campaign.
 
 The example campaign requests 72 hours beginning at 2018-04-15 00Z. This gives 13 analyses and 12 six-hour MPAS forecast legs, ending at 2018-04-18 00Z.
+
+
+## Regra: nenhum parâmetro científico pertence ao motor
+
+O gerador de campanhas não deve conhecer valores particulares de um
+experimento. Em especial, não deve fixar data/ano, malha, número de níveis,
+cadência de análise, intervalo de estado DA/FGAT, número de MPI ranks,
+partição da malha, famílias de observação ou nome do arquivo de análise.
+
+Essas escolhas pertencem aos contratos declarativos:
+
+| Escolha | Fonte |
+| --- | --- |
+| início, duração e cadência | `campaign.yaml` |
+| forecast, DA-state, MPI e partição | `mpas.yaml` |
+| produtos observacionais | `obs2ioda.yaml -> converters[*].outputs` |
+| estado/análise e configuração variacional | `jedi.yaml` e template JEDI |
+| caminhos do runtime instalado | manifesto do MONAN-JEDI + perfil do site |
+
+Arquivos históricos de reprodução podem, por definição, conter valores do
+experimento que reproduzem (por exemplo 2018/x1.10242). Eles não são defaults
+do motor nem devem ser copiados como baseline científico de 2025.
 
 ## Campaign file
 

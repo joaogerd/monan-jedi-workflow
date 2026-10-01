@@ -40,6 +40,8 @@ def test_campaign_cycle_count_is_inclusive(end_cycle: str, expected_cycles: int)
 
 def test_72_hour_campaign_uses_one_native_cycle_graph() -> None:
     document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         start_cycle="2018-04-15T00:00:00Z",
         end_cycle="2018-04-18T00:00:00Z",
         experiment_dir="/tmp/campaign",
@@ -96,11 +98,15 @@ def test_72_hour_campaign_uses_one_native_cycle_graph() -> None:
 
 def test_last_cycle_mpas_scope_is_scientific_configuration_not_hardcoded() -> None:
     cycling_only = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         end_cycle="2018-04-18T00:00:00Z",
         experiment_dir="/tmp/campaign",
         run_mpas_on_last_cycle=False,
     )
     with_forecast = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         end_cycle="2018-04-18T00:00:00Z",
         experiment_dir="/tmp/campaign",
         run_mpas_on_last_cycle=True,
@@ -115,6 +121,8 @@ def test_last_cycle_mpas_scope_is_scientific_configuration_not_hardcoded() -> No
 def test_structural_task_count_is_constant_from_three_days_to_one_year() -> None:
     documents = {
         label: build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
             start_cycle="2018-04-15T00:00:00Z",
             end_cycle=end,
             experiment_dir="/tmp/campaign",
@@ -151,6 +159,8 @@ def test_structural_task_count_is_constant_from_three_days_to_one_year() -> None
 
 def test_campaign_validation_gates_are_content_fingerprinted() -> None:
     document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         end_cycle="2018-04-18T00:00:00Z",
         experiment_dir="/tmp/campaign",
     )
@@ -175,6 +185,8 @@ def test_campaign_validation_gates_are_content_fingerprinted() -> None:
 
 def test_background_interface_is_uniform_for_first_and_later_cycles() -> None:
     document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         end_cycle="2018-04-18T00:00:00Z",
         experiment_dir="/tmp/campaign",
     )
@@ -190,6 +202,8 @@ def test_background_interface_is_uniform_for_first_and_later_cycles() -> None:
 
 def test_observations_belong_to_current_cycle() -> None:
     document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         end_cycle="2018-04-18T00:00:00Z",
         experiment_dir="/tmp/campaign",
     )
@@ -203,6 +217,8 @@ def test_observations_belong_to_current_cycle() -> None:
 
 def test_campaign_accepts_arbitrary_aligned_start_cycle() -> None:
     document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         start_cycle="2025-08-01T00:00:00Z",
         end_cycle="2025-08-08T00:00:00Z",
         experiment_dir="/tmp/campaign",
@@ -219,6 +235,8 @@ def test_campaign_accepts_arbitrary_aligned_start_cycle() -> None:
 
 def test_materialized_campaign_records_compact_scope(tmp_path: Path) -> None:
     document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         end_cycle="2018-04-18T00:00:00Z",
         experiment_dir=str(tmp_path / "campaign"),
     )
@@ -243,8 +261,6 @@ def test_native_initial_background_uses_mpas_output_state_count(tmp_path: Path) 
     case = _jedi_case(tmp_path / "case", inputs, initial=True)
     _patch_jedi_native(case)
     config = yaml.safe_load((case / "jedi.yaml").read_text())["jedi"]
-    # Formal MPAS initialization writes the same 63-field DA stream as cycling.
-    # The legacy precomputed first background had only 62 (no refl10cm).
-    assert config["analysis_base_state"]["expected_variable_count"] == {
-        "first_cycle": 63, "cycling": 63,
-    }
+    # The materializer preserves the scientific state contract declared by
+    # the source case instead of replacing it with a campaign-engine constant.
+    assert "expected_variable_count" not in config["analysis_base_state"]

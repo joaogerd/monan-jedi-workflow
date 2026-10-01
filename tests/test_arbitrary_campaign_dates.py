@@ -25,7 +25,7 @@ def test_august_2025_seven_day_campaign_has_29_inclusive_cycles() -> None:
 
 
 def test_initialization_for_august_2025_starts_six_hours_before_first_analysis() -> None:
-    tasks = _initialization_tasks(_parse_cycle("2025-08-01T00:00:00Z"))
+    tasks = _initialization_tasks(_parse_cycle("2025-08-01T00:00:00Z"), 6)
     by_name = {task["name"]: task for task in tasks}
 
     prepare = by_name["mpas_initial_prepare"]
@@ -38,6 +38,8 @@ def test_initialization_for_august_2025_starts_six_hours_before_first_analysis()
 
 def test_august_2025_workflow_remains_structurally_compact() -> None:
     document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         start_cycle="2025-08-01T00:00:00Z",
         end_cycle="2025-08-08T00:00:00Z",
         experiment_dir="/tmp/campaign",
@@ -64,6 +66,7 @@ def test_jedi_first_cycle_is_derived_from_campaign_start(tmp_path: Path) -> None
                     },
                     "analysis_base_state": {
                         "source": "/old/state.nc",
+                        "target": "Data/states/analysis.{analysis_mpas_file_time}.nc",
                         "expected_variable_count": 62,
                     },
                     "links": [
@@ -89,6 +92,8 @@ def test_jedi_first_cycle_is_derived_from_campaign_start(tmp_path: Path) -> None
 
 def test_historical_2018_default_remains_backward_compatible() -> None:
     document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/analysis.{analysis_mpas_file_time}.nc",
         end_cycle="2018-04-18T00:00:00Z",
         experiment_dir="/tmp/campaign",
     )

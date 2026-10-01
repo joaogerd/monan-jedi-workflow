@@ -25,9 +25,6 @@ from .corrected_replay import (
 )
 from .stage_config import StageConfigurationError
 
-_CYCLE_STEP = timedelta(hours=6)
-
-
 def _parse_cycle(value: str) -> datetime:
     try:
         cycle = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -36,10 +33,6 @@ def _parse_cycle(value: str) -> datetime:
     if cycle.tzinfo is None:
         cycle = cycle.replace(tzinfo=timezone.utc)
     cycle = cycle.astimezone(timezone.utc)
-    if cycle.minute or cycle.second or cycle.microsecond or cycle.hour not in {0, 6, 12, 18}:
-        raise StageConfigurationError(
-            "corrected campaign cycles must be aligned to 00/06/12/18Z"
-        )
     return cycle
 
 
@@ -51,17 +44,24 @@ def _cycle_id(cycle: datetime) -> str:
     return cycle.strftime("%Y%m%dT%H%M%SZ")
 
 
-def _cycles(start_cycle: str, end_cycle: str) -> list[datetime]:
-    """Return the inclusive six-hourly campaign cycle range."""
+def _cycles(
+    start_cycle: str, end_cycle: str, cycle_interval_hours: int = 6
+) -> list[datetime]:
+    """Return the inclusive campaign cycle range using the declared interval."""
+    if cycle_interval_hours <= 0:
+        raise StageConfigurationError("cycle_interval_hours must be positive")
+    step = timedelta(hours=cycle_interval_hours)
     start = _parse_cycle(start_cycle)
     end = _parse_cycle(end_cycle)
     if end < start:
         raise StageConfigurationError("campaign end cycle precedes the first cycle")
     span = end - start
-    if span % _CYCLE_STEP:
-        raise StageConfigurationError("campaign duration must be a multiple of 6 hours")
-    count = int(span / _CYCLE_STEP) + 1
-    return [start + index * _CYCLE_STEP for index in range(count)]
+    if span % step:
+        raise StageConfigurationError(
+            "campaign duration must be a multiple of cycle_interval_hours"
+        )
+    count = int(span / step) + 1
+    return [start + index * step for index in range(count)]
 
 
 def _validation_gate(
@@ -83,8 +83,10 @@ def _validation_gate(
     return task
 
 
-def _initialization_tasks(start_cycle: datetime) -> list[dict[str, Any]]:
-    source_cycle = start_cycle - _CYCLE_STEP
+def _initialization_tasks(
+    start_cycle: datetime, cycle_interval_hours: int
+) -> list[dict[str, Any]]:
+    source_cycle = start_cycle - timedelta(hours=cycle_interval_hours)
     source_iso = _iso(source_cycle)
     source_id = _cycle_id(source_cycle)
     target_iso = _iso(start_cycle)
@@ -178,11 +180,15 @@ def _initialization_tasks(start_cycle: datetime) -> list[dict[str, Any]]:
     ]
 
 
-def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
+def _cycle_tasks(
+    *,
+    run_mpas_on_last_cycle: bool,
+    observation_outputs: list[str],
+    analysis_output: str,
+) -> list[dict[str, Any]]:
     root = "{experiment_dir}"
     cycle_id = "{cycle_id}"
     obs_id = "{cycle_yyyymmddhh}"
-    analysis_file_time = "{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}.00.00"
 
     background_dir = f"{root}/work/background/{cycle_id}"
     background_validation = f"{background_dir}/background-validation.json"
@@ -190,15 +196,25 @@ def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
     obs_doctor = f"{obs_dir}/.monan-jedi-workflow/obs2ioda-doctor.json"
     obs_plan = f"{obs_dir}/.monan-jedi-workflow/obs2ioda.json"
     obs_validation = f"{obs_dir}/.monan-jedi-workflow/obs2ioda-validation.json"
-    sondes = f"{obs_dir}/sondes_obs_{obs_id}.h5"
-    sfc = f"{obs_dir}/sfc_obs_{obs_id}.h5"
-    gnssro = f"{obs_dir}/gnssro_obs_{obs_id}.h5"
+    if not observation_outputs:
+        raise StageConfigurationError(
+            "campaign requires at least one observation output declared by Obs2IODA"
+        )
+    obs_products = observation_outputs
+    obs_files = [
+        item if item.startswith("/") else f"{obs_dir}/{item}"
+        for item in obs_products
+    ]
 
     jedi_run = f"{root}/work/jedi/{cycle_id}"
     jedi_submission = f"{jedi_run}/.monan-jedi-workflow/jedi-submission.json"
     jedi_validation = f"{jedi_run}/.monan-jedi-workflow/jedi-validation.json"
     jedi_artifacts = f"{jedi_run}/.monan-jedi-workflow/jedi-artifacts.json"
-    analysis = f"{jedi_run}/Data/states/mpas.3dvar.{analysis_file_time}.nc"
+    analysis = (
+        analysis_output
+        if analysis_output.startswith("/")
+        else f"{jedi_run}/{analysis_output}"
+    )
 
     mpas_run = f"{root}/work/mpas/{cycle_id}"
     mpas_submission = f"{mpas_run}/.monan-jedi-workflow/mpas-submission.json"
@@ -260,7 +276,7 @@ def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
                 "--cycle",
                 "{cycle_time}",
             ],
-            "outputs": {"required": [sondes, sfc, gnssro]},
+            "outputs": {"required": obs_files},
         },
         {
             "name": "observations_validate",
@@ -273,7 +289,7 @@ def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
                 "--cycle",
                 "{cycle_time}",
             ],
-            "outputs": {"required": [obs_validation, sondes, sfc, gnssro]},
+            "outputs": {"required": [obs_validation, *obs_files]},
         },
         _validation_gate(
             "observations_gate", "observations_validate", obs_validation, cycle_scope="all"
@@ -293,9 +309,7 @@ def _cycle_tasks(*, run_mpas_on_last_cycle: bool) -> list[dict[str, Any]]:
                     f"{root}/jedi.yaml",
                     f"{background_dir}/trajectory.nc",
                     f"{background_dir}/state.nc",
-                    sondes,
-                    sfc,
-                    gnssro,
+                    *obs_files,
                 ]
             },
             "outputs": {
@@ -435,54 +449,70 @@ def build_corrected_campaign_workflow(
     end_cycle: str,
     experiment_dir: str,
     run_mpas_on_last_cycle: bool = False,
+    cycle_interval_hours: int = 6,
+    observation_outputs: list[str],
+    analysis_output: str,
 ) -> dict[str, Any]:
     """Build a constant-size native-cycle workflow for a corrected campaign."""
-    cycles = _cycles(start_cycle, end_cycle)
+    cycles = _cycles(start_cycle, end_cycle, cycle_interval_hours)
     return {
         "format_version": 1,
         "workflow": {"name": "monan_jedi_corrected_campaign"},
         "context": {"experiment_dir": experiment_dir},
-        "initialization": {"tasks": _initialization_tasks(cycles[0])},
+        "initialization": {"tasks": _initialization_tasks(cycles[0], cycle_interval_hours)},
         "cycle": {
             "start": _iso(cycles[0]),
             "end": _iso(cycles[-1]),
-            "step": "PT6H",
+            "step": f"PT{cycle_interval_hours}H",
         },
-        "tasks": _cycle_tasks(run_mpas_on_last_cycle=run_mpas_on_last_cycle),
+        "tasks": _cycle_tasks(
+            run_mpas_on_last_cycle=run_mpas_on_last_cycle,
+            observation_outputs=observation_outputs,
+            analysis_output=analysis_output,
+        ),
     }
 
 
 def _validate_cycling_contract(mpas: dict[str, Any]) -> None:
+    """Validate internal consistency without imposing one scientific case."""
     lead_hours = int(mpas.get("lead_hours", -1))
-    if lead_hours < 6 or lead_hours % 3:
-        raise StageConfigurationError(
-            "corrected campaign requires mpas.lead_hours >= 6 and divisible by 3"
-        )
+    if lead_hours <= 0:
+        raise StageConfigurationError("mpas.lead_hours must be a positive integer")
     contract = mpas.get("forecast_contract")
-    expected = {
-        "da_state_interval_hours": 3,
-        "mpi_ranks": 128,
-        "partition": "x1.10242.graph.info.part.128",
-        "do_restart": False,
-        "do_DAcycling": True,
-        "IAU": "off",
-    }
     if not isinstance(contract, dict):
         raise StageConfigurationError("source MPAS case must declare forecast_contract")
-    differences = [
-        f"{key}={contract.get(key)!r} (expected {value!r})"
-        for key, value in expected.items()
-        if contract.get(key) != value
-    ]
-    if int(contract.get("run_hours", -1)) != lead_hours:
-        differences.append(
-            f"run_hours={contract.get('run_hours')!r} (expected {lead_hours!r})"
-        )
-    if differences:
+
+    run_hours = int(contract.get("run_hours", -1))
+    if run_hours != lead_hours:
         raise StageConfigurationError(
-            "source MPAS case does not satisfy the corrected forecast_contract: "
-            + "; ".join(differences)
+            "mpas.forecast_contract.run_hours must equal mpas.lead_hours"
         )
+
+    interval = int(contract.get("da_state_interval_hours", -1))
+    if interval <= 0 or lead_hours % interval:
+        raise StageConfigurationError(
+            "mpas.forecast_contract.da_state_interval_hours must be positive "
+            "and divide mpas.lead_hours"
+        )
+
+    mpi_ranks = int(contract.get("mpi_ranks", -1))
+    if mpi_ranks <= 0:
+        raise StageConfigurationError(
+            "mpas.forecast_contract.mpi_ranks must be a positive integer"
+        )
+    partition = contract.get("partition")
+    if not isinstance(partition, str) or not partition.strip():
+        raise StageConfigurationError(
+            "mpas.forecast_contract.partition must be a non-empty string"
+        )
+
+    for key in ("do_restart", "do_DAcycling"):
+        if not isinstance(contract.get(key), bool):
+            raise StageConfigurationError(
+                f"mpas.forecast_contract.{key} must be boolean"
+            )
+    if "IAU" not in contract:
+        raise StageConfigurationError("mpas.forecast_contract must declare IAU")
 
 
 def _absolutize_mpas_assets(mpas: dict[str, Any], source_case: Path) -> None:
@@ -528,8 +558,12 @@ def _patch_cycling_mpas(source_case: Path, destination: Path) -> None:
         raise StageConfigurationError("mpas.yaml must define mpas mapping")
     _validate_cycling_contract(mpas)
     pbs = mpas.get("pbs")
-    if not isinstance(pbs, dict) or int(pbs.get("mpiprocs", 0)) != 128:
-        raise StageConfigurationError("corrected campaign requires MPAS pbs.mpiprocs=128")
+    if not isinstance(pbs, dict):
+        raise StageConfigurationError("MPAS configuration must define pbs")
+    if int(pbs.get("mpiprocs", 0)) != int(mpas["forecast_contract"]["mpi_ranks"]):
+        raise StageConfigurationError(
+            "mpas.pbs.mpiprocs must match mpas.forecast_contract.mpi_ranks"
+        )
     pbs["setup"] = []
     mpas["run_dir"] = str(destination.resolve() / "work/mpas/{cycle_id}")
     _absolutize_mpas_assets(mpas, source_case)
@@ -575,17 +609,20 @@ def _patch_jedi_native(destination: Path, start_cycle: str = _FIRST_CYCLE) -> No
     if not isinstance(base, dict):
         raise StageConfigurationError("jedi.analysis_base_state must be a mapping")
     base["source"] = str(root / "background/{cycle_id}/state.nc")
-    base["target"] = "Data/states/mpas.3dvar.{analysis_mpas_file_time}.nc"
-    prior_expected_count = base.get("expected_variable_count")
-    allowed_existing_counts = (None, 62, {"first_cycle": 62, "cycling": 63})
-    if prior_expected_count not in allowed_existing_counts:
+    target = base.get("target")
+    if not isinstance(target, str) or not target:
         raise StageConfigurationError(
-            "corrected campaign expected the validated JEDI state-count contract; "
-            f"found {prior_expected_count!r}"
+            "jedi.analysis_base_state.target must declare the analysis-state filename"
         )
-    # Both first and later backgrounds now come from the MPAS DA output stream.
-    # Its refl10cm field is absent only from the legacy precomputed background.
-    base["expected_variable_count"] = {"first_cycle": 63, "cycling": 63}
+    expected_count = base.get("expected_variable_count")
+    if expected_count is not None and not (
+        isinstance(expected_count, int) and not isinstance(expected_count, bool)
+        or isinstance(expected_count, dict)
+    ):
+        raise StageConfigurationError(
+            "jedi.analysis_base_state.expected_variable_count must be an integer "
+            "or a first_cycle/cycling mapping when declared"
+        )
 
     found = set()
     links = jedi.get("links", [])
@@ -615,9 +652,56 @@ def _patch_jedi_native(destination: Path, start_cycle: str = _FIRST_CYCLE) -> No
             "cycling JEDI case must declare sondes, sfc and gnssro links"
         )
     pbs = jedi.get("pbs")
-    if not isinstance(pbs, dict) or int(pbs.get("mpiprocs", 0)) != 128:
-        raise StageConfigurationError("corrected campaign requires JEDI pbs.mpiprocs=128")
+    if not isinstance(pbs, dict):
+        raise StageConfigurationError("JEDI configuration must define pbs")
+    if int(pbs.get("mpiprocs", 0)) <= 0:
+        raise StageConfigurationError("jedi.pbs.mpiprocs must be a positive integer")
     _write_yaml(path, data)
+
+
+def _declared_observation_outputs(path: Path) -> list[str]:
+    data = _load_yaml(path)
+    obs = data.get("obs2ioda")
+    if not isinstance(obs, dict):
+        raise StageConfigurationError("obs2ioda.yaml must define obs2ioda mapping")
+    converters = obs.get("converters")
+    if not isinstance(converters, list) or not converters:
+        raise StageConfigurationError("obs2ioda.converters must be a non-empty list")
+    outputs: list[str] = []
+    for index, converter in enumerate(converters):
+        if not isinstance(converter, dict):
+            raise StageConfigurationError(
+                f"obs2ioda.converters[{index}] must be a mapping"
+            )
+        declared = converter.get("outputs")
+        if not isinstance(declared, list) or not declared:
+            raise StageConfigurationError(
+                f"obs2ioda.converters[{index}].outputs must be a non-empty list"
+            )
+        for output in declared:
+            if not isinstance(output, str) or not output:
+                raise StageConfigurationError(
+                    f"obs2ioda.converters[{index}].outputs must contain strings"
+                )
+            prefix = "{work_dir}/"
+            outputs.append(output[len(prefix):] if output.startswith(prefix) else output)
+    return outputs
+
+
+def _declared_analysis_output(path: Path) -> str:
+    data = _load_yaml(path)
+    jedi = data.get("jedi")
+    if not isinstance(jedi, dict):
+        raise StageConfigurationError("jedi.yaml must define jedi mapping")
+    base = jedi.get("analysis_base_state")
+    if not isinstance(base, dict):
+        raise StageConfigurationError("jedi.analysis_base_state must be a mapping")
+    target = base.get("target")
+    if not isinstance(target, str) or not target:
+        raise StageConfigurationError(
+            "jedi.analysis_base_state.target must declare the analysis-state filename"
+        )
+    return target
 
 
 def materialize_corrected_campaign(
@@ -631,6 +715,7 @@ def materialize_corrected_campaign(
     end_cycle: str,
     run_mpas_on_last_cycle: bool = False,
     initial_jedi_case: Path | None = None,
+    cycle_interval_hours: int = 6,
 ) -> Path:
     """Create a clean compact campaign without executing scientific work.
 
@@ -640,7 +725,7 @@ def materialize_corrected_campaign(
     Obs2IODA tasks produce those inputs inside the campaign.
     """
     del initial_jedi_case
-    cycles = _cycles(start_cycle, end_cycle)
+    cycles = _cycles(start_cycle, end_cycle, cycle_interval_hours)
     destination = destination.resolve()
     if destination.exists():
         raise FileExistsError(f"campaign destination already exists: {destination}")
@@ -658,6 +743,9 @@ def materialize_corrected_campaign(
             end_cycle=end_cycle,
             experiment_dir=str(destination),
             run_mpas_on_last_cycle=run_mpas_on_last_cycle,
+            cycle_interval_hours=cycle_interval_hours,
+            observation_outputs=_declared_observation_outputs(destination / "obs2ioda.yaml"),
+            analysis_output=_declared_analysis_output(destination / "jedi.yaml"),
         )
         (destination / "workflow.yaml").write_text(
             yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
@@ -668,7 +756,7 @@ def materialize_corrected_campaign(
                     "campaign": {
                         "start_cycle": _iso(cycles[0]),
                         "end_cycle": _iso(cycles[-1]),
-                        "cycle_interval_hours": 6,
+                        "cycle_interval_hours": cycle_interval_hours,
                         "analysis_cycles": len(cycles),
                         "forecast_legs_for_cycling": len(cycles) - 1,
                         "run_mpas_on_last_cycle": run_mpas_on_last_cycle,
