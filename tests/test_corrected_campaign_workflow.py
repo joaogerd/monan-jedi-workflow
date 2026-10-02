@@ -56,12 +56,11 @@ def test_72_hour_campaign_uses_one_native_cycle_graph() -> None:
         "step": "PT6H",
     }
     assert set(initialization) == {
-        "mpas_initial_prepare",
-        "mpas_initial_submit",
-        "mpas_initial_wait",
-        "mpas_initial_validate",
-        "mpas_initial_gate",
-        "initial_background",
+        "wps_prepare", "wps_run", "wps_validate", "wps_gate",
+        "mpas_init_prepare", "mpas_init_submit", "mpas_init_wait",
+        "mpas_init_validate", "mpas_init_gate",
+        "mpas_initial_prepare", "mpas_initial_submit", "mpas_initial_wait",
+        "mpas_initial_validate", "mpas_initial_gate", "initial_background",
     }
     assert set(tasks) == {
         "background_check",
@@ -236,7 +235,7 @@ def test_campaign_accepts_arbitrary_aligned_start_cycle() -> None:
         "end": "2025-08-08T00:00:00Z",
         "step": "PT6H",
     }
-    assert len(document["initialization"]["tasks"]) == 6
+    assert len(document["initialization"]["tasks"]) == 15
     assert len(document["tasks"]) == 17
 
 
@@ -255,7 +254,7 @@ def test_materialized_campaign_records_compact_scope(tmp_path: Path) -> None:
     assert loaded["context"]["experiment_dir"] == str(tmp_path / "campaign")
     assert loaded["cycle"]["start"] == "2025-01-01T00:00:00Z"
     assert loaded["cycle"]["end"] == "2025-01-04T00:00:00Z"
-    assert len(loaded["initialization"]["tasks"]) == 6
+    assert len(loaded["initialization"]["tasks"]) == 15
     assert len(loaded["tasks"]) == 17
     assert materialize_corrected_campaign is not None
 
