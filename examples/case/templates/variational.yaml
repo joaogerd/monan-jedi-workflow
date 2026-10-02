@@ -84,47 +84,6 @@ cost function:
         apply at iterations: 0,1,2
         threshold: 3
     - obs space:
-        name: GnssroRefNCEP
-        obsdatain:
-          engine:
-            type: H5File
-            obsfile: Data/ufo/testinput_tier_1/gnssro_obs_{analysis_yyyymmddhh}_s.nc4
-        obsdataout:
-          engine:
-            type: H5File
-            obsfile: Data/os/obsout_3dfgat_gnssroref.nc4
-        simulated variables: [atmosphericRefractivity]
-      obs operator:
-        name: GnssroRefNCEP
-        obs options:
-          use_compress: 0
-      get values:
-        time interpolation: nearest
-      obs error:
-        covariance model: diagonal
-      obs filters:
-      - filter: Domain Check
-        where:
-        - variable:
-            name: MetaData/height
-          minvalue: 0
-          maxvalue: 30000
-        - variable:
-            name: MetaData/earthRadiusCurvature
-          minvalue: 6250000
-          maxvalue: 6450000
-        - variable:
-            name: MetaData/geoidUndulation
-          minvalue: -200
-          maxvalue: 200
-      - filter: Background Check
-        apply at iterations: 0,1
-        threshold: 3
-      - filter: ROobserror
-        apply at iterations: 0,1
-        variable: refractivity
-        errmodel: NCEP
-    - obs space:
         name: SfcCorrected
         obsdatain:
           engine:
