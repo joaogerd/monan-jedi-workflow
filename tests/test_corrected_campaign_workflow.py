@@ -10,6 +10,7 @@ from monan_jedi_workflow.corrected_campaign import (
     _cycles,
     build_corrected_campaign_workflow,
     materialize_corrected_campaign,
+    _patch_initialization_assets,
 )
 from monan_jedi_workflow.stage_config import StageConfigurationError
 
@@ -268,3 +269,24 @@ def test_campaign_workflow_requires_explicit_start_cycle() -> None:
             end_cycle="2025-01-04T00:00:00Z",
             experiment_dir="/tmp/campaign",
         )
+
+
+def test_initialization_assets_are_materialized_with_absolute_template_sources(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    (source / "templates").mkdir(parents=True)
+    for filename, root in (("wps.yaml", "wps"), ("mpas_init.yaml", "mpas_init")):
+        (source / filename).write_text(
+            yaml.safe_dump({root: {"templates": [{"source": "templates/input.in", "target": "input"}]}}),
+            encoding="utf-8",
+        )
+    (source / "templates" / "input.in").write_text("test\n", encoding="utf-8")
+
+    destination = tmp_path / "campaign"
+    (destination / "initialization").mkdir(parents=True)
+    _patch_initialization_assets(source, destination)
+
+    for filename, root in (("wps.yaml", "wps"), ("mpas_init.yaml", "mpas_init")):
+        data = yaml.safe_load((destination / "initialization" / filename).read_text())
+        template = data[root]["templates"][0]["source"]
+        assert Path(template).is_absolute()
+        assert Path(template) == (source / "templates" / "input.in").resolve()
