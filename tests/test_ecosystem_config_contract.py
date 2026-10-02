@@ -253,3 +253,19 @@ def test_runtime_paths_reject_missing_install_anchor(monkeypatch, tmp_path: Path
             "${MONAN_JEDI_INSTALL_ROOT}/share/monan-jedi/mpas-jedi/namelists/geovars.yaml",
             tmp_path,
         )
+
+
+def test_2025_reference_case_observers_match_declared_obs2ioda_outputs() -> None:
+    obs = yaml.safe_load((ROOT / "examples/case/obs2ioda.yaml").read_text())["obs2ioda"]
+    outputs = {
+        Path(value).name
+        for converter in obs["converters"]
+        for value in converter["outputs"]
+    }
+    variational = (ROOT / "examples/case/templates/variational.yaml").read_text()
+    assert "sondes_obs_{analysis_yyyymmddhh}.h5" in outputs
+    assert "sfc_obs_{analysis_yyyymmddhh}.h5" in outputs
+    assert "sondes_obs_{analysis_yyyymmddhh}_m.nc4" in variational
+    assert "sfc_obs_{analysis_yyyymmddhh}_m.nc4" in variational
+    assert "gnssro_obs_" not in variational
+    assert "GnssroRefNCEP" not in variational
