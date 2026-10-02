@@ -3,6 +3,8 @@
 # O contrato 128-rank é o mesmo registrado no caso JACI do MPAS-BMatrix.
 mpas:
   variables:
+    # Replaced by the campaign materializer with the destination path.
+    campaign_root: "."
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     stack_root: ${STACK_ROOT}
     data_root: ${MONAN_JEDI_DATA_ROOT}
