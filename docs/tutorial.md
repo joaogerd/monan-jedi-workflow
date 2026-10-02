@@ -163,7 +163,83 @@ Esperado:
 - o manifesto MONAN-JEDI instalado existe;
 - `MONAN_JEDI_INSTALL_ROOT` e `STACK_ROOT` estão definidos.
 
-## 3. Crie seu caso a partir do único template
+## 3. Caso de referência 2025 fornecido pelo repositório
+
+O `examples/case/` não é mais um esqueleto abstrato. Ele representa o primeiro
+caso de referência a validar no JACI:
+
+```text
+primeira análise : 2025-09-01 00Z
+fim P3D          : 2025-09-04 00Z
+cadência         : 6 h
+malha            : x1.10242 (~240 km)
+níveis           : 55
+MPAS             : 128 MPI ranks
+FGAT states      : 3 h
+JEDI             : 3D-FGAT
+observações      : GDAS PREPBUFR — radiossondas + superfície
+```
+
+A escolha de setembro de 2025 é intencional: os assets JACI usados pelo
+MPAS-BMatrix apontam para o conjunto `mpasjedi_tutorial202509NCAR`, e o
+PREPBUFR GDAS está disponível para o período.
+
+### 3.1 Defina os dados do site
+
+No JACI:
+
+```bash
+export MONAN_JEDI_DATA_ROOT=/p/projetos/monan_das/$USER/external-inputs
+
+export MONAN_JEDI_MESH_ROOT=\
+/p/projetos/monan_das/$USER/projects/mpas_meshes/quasi_uniform/x1.10242_240km
+
+export MONAN_JEDI_BMATRIX_ROOT=/caminho/para/B_Matrix-x1.10242-validada
+
+export MONAN_JEDI_GFS_ROOT=/p/projetos/monan_das/$USER/data/gfs
+
+export MONAN_JEDI_WORKFLOW_ROOT=/caminho/para/monan-jedi-workflow
+```
+
+`MONAN_JEDI_BMATRIX_ROOT` deve apontar para a B x1.10242 já produzida e
+validada. Não use uma B de outra malha/grade vertical.
+
+### 3.2 Dados necessários para iniciar P3D
+
+A inicialização da primeira análise começa seis horas antes, em
+**2025-08-31 18Z**. O caso espera o GFS f000 em:
+
+```text
+$MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000
+```
+
+E espera PREPBUFR para cada análise de 2025-09-01 00Z até
+2025-09-04 00Z:
+
+```text
+$MONAN_JEDI_DATA_ROOT/observations/prepbufr/2025/
+  prepbufr.gdas.20250901.t00z.nr.48h
+  prepbufr.gdas.20250901.t06z.nr.48h
+  ...
+  prepbufr.gdas.20250904.t00z.nr.48h
+```
+
+O PREPBUFR é o produto GDAS/NCEP da coleção NSF NCAR GDEX d337000. O caso não
+silencia arquivos ausentes: `campaign check` lista os ciclos que ainda
+precisam ser staged.
+
+### Checkpoint 3 — assets fixos
+
+```bash
+test -s "$MONAN_JEDI_DATA_ROOT/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc"
+test -s "$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.128"
+test -s "$MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000"
+test -d "$MONAN_JEDI_BMATRIX_ROOT"
+```
+
+Todos devem terminar com status zero antes de iniciar a campanha.
+
+## 4. Crie seu caso a partir do único template
 
 Volte à raiz do checkout do `monan-jedi-workflow`. Copie o diretório inteiro:
 
@@ -204,11 +280,11 @@ Confirme que os arquivos acima existem. Neste momento vários campos contêm
 `EDITAR`; isso é intencional. O preflight recusará executar o caso enquanto
 qualquer placeholder `EDITAR` permanecer nos YAMLs ativos.
 
-## 4. Configure o experimento, arquivo por arquivo
+## 5. Entenda e ajuste o experimento, arquivo por arquivo
 
 Não tente editar todos os YAMLs ao mesmo tempo. Siga esta ordem.
 
-### 4.1 `campaign.yaml` — quando executar
+### 5.1 `campaign.yaml` — quando executar
 
 Abra:
 
@@ -243,7 +319,7 @@ grep -nE 'name:|start:|duration:|cycle_interval_hours:|destination:' campaign.ya
 
 Confirme que não há `EDITAR` nessas chaves e que o destination é novo.
 
-### 4.2 `profile.yaml` — como os componentes se conectam
+### 5.2 `profile.yaml` — como os componentes se conectam
 
 Para o layout padrão copiado de `examples/case`, normalmente mantenha:
 
@@ -273,7 +349,7 @@ test -f obs2ioda.yaml
 
 Os quatro comandos devem terminar sem mensagem de erro.
 
-### 4.3 `mpas.yaml` — forecast cíclico MONAN/MPAS
+### 5.3 `mpas.yaml` — forecast cíclico MONAN/MPAS
 
 Abra:
 
@@ -307,7 +383,7 @@ grep -n 'EDITAR' mpas.yaml
 
 Antes do preflight final, esse comando não deve retornar nenhuma linha.
 
-### 4.4 `obs2ioda.yaml` — quais observações entram
+### 5.4 `obs2ioda.yaml` — quais observações entram
 
 Abra:
 
@@ -350,7 +426,7 @@ Além de não haver placeholders, confirme manualmente que os arquivos brutos
 existem para **todos os ciclos** da campanha. O `campaign check` fará essa
 verificação novamente usando as datas renderizadas.
 
-### 4.5 `jedi.yaml` — assimilação
+### 5.5 `jedi.yaml` — assimilação
 
 Abra:
 
@@ -382,7 +458,7 @@ grep -n 'EDITAR' jedi.yaml
 
 Esse comando também deve terminar sem retornar linhas.
 
-### 4.6 `initialization/mpas.yaml` — primeiro background
+### 5.6 `initialization/mpas.yaml` — primeiro background
 
 Este arquivo é diferente de `mpas.yaml`: ele prepara o estado que alimentará
 a **primeira análise** da campanha.
@@ -408,7 +484,7 @@ grep -n 'EDITAR' initialization/mpas.yaml
 
 Não deve haver placeholders antes da execução.
 
-### 4.7 `templates/` — arquivos científicos consumidos pelos executáveis
+### 5.7 `templates/` — arquivos científicos consumidos pelos executáveis
 
 Leia primeiro:
 
@@ -432,7 +508,7 @@ grep -RIn 'EDITAR' \
 Para um caso pronto, o comando não deve retornar nenhuma configuração ativa
 não resolvida.
 
-## 5. Faça o preflight completo antes de executar
+## 6. Faça o preflight completo antes de executar
 
 Da raiz do repositório:
 
@@ -443,7 +519,7 @@ monan-jedi-workflow campaign check my-experiment/campaign.yaml
 Corrija tudo que aparecer como erro. Não prossiga enquanto o preflight não
 estiver limpo.
 
-## 6. Materialize sem submeter
+## 7. Materialize sem submeter
 
 ```bash
 monan-jedi-workflow campaign create my-experiment/campaign.yaml
@@ -460,7 +536,7 @@ swf plan CAMPAIGN_DESTINATION/workflow.yaml
 
 Até aqui nenhum experimento científico deve ter sido submetido.
 
-## 7. Execute
+## 8. Execute
 
 ```bash
 monan-jedi-workflow campaign run my-experiment/campaign.yaml
@@ -472,7 +548,7 @@ Acompanhe:
 monan-jedi-workflow campaign status my-experiment/campaign.yaml
 ```
 
-## 8. Valide três dias
+## 9. Valide três dias
 
 Antes de ampliar o período, confirme:
 
@@ -485,7 +561,7 @@ Antes de ampliar o período, confirme:
 - horários NetCDF são coerentes;
 - logs não mostram erro científico silencioso.
 
-## 9. Amplie sem mudar a ciência
+## 10. Amplie sem mudar a ciência
 
 Crie uma nova campanha/destination e altere apenas a duração:
 
