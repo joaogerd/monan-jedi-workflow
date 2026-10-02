@@ -171,11 +171,6 @@ git clone https://github.com/joaogerd/simpleWorkflow.git
 cd simpleWorkflow
 python -m pip install -e .
 ```
-
-O simpleWorkflow não deve ser instalado neste tutorial com
-`pip install simpleworkflow`. O checkout Git acima é a fonte usada pelo
-experimento.
-
 Se o diretório `simpleWorkflow` já existir, não execute `git clone`
 novamente. Entre no checkout existente e execute somente:
 
