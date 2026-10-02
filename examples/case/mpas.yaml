@@ -33,7 +33,7 @@ mpas:
          VEGPARM.TBL]
 
   links:
-    - source: "work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{mpas_file_time}.nc"
+    - source: "{campaign_root}/work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{mpas_file_time}.nc"
       target: "mpas.analysis-full.{mpas_file_time}.nc"
     - source: "{monan_jedi_install_root}/bin/mpas_atmosphere"
       target: mpas_atmosphere
