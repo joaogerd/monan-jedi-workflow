@@ -2,6 +2,8 @@
 # Its +3 h and +6 h states become trajectory/state for the first JEDI cycle.
 mpas:
   variables:
+    # Replaced by the campaign materializer with the destination path.
+    campaign_root: "."
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     data_root: ${MONAN_JEDI_DATA_ROOT}
     mesh_root: "{data_root}/mpas-meshes/x1.10242"
