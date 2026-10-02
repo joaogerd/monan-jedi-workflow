@@ -520,16 +520,63 @@ grep -RIn 'EDITAR' \
 Para um caso pronto, o comando não deve retornar nenhuma configuração ativa
 não resolvida.
 
-## 6. Faça o preflight completo antes de executar
+## 6. Primeiro teste no JACI
 
-Da raiz do repositório:
+A partir deste ponto, pare de editar o caso e teste exatamente o que será
+executado. Faça os checkpoints abaixo no mesmo shell limpo preparado na seção 2.
+
+### Checkpoint 12 — ambiente final
 
 ```bash
-monan-jedi-workflow campaign check my-experiment/campaign.yaml
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+echo "MONAN_JEDI_INSTALL_ROOT=$MONAN_JEDI_INSTALL_ROOT"
+echo "STACK_ROOT=$STACK_ROOT"
+echo "MONAN_JEDI_DATA_ROOT=$MONAN_JEDI_DATA_ROOT"
+echo "MONAN_JEDI_MESH_ROOT=$MONAN_JEDI_MESH_ROOT"
+echo "MONAN_JEDI_BMATRIX_ROOT=$MONAN_JEDI_BMATRIX_ROOT"
+echo "MONAN_JEDI_GFS_ROOT=$MONAN_JEDI_GFS_ROOT"
+
+command -v python
+command -v swf
+command -v monan-jedi-workflow
 ```
 
-Corrija tudo que aparecer como erro. Não prossiga enquanto o preflight não
-estiver limpo.
+Não prossiga se alguma âncora estiver vazia ou se os comandos Python vierem de
+ambientes diferentes.
+
+### Checkpoint 13 — arquivos científicos mínimos
+
+```bash
+test -s "$MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000"
+test -s "$MONAN_JEDI_DATA_ROOT/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc"
+test -s "$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.128"
+test -d "$MONAN_JEDI_BMATRIX_ROOT"
+
+for hh in 00 06 12 18; do
+  test -s "$MONAN_JEDI_DATA_ROOT/observations/prepbufr/2025/prepbufr.gdas.20250901.t${hh}z.nr.48h"
+done
+```
+
+Esse laço é apenas uma checagem rápida do primeiro dia. O preflight seguinte
+verifica automaticamente **todos os 13 ciclos** do P3D.
+
+### Checkpoint 14 — preflight P3D
+
+Da raiz do checkout:
+
+```bash
+monan-jedi-workflow campaign check examples/case/campaign.yaml
+```
+
+O resultado deve terminar em:
+
+```text
+Preflight PASS
+```
+
+Se aparecer `FAIL`, **não use `campaign run`**. O erro do preflight passa a
+ser o próximo problema a corrigir e deve ser resolvido antes de qualquer
+submissão PBS.
 
 ## 7. Materialize sem submeter
 
