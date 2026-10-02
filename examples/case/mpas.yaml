@@ -9,7 +9,7 @@ mpas:
     stack_root: ${STACK_ROOT}
     data_root: ${MONAN_JEDI_DATA_ROOT}
     static_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
-    bmatrix_root: "{data_root}/bmatrix/x1.10242"
+    bmatrix_root: ${MONAN_JEDI_BMATRIX_ROOT}
     physics_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
 
   lead_hours: 6
