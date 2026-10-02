@@ -3,7 +3,7 @@ mpas_init:
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     data_root: ${MONAN_JEDI_DATA_ROOT}
-    mesh_root: "{data_root}/mpas-meshes/x1.10242"
+    mesh_root: ${MONAN_JEDI_MESH_ROOT}
     tutorial_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
 
   run_dir: "work/mpas-init/{cycle_id}"
