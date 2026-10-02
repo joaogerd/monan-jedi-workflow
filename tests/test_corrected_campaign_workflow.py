@@ -174,6 +174,8 @@ def test_campaign_validation_gates_are_content_fingerprinted() -> None:
     ]
 
     assert {task["name"] for task in gates} == {
+        "wps_gate",
+        "mpas_init_gate",
         "mpas_initial_gate",
         "observations_gate",
         "jedi_gate",
