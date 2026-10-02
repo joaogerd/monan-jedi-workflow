@@ -136,29 +136,107 @@ estiver correto.
 
 ### 2.3 Instale os comandos Python
 
-Com `monan-jedi` ativo, instale o simpleWorkflow e esta interface:
+Com o ambiente `monan-jedi` ativo, instale o **simpleWorkflow** e o
+**monan-jedi-workflow** a partir dos respectivos repositórios Git.
+
+Os códigos-fonte devem ficar fora do ambiente Conda. No JACI, use a área de
+projetos para manter os checkouts:
 
 ```bash
-pip install simpleworkflow
+mkdir -p /p/projetos/monan_das/$USER/projects
+cd /p/projetos/monan_das/$USER/projects
+```
+
+A organização esperada será:
+
+```text
+/p/projetos/monan_das/<usuario>/projects/
+├── simpleWorkflow/          <- código-fonte do orquestrador
+└── monan-jedi-workflow/     <- código-fonte da campanha
+
+$HOME/.conda/envs/monan-jedi/
+└── ...                      <- ambiente Python que executa os dois
+```
+
+Ou seja: os repositórios **não** são clonados dentro do ambiente Conda.
+O comando `python -m pip install -e .` registra cada checkout no ambiente
+`monan-jedi` que está ativo.
+
+#### Instale o simpleWorkflow
+
+```bash
+cd /p/projetos/monan_das/$USER/projects
+
+git clone https://github.com/joaogerd/simpleWorkflow.git
+cd simpleWorkflow
+python -m pip install -e .
+```
+
+O simpleWorkflow não deve ser instalado neste tutorial com
+`pip install simpleworkflow`. O checkout Git acima é a fonte usada pelo
+experimento.
+
+Se o diretório `simpleWorkflow` já existir, não execute `git clone`
+novamente. Entre no checkout existente e execute somente:
+
+```bash
+cd /p/projetos/monan_das/$USER/projects/simpleWorkflow
+python -m pip install -e .
+```
+
+#### Instale o monan-jedi-workflow
+
+```bash
+cd /p/projetos/monan_das/$USER/projects
 
 git clone https://github.com/joaogerd/monan-jedi-workflow.git
 cd monan-jedi-workflow
 python -m pip install -e .
 ```
 
-Se o repositório já existir, não o clone novamente. Entre no checkout correto e
-instale-o com `python -m pip install -e .`.
+Novamente, se o repositório já existir, não o clone. Entre no checkout existente
+e execute `python -m pip install -e .`.
 
-Verifique:
+#### Verifique a instalação
+
+Execute:
 
 ```bash
 command -v swf
 command -v monan-jedi-workflow
+
 swf --help
 monan-jedi-workflow --help
 ```
 
-Os dois comandos devem resolver dentro do mesmo ambiente Conda ativo.
+Uma saída correta para os dois primeiros comandos será semelhante a:
+
+```text
+/home2/<usuario>/.conda/envs/monan-jedi/bin/swf
+/home2/<usuario>/.conda/envs/monan-jedi/bin/monan-jedi-workflow
+```
+
+> [!NOTE]
+> #### Como saber se a instalação dos comandos está correta
+>
+> Confira cada item:
+>
+> - **[OK] simpleWorkflow:** `command -v swf` termina em
+>   `.conda/envs/monan-jedi/bin/swf`. Isso confirma que o comando foi
+>   instalado no ambiente Conda usado pelo experimento.
+> - **[OK] monan-jedi-workflow:** `command -v monan-jedi-workflow` termina em
+>   `.conda/envs/monan-jedi/bin/monan-jedi-workflow`.
+> - **[OK] interface do simpleWorkflow:** `swf --help` termina normalmente e
+>   mostra a ajuda do comando, sem erro de importação.
+> - **[OK] interface da campanha:** `monan-jedi-workflow --help` termina
+>   normalmente e mostra a ajuda do comando, sem erro de importação.
+> - **[OK] checkouts:** os diretórios
+>   `/p/projetos/monan_das/$USER/projects/simpleWorkflow` e
+>   `/p/projetos/monan_das/$USER/projects/monan-jedi-workflow` existem.
+>
+> **Se todos os itens acima estiverem OK, a instalação dos comandos Python foi
+> concluída e você pode prosseguir para a seção 2.4. Se algum item for
+> diferente, não prossiga: primeiro corrija a instalação correspondente.**
 
 ### 2.4 Selecione o runtime científico MONAN-JEDI
 
