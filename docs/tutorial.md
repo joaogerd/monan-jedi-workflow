@@ -260,6 +260,8 @@ my-experiment/
   obs2ioda.yaml
   jedi.yaml
   initialization/
+    wps.yaml
+    mpas_init.yaml
     mpas.yaml
   templates/
     README.md
@@ -269,7 +271,7 @@ O `workflow.yaml` **não existe ainda e não deve ser escrito pelo usuário**.
 Ele será produzido por `campaign create` depois que a configuração passar no
 preflight.
 
-### Checkpoint 3 — caso criado
+### Checkpoint 4 — caso criado
 
 ```bash
 pwd
@@ -311,7 +313,7 @@ Não altere para P7D/P30D/P365D antes de validar P3D.
 
 Referência completa: [configuração da campanha](configuration/campaign.md).
 
-### Checkpoint 4 — período
+### Checkpoint 5 — período
 
 ```bash
 grep -nE 'name:|start:|duration:|cycle_interval_hours:|destination:' campaign.yaml
@@ -338,11 +340,13 @@ Deixe `observation_acquisition.enabled: false` enquanto estiver fornecendo os
 arquivos de observação manualmente. Habilite aquisição automática somente
 quando os providers daquele período estiverem configurados e testados.
 
-### Checkpoint 5 — ligação do caso
+### Checkpoint 6 — ligação do caso
 
 ```bash
 test -f jedi.yaml
 test -f mpas.yaml
+test -f initialization/wps.yaml
+test -f initialization/mpas_init.yaml
 test -f initialization/mpas.yaml
 test -f obs2ioda.yaml
 ```
@@ -375,7 +379,7 @@ ranks apenas copiando outro experimento.
 
 Referência completa: [MONAN/MPAS](configuration/mpas.md).
 
-### Checkpoint 6 — MPAS
+### Checkpoint 7 — MPAS
 
 ```bash
 grep -n 'EDITAR' mpas.yaml
@@ -416,7 +420,7 @@ configurada.
 
 Referência completa: [observações](configuration/observations.md).
 
-### Checkpoint 7 — observações
+### Checkpoint 8 — observações
 
 ```bash
 grep -n 'EDITAR' obs2ioda.yaml
@@ -450,7 +454,7 @@ forecast seguinte precisam representar o **mesmo estado de análise**.
 
 Referência completa: [JEDI](configuration/jedi.md).
 
-### Checkpoint 8 — JEDI
+### Checkpoint 9 — JEDI
 
 ```bash
 grep -n 'EDITAR' jedi.yaml
@@ -458,31 +462,39 @@ grep -n 'EDITAR' jedi.yaml
 
 Esse comando também deve terminar sem retornar linhas.
 
-### 5.6 `initialization/mpas.yaml` — primeiro background
+### 5.6 `initialization/` — construa o primeiro background
 
-Este arquivo é diferente de `mpas.yaml`: ele prepara o estado que alimentará
-a **primeira análise** da campanha.
+A primeira análise é 2025-09-01 00Z. A inicialização começa no ciclo anterior,
+2025-08-31 18Z, e é inteiramente reproduzível pela campanha:
 
-Abra:
-
-```bash
-vi initialization/mpas.yaml
+```text
+GFS f000
+  -> initialization/wps.yaml
+  -> WPS/ungrib
+  -> initialization/mpas_init.yaml
+  -> mpas_init_atmosphere
+  -> initialization/mpas.yaml
+  -> MONAN/MPAS 18Z -> 00Z
+  -> primeiro background JEDI
 ```
 
-Defina o estado inicial, templates, recursos e outputs. A integração precisa
-cobrir pelo menos um `cycle_interval_hours` antes da primeira análise.
+Os três arquivos têm responsabilidades distintas:
 
-O tutorial será completado com WPS + `mpas_init_atmosphere` no baseline 2025,
-para que a origem desse primeiro estado também seja reproduzível e não uma
-etapa manual escondida.
+- `wps.yaml`: decodifica o GFS;
+- `mpas_init.yaml`: interpola o GFS para a malha x1.10242;
+- `mpas.yaml`: integra MONAN/MPAS por 6 h e produz os estados +3 h/+6 h.
 
-### Checkpoint 9 — inicialização
+### Checkpoint 10 — inicialização
 
 ```bash
-grep -n 'EDITAR' initialization/mpas.yaml
+grep -RIn 'EDITAR' initialization
+test -f initialization/wps.yaml
+test -f initialization/mpas_init.yaml
+test -f initialization/mpas.yaml
 ```
 
-Não deve haver placeholders antes da execução.
+O `grep` não deve retornar placeholders e os três `test` devem terminar com
+status zero.
 
 ### 5.7 `templates/` — arquivos científicos consumidos pelos executáveis
 
@@ -496,7 +508,7 @@ O caso real precisa fornecer os namelists, streams e `variational.yaml`
 referenciados pelos YAMLs anteriores. Não use um template de outra malha ou
 experimento sem verificar geometry, níveis, datas, B, observers e outputs.
 
-### Checkpoint 10 — nenhum placeholder restante
+### Checkpoint 11 — nenhum placeholder restante
 
 Da raiz de `my-experiment`:
 
