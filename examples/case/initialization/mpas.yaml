@@ -32,7 +32,7 @@ mpas:
   links:
     - source: "{monan_jedi_install_root}/bin/mpas_atmosphere"
       target: mpas_atmosphere
-    - source: "work/mpas-init/{cycle_id}/x1.10242.init.{mpas_file_time}.nc"
+    - source: "{campaign_root}/initialization/work/mpas-init/{cycle_id}/x1.10242.init.{mpas_file_time}.nc"
       target: "mpas.init.{mpas_file_time}.nc"
     - source: "{tutorial_root}/x1.10242.invariant.nc"
       target: x1.10242.invariant.nc
