@@ -11,7 +11,7 @@ jedi:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     stack_root: ${STACK_ROOT}
     data_root: ${MONAN_JEDI_DATA_ROOT}
-    bmatrix_root: "{data_root}/bmatrix/x1.10242"
+    bmatrix_root: ${MONAN_JEDI_BMATRIX_ROOT}
     model_tstep: PT20M
 
   run_dir: "work/jedi/{cycle_id}"
