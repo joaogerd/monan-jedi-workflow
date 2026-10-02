@@ -134,13 +134,135 @@ importante é entender **de onde cada componente está sendo carregado**.
 O spack-stack científico será carregado somente depois que este checkpoint
 estiver correto.
 
-### 2.3 Instale os comandos Python
+### 2.3 Prepare o runtime científico MONAN-JEDI
 
-Com o ambiente `monan-jedi` ativo, instale o **simpleWorkflow** e o
-**monan-jedi-workflow** a partir dos respectivos repositórios Git.
+Antes de instalar os comandos que executarão a campanha, confirme que existe
+uma instalação válida do **MONAN-JEDI**. Ele fornece os executáveis científicos
+(MONAN/MPAS, JEDI, Obs2IODA e WPS) usados pelo restante do tutorial.
 
-Os códigos-fonte devem ficar fora do ambiente Conda. No JACI, use a área de
-projetos para manter os checkouts:
+No JACI, o caminho padrão da instalação é:
+
+```text
+/p/projetos/monan_das/<usuario>/build/monan-jedi
+```
+
+#### Verifique se o MONAN-JEDI já está instalado
+
+Execute:
+
+```bash
+test -f /p/projetos/monan_das/$USER/build/monan-jedi/share/monan-jedi/install-manifest.json \
+  && echo "[OK] MONAN-JEDI instalado" \
+  || echo "[FALHA] MONAN-JEDI ainda não está instalado"
+```
+
+Se aparecer `[OK]`, **não reinstale** o MONAN-JEDI. Vá diretamente para
+**Obtenha o ambiente publicado pelo MONAN-JEDI**, abaixo.
+
+Se aparecer `[FALHA]`, faça a instalação antes de continuar.
+
+#### Se necessário, instale o MONAN-JEDI
+
+Mantenha o código-fonte na área de projetos:
+
+```bash
+mkdir -p /p/projetos/monan_das/$USER/projects
+cd /p/projetos/monan_das/$USER/projects
+
+git clone https://github.com/GAD-DIMNT-CPTEC/MONAN-JEDI.git
+cd MONAN-JEDI
+```
+
+Valide primeiro a configuração JACI:
+
+```bash
+python3 scripts/lib/read_config.py --check config/jaci.yaml
+python3 scripts/check_config_documentation.py
+```
+
+Verifique então se o spack-stack configurado pelo MONAN-JEDI pode ser ativado:
+
+```bash
+bash scripts/monan-jedi.sh load --config config/jaci.yaml
+```
+
+Se os comandos anteriores terminarem sem erro, execute a instalação completa:
+
+```bash
+bash scripts/monan-jedi.sh all --config config/jaci.yaml
+```
+
+No JACI, usando a configuração padrão, o runtime resultante será publicado em:
+
+```text
+/p/projetos/monan_das/<usuario>/build/monan-jedi
+```
+
+#### Obtenha o ambiente publicado pelo MONAN-JEDI
+
+Independentemente de a instalação já existir ou ter sido criada agora, use o
+próprio MONAN-JEDI para informar ao shell onde estão o runtime e o spack-stack
+correspondente:
+
+```bash
+cd /p/projetos/monan_das/$USER/projects/MONAN-JEDI
+
+eval "$(bash scripts/monan-jedi.sh env --config config/jaci.yaml)"
+```
+
+Não digite manualmente os caminhos de `MONAN_JEDI_INSTALL_ROOT` e
+`STACK_ROOT`. O comando acima obtém os dois valores da mesma configuração
+usada pelo MONAN-JEDI, evitando combinar um runtime com um spack-stack
+diferente.
+
+### Checkpoint 2 — runtime MONAN-JEDI
+
+Execute:
+
+```bash
+printf 'MONAN_JEDI_INSTALL_ROOT=%s\n' "$MONAN_JEDI_INSTALL_ROOT"
+printf 'STACK_ROOT=%s\n' "$STACK_ROOT"
+
+test -f "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi/install-manifest.json" \
+  && echo "[OK] manifesto do runtime encontrado" \
+  || echo "[FALHA] manifesto do runtime não encontrado"
+```
+
+Para a instalação JACI padrão, a primeira linha será semelhante a:
+
+```text
+MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/<usuario>/build/monan-jedi
+STACK_ROOT=<spack-stack selecionado pela configuração MONAN-JEDI>
+[OK] manifesto do runtime encontrado
+```
+
+> [!NOTE]
+> #### Como saber se o Checkpoint 2 está correto
+>
+> Confira cada item:
+>
+> - **[OK] Runtime:** `MONAN_JEDI_INSTALL_ROOT` está preenchido e, na
+>   instalação padrão do JACI, aponta para
+>   `/p/projetos/monan_das/<usuario>/build/monan-jedi`.
+> - **[OK] spack-stack:** `STACK_ROOT` está preenchido. Você não precisa
+>   descobrir ou escolher esse caminho manualmente neste tutorial; ele vem da
+>   configuração do MONAN-JEDI.
+> - **[OK] Manifesto:** o último comando imprime
+>   `[OK] manifesto do runtime encontrado`.
+>
+> O MONAN-JEDI publica o runtime científico e informa ao restante do ecossistema
+> quais são suas duas âncoras públicas: `MONAN_JEDI_INSTALL_ROOT` e
+> `STACK_ROOT`.
+>
+> **Se os três itens estiverem OK, o runtime científico está pronto e você pode
+> prosseguir para a seção 2.4. Se algum item falhar, não prossiga.**
+
+### 2.4 Instale os comandos Python
+
+Agora que o runtime científico foi validado, instale o **simpleWorkflow** e o
+**monan-jedi-workflow** no ambiente Conda `monan-jedi`.
+
+Os códigos-fonte ficam fora do ambiente Conda. Use a área de projetos:
 
 ```bash
 mkdir -p /p/projetos/monan_das/$USER/projects
@@ -151,16 +273,16 @@ A organização esperada será:
 
 ```text
 /p/projetos/monan_das/<usuario>/projects/
+├── MONAN-JEDI/              <- instalação e publicação do runtime científico
 ├── simpleWorkflow/          <- código-fonte do orquestrador
 └── monan-jedi-workflow/     <- código-fonte da campanha
 
 $HOME/.conda/envs/monan-jedi/
-└── ...                      <- ambiente Python que executa os dois
+└── ...                      <- ambiente Python que executa os dois comandos
 ```
 
-Ou seja: os repositórios **não** são clonados dentro do ambiente Conda.
-O comando `python -m pip install -e .` registra cada checkout no ambiente
-`monan-jedi` que está ativo.
+Os repositórios não são clonados dentro do ambiente Conda.
+`python -m pip install -e .` registra cada checkout no ambiente Python ativo.
 
 #### Instale o simpleWorkflow
 
@@ -171,8 +293,8 @@ git clone https://github.com/joaogerd/simpleWorkflow.git
 cd simpleWorkflow
 python -m pip install -e .
 ```
-Se o diretório `simpleWorkflow` já existir, não execute `git clone`
-novamente. Entre no checkout existente e execute somente:
+
+Se o diretório `simpleWorkflow` já existir, não o clone novamente:
 
 ```bash
 cd /p/projetos/monan_das/$USER/projects/simpleWorkflow
@@ -189,10 +311,10 @@ cd monan-jedi-workflow
 python -m pip install -e .
 ```
 
-Novamente, se o repositório já existir, não o clone. Entre no checkout existente
-e execute `python -m pip install -e .`.
+Se o repositório já existir, entre no checkout existente e execute
+`python -m pip install -e .`.
 
-#### Verifique a instalação
+### Checkpoint 3 — comandos do workflow
 
 Execute:
 
@@ -212,70 +334,25 @@ Uma saída correta para os dois primeiros comandos será semelhante a:
 ```
 
 > [!NOTE]
-> #### Como saber se a instalação dos comandos está correta
+> #### Como saber se o Checkpoint 3 está correto
 >
 > Confira cada item:
 >
 > - **[OK] simpleWorkflow:** `command -v swf` termina em
->   `.conda/envs/monan-jedi/bin/swf`. Isso confirma que o comando foi
->   instalado no ambiente Conda usado pelo experimento.
+>   `.conda/envs/monan-jedi/bin/swf`.
 > - **[OK] monan-jedi-workflow:** `command -v monan-jedi-workflow` termina em
 >   `.conda/envs/monan-jedi/bin/monan-jedi-workflow`.
-> - **[OK] interface do simpleWorkflow:** `swf --help` termina normalmente e
->   mostra a ajuda do comando, sem erro de importação.
-> - **[OK] interface da campanha:** `monan-jedi-workflow --help` termina
->   normalmente e mostra a ajuda do comando, sem erro de importação.
+> - **[OK] interface do simpleWorkflow:** `swf --help` mostra a ajuda do
+>   comando sem erro de importação.
+> - **[OK] interface da campanha:** `monan-jedi-workflow --help` mostra a
+>   ajuda do comando sem erro de importação.
 > - **[OK] checkouts:** os diretórios
 >   `/p/projetos/monan_das/$USER/projects/simpleWorkflow` e
 >   `/p/projetos/monan_das/$USER/projects/monan-jedi-workflow` existem.
 >
-> **Se todos os itens acima estiverem OK, a instalação dos comandos Python foi
-> concluída e você pode prosseguir para a seção 2.4. Se algum item for
-> diferente, não prossiga: primeiro corrija a instalação correspondente.**
-
-### 2.4 Selecione o runtime científico MONAN-JEDI
-
-Defina as duas âncoras públicas do ecossistema:
-
-```bash
-export MONAN_JEDI_INSTALL_ROOT=/caminho/para/monan-jedi-instalado
-export STACK_ROOT=/caminho/para/spack-stack-validado
-```
-
-O `MONAN_JEDI_INSTALL_ROOT` deve apontar para uma instalação MONAN-JEDI que
-contenha:
-
-```text
-bin/
-share/monan-jedi/install-manifest.json
-```
-
-O `STACK_ROOT` deve apontar para o spack-stack usado por essa instalação.
-
-O workflow lê o manifesto instalado para descobrir o ambiente científico. Não
-copie caminhos internos do spack-stack para os YAMLs do caso.
-
-### Checkpoint 2 — comandos e runtime
-
-Execute:
-
-```bash
-test -f "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi/install-manifest.json"
-
-command -v python
-command -v swf
-command -v monan-jedi-workflow
-
-python -c "import sys, numpy; print(sys.executable); print(numpy.__file__)"
-```
-
-Esperado:
-
-- Python, `swf` e `monan-jedi-workflow` pertencem ao ambiente Conda
-  `monan-jedi`;
-- NumPy também vem desse ambiente;
-- o manifesto MONAN-JEDI instalado existe;
-- `MONAN_JEDI_INSTALL_ROOT` e `STACK_ROOT` estão definidos.
+> **Se todos os itens estiverem OK, a preparação dos comandos está concluída e
+> você pode prosseguir para a próxima seção. Se algum item for diferente, não
+> prossiga.**
 
 ## 3. Caso de referência 2025 fornecido pelo repositório
 
