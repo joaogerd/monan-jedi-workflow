@@ -340,6 +340,8 @@ def _configuration_placeholders(spec: CampaignSpec) -> PreflightItem:
         (spec.cycling_jedi_case / "jedi.yaml").resolve(),
         (spec.mpas_case / "mpas.yaml").resolve(),
         (spec.initial_mpas_case / "mpas.yaml").resolve(),
+        (spec.initial_mpas_case / "wps.yaml").resolve(),
+        (spec.initial_mpas_case / "mpas_init.yaml").resolve(),
         spec.obs2ioda_config.resolve(),
     }
     profile_path = spec.config_path.parent / "profile.yaml"
