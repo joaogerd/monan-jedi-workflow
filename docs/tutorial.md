@@ -163,69 +163,276 @@ Esperado:
 - o manifesto MONAN-JEDI instalado existe;
 - `MONAN_JEDI_INSTALL_ROOT` e `STACK_ROOT` estão definidos.
 
-## 3. Crie a configuração do experimento
+## 3. Crie seu caso a partir do único template
 
-Copie o template mantido:
+Volte à raiz do checkout do `monan-jedi-workflow`. Copie o diretório inteiro:
 
 ```bash
+cd /caminho/para/monan-jedi-workflow
 cp -r examples/case my-experiment
 cd my-experiment
 ```
 
-Você encontrará um único conjunto de arquivos de usuário:
+Não copie YAMLs isoladamente e não procure outro exemplo. O diretório criado é
+a configuração completa do usuário:
 
 ```text
 my-experiment/
-  campaign.yaml       quando e por quanto tempo executar
-  profile.yaml        liga a campanha aos componentes abaixo
-  jedi.yaml           análise/DA
-  mpas.yaml           forecast MONAN/MPAS
-  obs2ioda.yaml       observações
-  initialization/     configuração do primeiro estado MPAS
-  templates/          namelists, streams e YAML variacional (a preencher)
+  campaign.yaml
+  profile.yaml
+  mpas.yaml
+  obs2ioda.yaml
+  jedi.yaml
+  initialization/
+    mpas.yaml
+  templates/
+    README.md
 ```
 
-Não crie `workflow.yaml` manualmente. Ele é produto da materialização.
+O `workflow.yaml` **não existe ainda e não deve ser escrito pelo usuário**.
+Ele será produzido por `campaign create` depois que a configuração passar no
+preflight.
 
-## 4. Configure na ordem correta
+### Checkpoint 3 — caso criado
 
-### 4.1 Campanha
+```bash
+pwd
+find . -maxdepth 2 -type f | sort
+```
 
-Abra `campaign.yaml`. Para o primeiro teste escolha uma data para a qual todos
-os dados estejam disponíveis e use:
+Confirme que os arquivos acima existem. Neste momento vários campos contêm
+`EDITAR`; isso é intencional. O preflight recusará executar o caso enquanto
+qualquer placeholder `EDITAR` permanecer nos YAMLs ativos.
+
+## 4. Configure o experimento, arquivo por arquivo
+
+Não tente editar todos os YAMLs ao mesmo tempo. Siga esta ordem.
+
+### 4.1 `campaign.yaml` — quando executar
+
+Abra:
+
+```bash
+vi campaign.yaml
+```
+
+Para o primeiro experimento, defina:
 
 ```yaml
-duration: P3D
+campaign:
+  name: meu-experimento-3d
+  start: AAAA-MM-DDT00:00:00Z
+  duration: P3D
+  cycle_interval_hours: 6
+  destination: cases/meu-experimento-3d
 ```
 
-Veja [campaign](configuration/campaign.md).
+Você precisa decidir somente o nome, a primeira análise, a duração e a cadência.
+A data só pode ser escolhida depois de confirmar que inicialização e observações
+existem para todo o período.
 
-### 4.2 MONAN/MPAS
+Não altere para P7D/P30D/P365D antes de validar P3D.
 
-Abra `mpas.yaml` e confira malha, partição, forecast, intervalo dos estados
-DA, namelist/streams e PBS.
+Referência completa: [configuração da campanha](configuration/campaign.md).
 
-Veja [MONAN/MPAS](configuration/mpas.md).
+### Checkpoint 4 — período
 
-### 4.3 Observações
+```bash
+grep -nE 'name:|start:|duration:|cycle_interval_hours:|destination:' campaign.yaml
+```
 
-Abra `obs2ioda.yaml`. Para cada observação confirme origem, conversor e output
-IODA. A lista `converters[*].outputs` é a lista de produtos que a campanha
-espera.
+Confirme que não há `EDITAR` nessas chaves e que o destination é novo.
 
-Veja [observações](configuration/observations.md).
+### 4.2 `profile.yaml` — como os componentes se conectam
 
-### 4.4 JEDI
+Para o layout padrão copiado de `examples/case`, normalmente mantenha:
 
-Abra `jedi.yaml` e confira ciclo/janela, background, B, links das observações,
-YAML variacional, recursos PBS e validação.
+```yaml
+profile:
+  cycling_jedi_case: .
+  initial_mpas_case: initialization
+  mpas_case: .
+  obs2ioda_config: obs2ioda.yaml
+```
 
-Depois confira o YAML variacional em `templates/`: geometry, variáveis,
-B, observers, operadores, QC, erros e minimização.
+Esses caminhos dizem ao materializador onde encontrar JEDI, forecast MPAS,
+inicialização e Obs2IODA. Eles não definem a ciência.
 
-Veja [JEDI](configuration/jedi.md).
+Deixe `observation_acquisition.enabled: false` enquanto estiver fornecendo os
+arquivos de observação manualmente. Habilite aquisição automática somente
+quando os providers daquele período estiverem configurados e testados.
 
-## 5. Verifique antes de executar
+### Checkpoint 5 — ligação do caso
+
+```bash
+test -f jedi.yaml
+test -f mpas.yaml
+test -f initialization/mpas.yaml
+test -f obs2ioda.yaml
+```
+
+Os quatro comandos devem terminar sem mensagem de erro.
+
+### 4.3 `mpas.yaml` — forecast cíclico MONAN/MPAS
+
+Abra:
+
+```bash
+vi mpas.yaml
+```
+
+Preencha, no mínimo:
+
+1. `static_root`: onde estão invariant, partição e demais dados fixos;
+2. `lead_hours`: horizonte de cada forecast;
+3. `forecast_contract.da_state_interval_hours`: frequência do estado usado
+   pela DA/FGAT;
+4. `forecast_contract.mpi_ranks` e `partition`;
+5. links do estado de análise, executável e arquivos estáticos;
+6. namelist e streams em `templates/`;
+7. fila, CPUs, ranks e walltime em `pbs`;
+8. produtos esperados em `validation`.
+
+Para o ciclo inicial de 6 h usado atualmente, `run_hours`, outputs, streams e
+a cadência precisam ser coerentes entre si. Não escolha partição ou número de
+ranks apenas copiando outro experimento.
+
+Referência completa: [MONAN/MPAS](configuration/mpas.md).
+
+### Checkpoint 6 — MPAS
+
+```bash
+grep -n 'EDITAR' mpas.yaml
+```
+
+Antes do preflight final, esse comando não deve retornar nenhuma linha.
+
+### 4.4 `obs2ioda.yaml` — quais observações entram
+
+Abra:
+
+```bash
+vi obs2ioda.yaml
+```
+
+Para **cada** família assimilada, declare:
+
+```yaml
+converters:
+  - name: nome-do-conversor
+    inputs:
+      - caminho-do-dado-bruto
+    outputs:
+      - caminho-do-produto-IODA
+    argv:
+      - executavel-do-conversor
+      - argumentos
+```
+
+A regra é importante:
+
+```text
+dado bruto -> conversor Obs2IODA -> output IODA -> link no JEDI -> observer
+```
+
+Se uma dessas ligações estiver ausente, a observação não está completamente
+configurada.
+
+Referência completa: [observações](configuration/observations.md).
+
+### Checkpoint 7 — observações
+
+```bash
+grep -n 'EDITAR' obs2ioda.yaml
+```
+
+Além de não haver placeholders, confirme manualmente que os arquivos brutos
+existem para **todos os ciclos** da campanha. O `campaign check` fará essa
+verificação novamente usando as datas renderizadas.
+
+### 4.5 `jedi.yaml` — assimilação
+
+Abra:
+
+```bash
+vi jedi.yaml
+```
+
+Confira nesta ordem:
+
+1. `cycle`: passo, offset do background e janela;
+2. `bmatrix_root`: B compatível com a geometry/malha;
+3. `background` e `analysis_base_state`;
+4. um link para cada output IODA realmente usado;
+5. `templates/variational.yaml`;
+6. namelist MPAS-JEDI;
+7. recursos PBS;
+8. produto de análise esperado em `validation`.
+
+O nome declarado em `analysis_base_state.target` e o produto esperado pelo
+forecast seguinte precisam representar o **mesmo estado de análise**.
+
+Referência completa: [JEDI](configuration/jedi.md).
+
+### Checkpoint 8 — JEDI
+
+```bash
+grep -n 'EDITAR' jedi.yaml
+```
+
+Esse comando também deve terminar sem retornar linhas.
+
+### 4.6 `initialization/mpas.yaml` — primeiro background
+
+Este arquivo é diferente de `mpas.yaml`: ele prepara o estado que alimentará
+a **primeira análise** da campanha.
+
+Abra:
+
+```bash
+vi initialization/mpas.yaml
+```
+
+Defina o estado inicial, templates, recursos e outputs. A integração precisa
+cobrir pelo menos um `cycle_interval_hours` antes da primeira análise.
+
+O tutorial será completado com WPS + `mpas_init_atmosphere` no baseline 2025,
+para que a origem desse primeiro estado também seja reproduzível e não uma
+etapa manual escondida.
+
+### Checkpoint 9 — inicialização
+
+```bash
+grep -n 'EDITAR' initialization/mpas.yaml
+```
+
+Não deve haver placeholders antes da execução.
+
+### 4.7 `templates/` — arquivos científicos consumidos pelos executáveis
+
+Leia primeiro:
+
+```bash
+cat templates/README.md
+```
+
+O caso real precisa fornecer os namelists, streams e `variational.yaml`
+referenciados pelos YAMLs anteriores. Não use um template de outra malha ou
+experimento sem verificar geometry, níveis, datas, B, observers e outputs.
+
+### Checkpoint 10 — nenhum placeholder restante
+
+Da raiz de `my-experiment`:
+
+```bash
+grep -RIn 'EDITAR' \
+  campaign.yaml profile.yaml mpas.yaml obs2ioda.yaml jedi.yaml initialization templates
+```
+
+Para um caso pronto, o comando não deve retornar nenhuma configuração ativa
+não resolvida.
+
+## 5. Faça o preflight completo antes de executar
 
 Da raiz do repositório:
 
