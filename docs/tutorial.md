@@ -98,38 +98,39 @@ PYTHONPATH=<not set>
 Os números exatos da versão e o nome do usuário podem ser diferentes. O
 importante é entender **de onde cada componente está sendo carregado**.
 
-#### Como saber se o Checkpoint 1 está correto
-
-Confira cada item:
-
-- **[OK] Python selecionado:** a saída de `command -v python` termina em
-  `.conda/envs/monan-jedi/bin/python`. Isso confirma que o comando `python`
-  pertence ao ambiente Conda criado para o MONAN-JEDI.
-- **[OK] Versão do Python:** a primeira linha produzida pelo comando Python
-  começa com `3.11`. Valores como `3.11.10` ou `3.11.16` são versões
-  diferentes da mesma série Python 3.11 e estão corretos para este tutorial.
-- **[OK] Executável Python:** `sys.executable` também termina em
-  `.conda/envs/monan-jedi/bin/python`. Isso confirma que o Python realmente
-  executado é o mesmo que o shell encontrou.
-- **[OK] NumPy:** `numpy.__file__` está abaixo de
-  `.conda/envs/monan-jedi/lib/python3.11/site-packages/`. Isso confirma que o
-  NumPy pertence ao mesmo ambiente Conda.
-- **[OK] Ambiente Conda:** `CONDA_PREFIX` termina em
-  `.conda/envs/monan-jedi`. Essa variável identifica o ambiente atualmente
-  ativo.
-- **[OK] PYTHONPATH:** deve aparecer como `PYTHONPATH=<not set>`. Assim, um
-  caminho externo não está forçando o Python a importar pacotes de outra
-  instalação.
-
-Um sinal claro de problema seria, por exemplo, o Python vindo de
-`monan-jedi`, mas o NumPy vindo de um caminho contendo
-`spack-stack/.../site-packages`. Isso significaria que dois ambientes Python
-foram misturados.
-
-**Se todos os seis itens acima estiverem OK, o Checkpoint 1 foi concluído e
-você pode prosseguir para a seção 2.3. Se algum item for diferente, não
-prossiga: primeiro identifique por que o ambiente não corresponde ao esperado.**
-
+> [!NOTE]
+> #### Como saber se o Checkpoint 1 está correto
+>
+> Confira cada item:
+>
+> - **[OK] Python selecionado:** a saída de `command -v python` termina em
+>   `.conda/envs/monan-jedi/bin/python`. Isso confirma que o comando `python`
+>   pertence ao ambiente Conda criado para o MONAN-JEDI.
+> - **[OK] Versão do Python:** a primeira linha produzida pelo comando Python
+>   começa com `3.11`. Valores como `3.11.10` ou `3.11.16` são versões
+>   diferentes da mesma série Python 3.11 e estão corretos para este tutorial.
+> - **[OK] Executável Python:** `sys.executable` também termina em
+>   `.conda/envs/monan-jedi/bin/python`. Isso confirma que o Python realmente
+>   executado é o mesmo que o shell encontrou.
+> - **[OK] NumPy:** `numpy.__file__` está abaixo de
+>   `.conda/envs/monan-jedi/lib/python3.11/site-packages/`. Isso confirma que o
+>   NumPy pertence ao mesmo ambiente Conda.
+> - **[OK] Ambiente Conda:** `CONDA_PREFIX` termina em
+>   `.conda/envs/monan-jedi`. Essa variável identifica o ambiente atualmente
+>   ativo.
+> - **[OK] PYTHONPATH:** deve aparecer como `PYTHONPATH=<not set>`. Assim, um
+>   caminho externo não está forçando o Python a importar pacotes de outra
+>   instalação.
+>
+> Um sinal claro de problema seria, por exemplo, o Python vindo de
+> `monan-jedi`, mas o NumPy vindo de um caminho contendo
+> `spack-stack/.../site-packages`. Isso significaria que dois ambientes Python
+> foram misturados.
+>
+> **Se todos os seis itens acima estiverem OK, o Checkpoint 1 foi concluído e
+> você pode prosseguir para a seção 2.3. Se algum item for diferente, não
+> prossiga: primeiro identifique por que o ambiente não corresponde ao esperado.**
+>
 O spack-stack científico será carregado somente depois que este checkpoint
 estiver correto.
 
