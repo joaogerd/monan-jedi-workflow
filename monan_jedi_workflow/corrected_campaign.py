@@ -518,18 +518,25 @@ def _validate_cycling_contract(mpas: dict[str, Any]) -> None:
 
 
 def _absolutize_mpas_assets(mpas: dict[str, Any], source_case: Path) -> None:
+    def fixed_asset(value: Any) -> Any:
+        # Values containing render placeholders are runtime paths/products and
+        # must not be anchored to the source template checkout.
+        if isinstance(value, str) and "{" in value:
+            return value
+        return absolutize_case_path(value, source_case)
+
     for entry in mpas.get("templates", []):
         if isinstance(entry, dict):
-            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = fixed_asset(entry.get("source"))
     directories = mpas.get("link_directories", [])
     for index, entry in enumerate(directories):
         if isinstance(entry, dict):
-            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = fixed_asset(entry.get("source"))
         elif isinstance(entry, str):
-            directories[index] = absolutize_case_path(entry, source_case)
+            directories[index] = fixed_asset(entry)
     for entry in mpas.get("links", []):
         if isinstance(entry, dict):
-            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = fixed_asset(entry.get("source"))
 
 
 def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
@@ -543,6 +550,8 @@ def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
     pbs = mpas.get("pbs")
     if not isinstance(pbs, dict):
         raise StageConfigurationError("initial MPAS configuration must define pbs")
+    variables = mpas.setdefault("variables", {})
+    variables["campaign_root"] = str(destination.resolve())
     mpas["run_dir"] = str(
         destination.resolve() / "work/initialization/mpas/{cycle_id}"
     )
@@ -565,6 +574,8 @@ def _patch_cycling_mpas(source_case: Path, destination: Path) -> None:
             "mpas.pbs.mpiprocs must match mpas.forecast_contract.mpi_ranks"
         )
     pbs["setup"] = []
+    variables = mpas.setdefault("variables", {})
+    variables["campaign_root"] = str(destination.resolve())
     mpas["run_dir"] = str(destination.resolve() / "work/mpas/{cycle_id}")
     _absolutize_mpas_assets(mpas, source_case)
 
