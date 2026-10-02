@@ -1,56 +1,70 @@
-# PASSO 3 — forecast MONAN/MPAS.
-# Este é um TEMPLATE, não um baseline científico pronto.
-# Substitua todo EDITAR. Veja docs/configuration/mpas.md.
+# Forecast cíclico MONAN/MPAS — x1.10242 / 55 níveis.
+#
+# O contrato 128-rank é o mesmo registrado no caso JACI do MPAS-BMatrix.
 mpas:
   variables:
+    # Replaced by the campaign materializer with the destination path.
+    campaign_root: "."
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     stack_root: ${STACK_ROOT}
-    static_root: EDITAR-caminho-dados-estaticos
+    data_root: ${MONAN_JEDI_DATA_ROOT}
+    static_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
+    mesh_root: ${MONAN_JEDI_MESH_ROOT}
+    physics_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
 
-  # Deve ser coerente com forecast_contract.run_hours.
   lead_hours: 6
   run_dir: "work/mpas/{cycle_id}"
 
   forecast_contract:
     run_hours: 6
-    # Frequência dos estados usados pela DA/FGAT.
     da_state_interval_hours: 3
-    mpi_ranks: EDITAR-INTEIRO
-    partition: EDITAR-arquivo-de-particao
+    mpi_ranks: 128
+    partition: x1.10242.graph.info.part.128
     do_restart: false
     do_DAcycling: true
     IAU: "off"
 
+  clean_patterns: ["mpasout.*.nc", "restart.*.nc", "log.atmosphere.*.out"]
+
+  link_directories:
+    - source: "{physics_root}"
+      include:
+        [CAM_ABS_DATA.DBL, CAM_AEROPT_DATA.DBL, GENPARM.TBL, LANDUSE.TBL,
+         OZONE_DAT.TBL, OZONE_LAT.TBL, OZONE_PLEV.TBL, RRTMG_LW_DATA,
+         RRTMG_LW_DATA.DBL, RRTMG_SW_DATA, RRTMG_SW_DATA.DBL, SOILPARM.TBL,
+         VEGPARM.TBL]
+
   links:
-    # Produto do JEDI deste ciclo. O nome deve ser o mesmo de
-    # jedi.analysis_base_state.target.
-    - source: "work/jedi/{cycle_id}/EDITAR-caminho-do-estado-de-analise"
-      target: init.nc
+    - source: "{campaign_root}/work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{mpas_file_time}.nc"
+      target: "mpas.analysis-full.{mpas_file_time}.nc"
     - source: "{monan_jedi_install_root}/bin/mpas_atmosphere"
       target: mpas_atmosphere
-    - source: "{static_root}/EDITAR-invariant.nc"
-      target: EDITAR-invariant.nc
-    - source: "{static_root}/{forecast_contract_partition}"
-      target: "{forecast_contract_partition}"
+    - source: "{static_root}/x1.10242.invariant.nc"
+      target: x1.10242.invariant.nc
+    - source: "{mesh_root}/partitions/x1.10242.graph.info.part.128"
+      target: x1.10242.graph.info.part.128
 
   templates:
-    - source: templates/namelist.atmosphere
+    - source: templates/namelist.atmosphere.cycling.in
       target: namelist.atmosphere
-    - source: templates/streams.atmosphere
+    - source: templates/streams.atmosphere.cycling.in
       target: streams.atmosphere
 
   pbs:
     filename: run_mpas.pbs
-    job_name: "mpas_{cycle_yyyymmddhh}"
-    queue: EDITAR-fila
+    job_name: "mpas_cycling_{cycle_yyyymmddhh}"
+    queue: pesqmidi
     select: 1
-    ncpus: EDITAR-INTEIRO
-    mpiprocs: EDITAR-MESMO-VALOR-DE-mpi_ranks
-    walltime: "EDITAR-HH:MM:SS"
+    ncpus: 128
+    mpiprocs: 128
+    walltime: "02:00:00"
     launcher: mpiexec
     command: ["./mpas_atmosphere"]
     environment:
       OMP_NUM_THREADS: "1"
+      FI_CXI_RX_MATCH_MODE: hybrid
+      GFORTRAN_CONVERT_UNIT: "big_endian:101-200"
+      F_UFMTENDIAN: big
 
   validation:
     log: log.atmosphere.0000.out
@@ -58,3 +72,16 @@ mpas:
     required_outputs:
       - "mpasout.{mpas_da_state_file_time}.nc"
       - "mpasout.{mpas_valid_file_time}.nc"
+    netcdf:
+      - path: "mpasout.{mpas_da_state_file_time}.nc"
+        consumer: "FGAT / analysis base-state hand-off"
+        required_variables: [xtime]
+        required_dimensions: {Time: 1}
+        time_variable: xtime
+        expected_time: "{mpas_da_state_time}"
+      - path: "mpasout.{mpas_valid_file_time}.nc"
+        consumer: "next MONAN-JEDI cycle"
+        required_variables: [xtime]
+        required_dimensions: {Time: 1}
+        time_variable: xtime
+        expected_time: "{mpas_valid_time}"

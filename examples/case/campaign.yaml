@@ -1,11 +1,11 @@
-# PASSO 1 — período da campanha.
-# Leia docs/configuration/campaign.md.
+# Caso de referência MONAN-JEDI/JACI — setembro de 2025.
+# Primeiro objetivo: validar P3D. Depois altere somente duration/destination.
 campaign:
-  name: EDITAR-nome
-  start: EDITAR-AAAA-MM-DDT00:00:00Z
+  name: monan-jedi-20250901-3d
+  start: 2025-09-01T00:00:00Z
   duration: P3D
   cycle_interval_hours: 6
-  destination: EDITAR-cases/nome
+  destination: cases/monan-jedi-20250901-3d
 
 profile: profile.yaml
 

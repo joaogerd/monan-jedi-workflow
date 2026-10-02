@@ -1,0 +1,17 @@
+&share
+ wrf_core = 'ARW',
+ max_dom = 1,
+ start_date = '{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}:00:00',
+ end_date   = '{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}:00:00',
+ interval_seconds = 10800,
+ io_form_geogrid = 2,
+ debug_level = 0,
+/
+&geogrid
+/
+&ungrib
+ out_format = 'WPS',
+ prefix = 'GFS',
+/
+&metgrid
+/

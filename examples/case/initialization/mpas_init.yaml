@@ -1,0 +1,47 @@
+# mpas_init_atmosphere for the first forecast initialization.
+mpas_init:
+  variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    data_root: ${MONAN_JEDI_DATA_ROOT}
+    mesh_root: ${MONAN_JEDI_MESH_ROOT}
+    tutorial_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
+
+  run_dir: "work/mpas-init/{cycle_id}"
+  clean_patterns: ["x1.10242.init.*.nc", "log.init_atmosphere.*.out"]
+
+  links:
+    - source: "{monan_jedi_install_root}/bin/mpas_init_atmosphere"
+      target: mpas_init_atmosphere
+    - source: "{tutorial_root}/x1.10242.invariant.nc"
+      target: x1.10242.static.nc
+    - source: "{mesh_root}/partitions/x1.10242.graph.info.part.128"
+      target: x1.10242.graph.info.part.128
+    - source: "work/wps/{cycle_id}/GFS:{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}"
+      target: "GFS:{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}"
+
+  templates:
+    - source: templates/namelist.init_atmosphere.in
+      target: namelist.init_atmosphere
+    - source: templates/streams.init_atmosphere.in
+      target: streams.init_atmosphere
+
+  pbs:
+    filename: run_mpas_init.pbs
+    job_name: "mpas_init_{cycle_yyyymmddhh}"
+    queue: pesqmini
+    select: 1
+    ncpus: 128
+    mpiprocs: 128
+    walltime: "00:30:00"
+    launcher: mpiexec
+    command: ["./mpas_init_atmosphere"]
+    environment:
+      OMP_NUM_THREADS: "1"
+      FI_CXI_RX_MATCH_MODE: hybrid
+      F_UFMTENDIAN: big
+
+  validation:
+    log: log.init_atmosphere.0000.out
+    required_log_markers: []
+    required_outputs:
+      - "work/mpas-init/{cycle_id}/x1.10242.init.{mpas_file_time}.nc"

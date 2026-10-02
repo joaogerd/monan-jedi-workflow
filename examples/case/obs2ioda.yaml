@@ -1,18 +1,32 @@
-# PASSO 4 — observações.
-# Declare somente famílias realmente assimiladas pelo JEDI.
-# Veja docs/configuration/observations.md.
+# Observações convencionais GDAS PREPBUFR -> IODA.
+#
+# Antes de executar, defina:
+#   export MONAN_JEDI_DATA_ROOT=/p/projetos/monan_das/$USER/external-inputs
+#   export MONAN_JEDI_WORKFLOW_ROOT=/caminho/para/monan-jedi-workflow
+#
+# Stage esperado:
+#   $MONAN_JEDI_DATA_ROOT/observations/prepbufr/2025/
+#     prepbufr.gdas.YYYYMMDD.tHHz.nr.48h
 obs2ioda:
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
-    raw_obs_root: EDITAR-caminho-dados-brutos
-    converter: EDITAR-executavel-ou-wrapper
+    data_root: ${MONAN_JEDI_DATA_ROOT}
+    workflow_root: ${MONAN_JEDI_WORKFLOW_ROOT}
+    obs2ioda_executable: "{monan_jedi_install_root}/bin/obs2ioda_v3"
+    obs2ioda_library_root: "{monan_jedi_install_root}/lib"
+    libfabric_library_root: /opt/cray/libfabric/1.22.0/lib64
+    prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
+    prepbufr_input: "{data_root}/observations/prepbufr/2025/prepbufr.gdas.{cycle_yyyymmdd}.t{cycle_hh}z.nr.48h"
 
   work_dir: "work/obs/{cycle_yyyymmddhh}"
 
   runtime:
-    library_paths: []
+    library_paths:
+      - "{obs2ioda_library_root}"
+      - "{obs2ioda_library_root}/cxx"
+      - "{libfabric_library_root}"
     dependency_checks:
-      - "{converter}"
+      - "{obs2ioda_executable}"
 
   inspection:
     argv: [ncdump, -h, "{output}"]
@@ -23,14 +37,20 @@ obs2ioda:
     sha256: true
 
   converters:
-    # Duplique este bloco para cada conversor necessário.
-    - name: EDITAR-nome
+    - name: prepbufr-conventional
       inputs:
-        - "EDITAR-input-{cycle_yyyymmddhh}"
+        - "{prepbufr_input}"
+        - "{prepbufr_runner}"
+      # O wrapper produz outras famílias também; o primeiro baseline assimila
+      # radiossondas e superfície para reduzir a complexidade do E2E.
       outputs:
-        # Estes nomes são consumidos pelo workflow; não existem famílias
-        # observacionais hardcoded no motor.
-        - "{work_dir}/EDITAR-output-{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/sondes_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/sfc_obs_{cycle_yyyymmddhh}.h5"
+      timeout_seconds: 1800
       argv:
-        - "{converter}"
-        - EDITAR-argumentos
+        - bash
+        - "{prepbufr_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
+        - --input
+        - "{prepbufr_input}"
