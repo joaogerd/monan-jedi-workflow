@@ -1,13 +1,12 @@
-# PASSO 2 — ligação entre a campanha e os componentes científicos.
-# Todos os caminhos abaixo são relativos a este diretório.
+# O layout padrão mantém toda a configuração científica neste diretório.
 profile:
   cycling_jedi_case: .
   initial_mpas_case: initialization
   mpas_case: .
   obs2ioda_config: obs2ioda.yaml
 
-  # Opcional: aquisição automática dos dados brutos.
-  # Habilite somente depois de declarar provedores válidos para o período.
+  # O primeiro caso usa dados previamente baixados/staged no JACI.
+  # A aquisição automática será habilitada depois da validação E2E.
   observation_acquisition:
     enabled: false
     search_roots: []
