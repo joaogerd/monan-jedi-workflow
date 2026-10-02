@@ -1,39 +1,68 @@
-# PASSO 6 — integração que produz o primeiro background.
-# Configure um estado MPAS válido antes da primeira análise. Esta integração
-# precisa alcançar pelo menos o horário da primeira análise.
+# First 6-h MONAN/MPAS integration: 2025-08-31 18Z -> 2025-09-01 00Z.
+# Its +3 h and +6 h states become trajectory/state for the first JEDI cycle.
 mpas:
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
-    initial_data_root: EDITAR-caminho-inicializacao
+    data_root: ${MONAN_JEDI_DATA_ROOT}
+    mesh_root: "{data_root}/mpas-meshes/x1.10242"
+    tutorial_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
 
   lead_hours: 6
   run_dir: "work/initialization/mpas/{cycle_id}"
 
+  forecast_contract:
+    run_hours: 6
+    da_state_interval_hours: 3
+    mpi_ranks: 128
+    partition: x1.10242.graph.info.part.128
+    do_restart: false
+    do_DAcycling: false
+    IAU: "off"
+
+  clean_patterns: ["mpasout.*.nc", "restart.*.nc", "log.atmosphere.*.out"]
+
+  link_directories:
+    - source: "{tutorial_root}"
+      include:
+        [CAM_ABS_DATA.DBL, CAM_AEROPT_DATA.DBL, GENPARM.TBL, LANDUSE.TBL,
+         OZONE_DAT.TBL, OZONE_LAT.TBL, OZONE_PLEV.TBL, RRTMG_LW_DATA,
+         RRTMG_LW_DATA.DBL, RRTMG_SW_DATA, RRTMG_SW_DATA.DBL, SOILPARM.TBL,
+         VEGPARM.TBL]
+
   links:
     - source: "{monan_jedi_install_root}/bin/mpas_atmosphere"
       target: mpas_atmosphere
-    - source: "{initial_data_root}/EDITAR-estado-inicial.nc"
-      target: init.nc
+    - source: "work/mpas-init/{cycle_id}/x1.10242.init.{mpas_file_time}.nc"
+      target: "mpas.init.{mpas_file_time}.nc"
+    - source: "{tutorial_root}/x1.10242.invariant.nc"
+      target: x1.10242.invariant.nc
+    - source: "{mesh_root}/partitions/x1.10242.graph.info.part.128"
+      target: x1.10242.graph.info.part.128
 
   templates:
-    - source: ../templates/namelist.atmosphere.initial
+    - source: ../templates/namelist.atmosphere.initial.in
       target: namelist.atmosphere
-    - source: ../templates/streams.atmosphere.initial
+    - source: ../templates/streams.atmosphere.initial.in
       target: streams.atmosphere
 
   pbs:
     filename: run_mpas.pbs
     job_name: "mpas_initial_{cycle_yyyymmddhh}"
-    queue: EDITAR-fila
+    queue: pesqmidi
     select: 1
-    ncpus: EDITAR-INTEIRO
-    mpiprocs: EDITAR-INTEIRO
-    walltime: "EDITAR-HH:MM:SS"
+    ncpus: 128
+    mpiprocs: 128
+    walltime: "02:00:00"
     launcher: mpiexec
     command: ["./mpas_atmosphere"]
+    environment:
+      OMP_NUM_THREADS: "1"
+      FI_CXI_RX_MATCH_MODE: hybrid
+      F_UFMTENDIAN: big
 
   validation:
     log: log.atmosphere.0000.out
     required_log_markers: ["Finished running the atmosphere core"]
     required_outputs:
+      - "mpasout.{mpas_da_state_file_time}.nc"
       - "mpasout.{mpas_valid_file_time}.nc"
