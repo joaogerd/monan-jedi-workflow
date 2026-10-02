@@ -9,7 +9,7 @@ mpas:
     stack_root: ${STACK_ROOT}
     data_root: ${MONAN_JEDI_DATA_ROOT}
     static_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
-    bmatrix_root: ${MONAN_JEDI_BMATRIX_ROOT}
+    mesh_root: ${MONAN_JEDI_MESH_ROOT}
     physics_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
 
   lead_hours: 6
@@ -41,7 +41,7 @@ mpas:
       target: mpas_atmosphere
     - source: "{static_root}/x1.10242.invariant.nc"
       target: x1.10242.invariant.nc
-    - source: "{bmatrix_root}/x1.10242.graph.info.part.128"
+    - source: "{mesh_root}/partitions/x1.10242.graph.info.part.128"
       target: x1.10242.graph.info.part.128
 
   templates:
