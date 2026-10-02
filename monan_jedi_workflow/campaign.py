@@ -34,6 +34,7 @@ _DURATION = re.compile(r"^(?:P(?P<days>[1-9][0-9]*)D|PT(?P<hours>[1-9][0-9]*)H)$
 _UNRESOLVED_ENV = re.compile(
     r"\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
 )
+_PLACEHOLDER = re.compile(r"EDITAR", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -332,6 +333,34 @@ def _rendered_obs_inputs(config: Path, cycle: datetime) -> tuple[list[Path], lis
     return inputs, tools
 
 
+def _configuration_placeholders(spec: CampaignSpec) -> PreflightItem:
+    """Reject maintained-template placeholders before any campaign is created."""
+    roots = {
+        spec.config_path.resolve(),
+        (spec.cycling_jedi_case / "jedi.yaml").resolve(),
+        (spec.mpas_case / "mpas.yaml").resolve(),
+        (spec.initial_mpas_case / "mpas.yaml").resolve(),
+        spec.obs2ioda_config.resolve(),
+    }
+    profile_path = spec.config_path.parent / "profile.yaml"
+    if profile_path.is_file():
+        roots.add(profile_path.resolve())
+
+    found: list[str] = []
+    for path in sorted(roots):
+        if not path.is_file():
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _PLACEHOLDER.search(line):
+                found.append(f"{path}:{lineno}: {line.strip()}")
+
+    return PreflightItem(
+        "configuration placeholders",
+        not found,
+        "none" if not found else "; ".join(found),
+    )
+
+
 def _initial_mpas_detail(spec: CampaignSpec) -> PreflightItem:
     config = spec.initial_mpas_case / "mpas.yaml"
     if not config.is_file():
@@ -359,6 +388,7 @@ def _initial_mpas_detail(spec: CampaignSpec) -> PreflightItem:
 def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> PreflightReport:
     """Check everything knowable before creating or submitting the campaign."""
     items: list[PreflightItem] = []
+    items.append(_configuration_placeholders(spec))
     for label, path, kind in (
         ("cycling JEDI case", spec.cycling_jedi_case, "dir"),
         ("MPAS case", spec.mpas_case, "dir"),
