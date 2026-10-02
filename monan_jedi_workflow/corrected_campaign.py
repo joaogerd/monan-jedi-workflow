@@ -539,6 +539,25 @@ def _absolutize_mpas_assets(mpas: dict[str, Any], source_case: Path) -> None:
             entry["source"] = fixed_asset(entry.get("source"))
 
 
+def _patch_initialization_assets(source_case: Path, destination: Path) -> None:
+    """Copy WPS/MPAS-init configuration with stable references to source templates."""
+    source_case = source_case.resolve()
+    target = destination / "initialization"
+    for filename in ("wps.yaml", "mpas_init.yaml"):
+        source = source_case / filename
+        if not source.is_file():
+            raise StageConfigurationError(f"initialization configuration is missing: {source}")
+        data = load_yaml(source)
+        root_key = "wps" if filename == "wps.yaml" else "mpas_init"
+        stage = data.get(root_key)
+        if not isinstance(stage, dict):
+            raise StageConfigurationError(f"{filename} must define {root_key} mapping")
+        for entry in stage.get("templates", []):
+            if isinstance(entry, dict):
+                entry["source"] = absolutize_case_path(entry.get("source"), source_case)
+        write_yaml(target / filename, data)
+
+
 def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
     """Materialize a standalone MPAS integration that produces the first background."""
     source_case = source_case.resolve()
@@ -708,6 +727,7 @@ def materialize_corrected_campaign(
         copy_clean_case(cycling_jedi_case.resolve(), destination)
         (destination / "initialization").mkdir(parents=True, exist_ok=True)
         _patch_jedi_native(destination, start_cycle)
+        _patch_initialization_assets(initial_mpas_case.resolve(), destination)
         _patch_initial_mpas(initial_mpas_case.resolve(), destination)
         _patch_cycling_mpas(mpas_case.resolve(), destination)
         obs_data = load_yaml(obs2ioda_config.resolve())
