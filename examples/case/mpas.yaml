@@ -10,7 +10,9 @@ mpas:
     data_root: ${MONAN_JEDI_DATA_ROOT}
     static_root: "{mesh_root}/static"
     mesh_root: ${MONAN_JEDI_MESH_ROOT}
-    physics_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
+    # Tabelas compartilhadas no JACI; altere este caminho em outro site.
+    # Origem e SHA-256: physics/mpas/manifest.yaml no MONAN-JEDI-Data.
+    physics_root: "/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files"
 
   lead_hours: 6
   run_dir: "work/mpas/{cycle_id}"
