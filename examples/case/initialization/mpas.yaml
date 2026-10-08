@@ -7,7 +7,9 @@ mpas:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     data_root: ${MONAN_JEDI_DATA_ROOT}
     mesh_root: ${MONAN_JEDI_MESH_ROOT}
-    tutorial_root: "{data_root}/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files"
+    # Tabelas compartilhadas no JACI; altere este caminho em outro site.
+    # Origem e SHA-256: physics/mpas/manifest.yaml no MONAN-JEDI-Data.
+    physics_root: "/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files"
 
   lead_hours: 6
   run_dir: "work/initialization/mpas/{cycle_id}"
@@ -24,7 +26,7 @@ mpas:
   clean_patterns: ["mpasout.*.nc", "restart.*.nc", "log.atmosphere.*.out"]
 
   link_directories:
-    - source: "{tutorial_root}"
+    - source: "{physics_root}"
       include:
         [CAM_ABS_DATA.DBL, CAM_AEROPT_DATA.DBL, GENPARM.TBL, LANDUSE.TBL,
          OZONE_DAT.TBL, OZONE_LAT.TBL, OZONE_PLEV.TBL, RRTMG_LW_DATA,
