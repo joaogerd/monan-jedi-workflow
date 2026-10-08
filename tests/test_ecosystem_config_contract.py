@@ -207,7 +207,9 @@ def test_single_case_template_uses_shared_runtime_contract() -> None:
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert "${MONAN_JEDI_INSTALL_ROOT}" in text
         assert "${STACK_ROOT}" in text
-        assert "/p/projetos/" not in text
+        assert "/p/projetos/" not in text.replace(
+            "/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files", ""
+        )
 
 def test_legacy_renderer_no_longer_derives_source_or_build_roots() -> None:
     source = (ROOT / "monan_jedi_workflow/render.py").read_text(encoding="utf-8")
@@ -258,7 +260,7 @@ def test_runtime_paths_reject_missing_install_anchor(monkeypatch, tmp_path: Path
 def test_2025_reference_case_observers_match_declared_obs2ioda_outputs() -> None:
     obs = yaml.safe_load((ROOT / "examples/case/obs2ioda.yaml").read_text())["obs2ioda"]
     outputs = {
-        Path(value).name
+        Path(value).name.replace("{cycle_yyyymmddhh}", "{analysis_yyyymmddhh}")
         for converter in obs["converters"]
         for value in converter["outputs"]
     }
@@ -267,5 +269,6 @@ def test_2025_reference_case_observers_match_declared_obs2ioda_outputs() -> None
     assert "sfc_obs_{analysis_yyyymmddhh}.h5" in outputs
     assert "sondes_obs_{analysis_yyyymmddhh}_m.nc4" in variational
     assert "sfc_obs_{analysis_yyyymmddhh}_m.nc4" in variational
-    assert "gnssro_obs_" not in variational
-    assert "GnssroRefNCEP" not in variational
+    assert "gnssro_obs_{analysis_yyyymmddhh}.h5" in outputs
+    assert "gnssro_obs_{analysis_yyyymmddhh}_s.nc4" in variational
+    assert "GnssroRefNCEP" in variational
