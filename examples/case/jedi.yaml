@@ -1,6 +1,6 @@
 # JEDI 3D-FGAT — x1.10242.
 #
-# Primeiro E2E 2025: Radiosonde + superfície PREPBUFR.
+# Primeiro E2E 2025: Radiosonde + superfície PREPBUFR + GNSS-RO (M3/3dias).
 jedi:
   cycle:
     step_hours: 6
@@ -29,11 +29,14 @@ jedi:
 
   links:
     - source: "{bmatrix_root}"
-      target: B_Matrix
+      target: Data/covariance
     - source: "work/obs/{analysis_yyyymmddhh}/sondes_obs_{analysis_yyyymmddhh}.h5"
       target: "Data/ufo/testinput_tier_1/sondes_obs_{analysis_yyyymmddhh}_m.nc4"
     - source: "work/obs/{analysis_yyyymmddhh}/sfc_obs_{analysis_yyyymmddhh}.h5"
       target: "Data/ufo/testinput_tier_1/sfc_obs_{analysis_yyyymmddhh}_m.nc4"
+
+    - source: "work/obs/{analysis_yyyymmddhh}/gnssro_obs_{analysis_yyyymmddhh}.h5"
+      target: "Data/ufo/testinput_tier_1/gnssro_obs_{analysis_yyyymmddhh}_s.nc4"
 
   templates:
     - source: templates/variational.yaml
