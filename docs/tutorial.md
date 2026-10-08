@@ -369,12 +369,13 @@ níveis           : 55
 MPAS             : 128 MPI ranks
 FGAT states      : 3 h
 JEDI             : 3D-FGAT
-observações      : GDAS PREPBUFR — radiossondas + superfície
+observações      : GDAS PREPBUFR — radiossondas + superfície; GNSS-RO
 ```
 
-A escolha de setembro de 2025 é intencional: os assets JACI usados pelo
-MPAS-BMatrix apontam para o conjunto `mpasjedi_tutorial202509NCAR`, e o
-PREPBUFR GDAS está disponível para o período.
+A configuração científica do JEDI vem do experimento [M3 de três dias](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/5aeed60857447bf229416327441589ca52e29e39/docs/relatorios/M3_3dias.md).
+Mantemos SABER/BUMP (NICAS, StdDev e balanço vertical), os três observers,
+os filtros QC e DRPCG com 10 iterações. As datas e os dados dinâmicos de
+2018 não são reutilizados. A execução de 2025 ainda precisa ser validada na JACI.
 
 ### 3.1 Defina os dados do site
 
@@ -393,8 +394,18 @@ export MONAN_JEDI_GFS_ROOT=/p/projetos/monan_das/$USER/data/gfs
 export MONAN_JEDI_WORKFLOW_ROOT=/p/projetos/monan_das/$USER/projects/monan-jedi-workflow
 ```
 
-`MONAN_JEDI_BMATRIX_ROOT` deve apontar para a B x1.10242 já produzida e
-validada. Não use uma B de outra malha/grade vertical.
+`MONAN_JEDI_BMATRIX_ROOT` deve apontar para o diretório que contém
+`NICAS/`, `HDIAG/mpas.stddev.nc` e `VBAL/`. Ele será ligado como
+`Data/covariance` no JEDI. A referência usa SABER, não MPASstatic.
+Não use uma B de outra malha/grade vertical.
+
+O destino compartilhado proposto é
+`/p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels/`.
+Antes de copiar, identifique o destino real de `Data/covariance` no caso
+executado de três dias (`readlink -f Data/covariance`, dentro daquele caso).
+O GitHub registra o layout consumido, mas não confirma onde os arquivos
+estão atualmente na JACI. Copie o conjunto completo, preservando os três
+subdiretórios, e registre origem e hashes; não copie backgrounds ou observações de 2018.
 
 O `MONAN-JEDI-Data` versiona o catálogo e os hashes. Os arquivos científicos
 completos ficam na área compartilhada da JACI; clonar o GitHub não os baixa.
@@ -792,112 +803,7 @@ experimento sem verificar geometry, níveis, datas, B, observers e outputs.
 Da raiz de `my-experiment`:
 
 ```bash
-grep -RIn 'EDITAR' \
-  campaign.yaml profile.yaml mpas.yaml obs2ioda.yaml jedi.yaml initialization templates
-```
-
-Para um caso pronto, o comando não deve retornar nenhuma configuração ativa
-não resolvida.
-
-## 6. Primeiro teste no JACI
-
-A partir deste ponto, pare de editar o caso e teste exatamente o que será
-executado. Faça os checkpoints abaixo no mesmo shell limpo preparado na seção 2.
-
-### Checkpoint 12 — ambiente final
-
-```bash
-echo "CONDA_PREFIX=$CONDA_PREFIX"
-echo "MONAN_JEDI_INSTALL_ROOT=$MONAN_JEDI_INSTALL_ROOT"
-echo "STACK_ROOT=$STACK_ROOT"
-echo "MONAN_JEDI_DATA_ROOT=$MONAN_JEDI_DATA_ROOT"
-echo "MONAN_JEDI_MESH_ROOT=$MONAN_JEDI_MESH_ROOT"
-echo "MONAN_JEDI_BMATRIX_ROOT=$MONAN_JEDI_BMATRIX_ROOT"
-echo "MONAN_JEDI_GFS_ROOT=$MONAN_JEDI_GFS_ROOT"
-
-command -v python
-command -v swf
-command -v monan-jedi-workflow
-```
-
-Não prossiga se alguma âncora estiver vazia ou se os comandos Python vierem de
-ambientes diferentes.
-
-### Checkpoint 13 — arquivos científicos mínimos
-
-```bash
-test -s "$MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000"
-test -s "$MONAN_JEDI_MESH_ROOT/static/x1.10242.invariant.nc"
-test -s "$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.128"
-test -d "$MONAN_JEDI_BMATRIX_ROOT"
-
-for hh in 00 06 12 18; do
-  test -s "$MONAN_JEDI_DATA_ROOT/observations/prepbufr/2025/prepbufr.gdas.20250901.t${hh}z.nr.48h"
-done
-```
-
-Esse laço é apenas uma checagem rápida do primeiro dia. O preflight seguinte
-verifica automaticamente **todos os 29 ciclos** do P7D.
-
-### Checkpoint 14 — preflight P7D
-
-Da raiz do checkout:
-
-```bash
-monan-jedi-workflow campaign check my-experiment/campaign.yaml
-```
-
-O resultado deve terminar em:
-
-```text
-Preflight PASS
-```
-
-Se aparecer `FAIL`, **não use `campaign run`**. O erro do preflight passa a
-ser o próximo problema a corrigir e deve ser resolvido antes de qualquer
-submissão PBS.
-
-## 7. Materialize sem submeter
-
-```bash
-monan-jedi-workflow campaign create my-experiment/campaign.yaml
-```
-
-O diretório indicado por `campaign.destination` será criado. Agora sim ele
-conterá o `workflow.yaml`.
-
-Inspecione:
-
-```bash
-swf plan CAMPAIGN_DESTINATION/workflow.yaml
-```
-
-Até aqui nenhum experimento científico deve ter sido submetido.
-
-## 8. Execute
-
-```bash
-monan-jedi-workflow campaign run my-experiment/campaign.yaml
-```
-
-Acompanhe:
-
-```bash
-monan-jedi-workflow campaign status my-experiment/campaign.yaml
-```
-
-## 9. Valide sete dias
-
-Antes de ampliar o período, confirme:
-
-- todos os ciclos terminaram;
-- observações foram convertidas e usadas;
-- JEDI terminou com seus marcadores de sucesso;
-- análises foram produzidas;
-- forecasts MPAS terminaram;
-- cada forecast forneceu o estado esperado ao ciclo seguinte;
-- horários NetCDF são coerentes;
-- logs não mostram erro científico silencioso.
+grep…756 tokens truncated…rro científico silencioso.
 
 ## 10. Amplie sem mudar a ciência
 
