@@ -406,14 +406,77 @@ Use a coleção já importada, sem repetir a importação nem instalar LFS.
 | Grafo | `$MONAN_JEDI_MESH_ROOT/graph/x1.10242.graph.info` |
 | Invariant | `$MONAN_JEDI_MESH_ROOT/static/x1.10242.invariant.nc` |
 | Partitions | `$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.N` |
-| Tabelas de física | `$MONAN_JEDI_DATA_ROOT/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files` |
+| Tabelas de física | `/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files` |
 | Matriz B | `$MONAN_JEDI_BMATRIX_ROOT` |
 
-O catálogo de malhas não substitui tabelas de física, B, GFS ou observações.
+O MONAN-JEDI-Data reúne agora malhas e tabelas de física. B, GFS e
+observações continuam sendo conjuntos separados.
 Os hashes verificam a identidade dos arquivos; não demonstram por si só
 compatibilidade científica do invariant com o caso de 55 níveis.
 
-### 3.2 Dados necessários para iniciar P7D
+
+### 3.2 Tabelas de física compartilhadas
+
+Os YAMLs do forecast cíclico e de inicialização já apontam `physics_root`
+para `/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files`.
+Não é necessário exportar outra variável nem copiar tabelas para cada usuário.
+Em outro site, ajuste `physics_root` nos dois YAMLs.
+
+O conjunto contém 13 arquivos: `CAM_ABS_DATA.DBL`, `CAM_AEROPT_DATA.DBL`,
+`GENPARM.TBL`, `LANDUSE.TBL`, `OZONE_DAT.TBL`, `OZONE_LAT.TBL`,
+`OZONE_PLEV.TBL`, `RRTMG_LW_DATA`, `RRTMG_LW_DATA.DBL`,
+`RRTMG_SW_DATA`, `RRTMG_SW_DATA.DBL`, `SOILPARM.TBL` e `VEGPARM.TBL`.
+São dados de radiação, ozônio e parametrizações de superfície.
+Namelists/streams ficam nos templates do caso; invariant e partitions ficam
+na coleção da malha.
+
+**Como obter:** na JACI, reutilize a cópia compartilhada já cadastrada.
+O GitHub publica o manifesto e a documentação, não os arquivos completos.
+Se a coleção local estiver ausente, recupere uma cópia do conjunto indicado
+em `provenance.source_directory` do manifesto, ou solicite a coleção ao
+responsável pelo armazenamento compartilhado. O nome do diretório antigo
+é informação de origem, não um caminho exigido pelo workflow.
+Ainda não existe um downloader automático publicado para este conjunto.
+Não substitua silenciosamente por tabelas de outra versão.
+
+**Checkpoint — integridade das tabelas**
+
+Execute no ambiente Python preparado na seção 2:
+
+```bash
+python - <<'PY'
+import hashlib
+import json
+from pathlib import Path
+
+root = Path("/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas")
+manifest = json.loads((root / "manifest.yaml").read_text())
+failures = []
+for item in manifest["files"]:
+    path = root / item["path"]
+    if not path.is_file():
+        failures.append(f"Ausente: {path}")
+        continue
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    if path.stat().st_size != item["size_bytes"] or digest.hexdigest() != item["sha256"]:
+        failures.append(f"Conteúdo divergente: {path}")
+    else:
+        print(f"[OK] {path.name}")
+if failures:
+    raise SystemExit("\\n".join(failures))
+print(f"Integridade OK: {len(manifest['files'])} tabelas.")
+PY
+```
+
+O resultado esperado é 13 linhas `[OK]` e `Integridade OK: 13 tabelas.`
+O manifesto preserva a origem no tutorial de setembro de 2025 e registra
+compatibilidade científica como ainda não validada. SHA-256 verifica a cópia;
+a execução com o runtime selecionado continua exigindo validação.
+
+### 3.3 Dados necessários para iniciar P7D
 
 A inicialização da primeira análise começa seis horas antes, em
 **2025-08-31 18Z**. O caso espera o GFS f000 em:
