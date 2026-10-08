@@ -1,4 +1,4 @@
-# Observações convencionais GDAS PREPBUFR -> IODA.
+# Observações GDAS PREPBUFR + GNSS-RO -> IODA (M3/3dias).
 #
 # Antes de executar, defina:
 #   export MONAN_JEDI_DATA_ROOT=/p/projetos/monan_das/$USER/external-inputs
@@ -16,6 +16,8 @@ obs2ioda:
     obs2ioda_library_root: "{monan_jedi_install_root}/lib"
     libfabric_library_root: /opt/cray/libfabric/1.22.0/lib64
     prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
+    gpsro_runner: "{workflow_root}/scripts/obs2ioda/run_gpsro.sh"
+    gpsro_input: "{data_root}/observations/gpsro/2025/gdas.gpsro.t{cycle_hh}z.{cycle_yyyymmdd}.bufr"
     prepbufr_input: "{data_root}/observations/prepbufr/2025/prepbufr.gdas.{cycle_yyyymmdd}.t{cycle_hh}z.nr.48h"
 
   work_dir: "work/obs/{cycle_yyyymmddhh}"
@@ -41,8 +43,6 @@ obs2ioda:
       inputs:
         - "{prepbufr_input}"
         - "{prepbufr_runner}"
-      # O wrapper produz outras famílias também; o primeiro baseline assimila
-      # radiossondas e superfície para reduzir a complexidade do E2E.
       outputs:
         - "{work_dir}/sondes_obs_{cycle_yyyymmddhh}.h5"
         - "{work_dir}/sfc_obs_{cycle_yyyymmddhh}.h5"
@@ -54,3 +54,17 @@ obs2ioda:
         - "{obs2ioda_executable}"
         - --input
         - "{prepbufr_input}"
+    - name: gpsro-gnssro
+      inputs:
+        - "{gpsro_input}"
+        - "{gpsro_runner}"
+      outputs:
+        - "{work_dir}/gnssro_obs_{cycle_yyyymmddhh}.h5"
+      timeout_seconds: 1800
+      argv:
+        - bash
+        - "{gpsro_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
+        - --input
+        - "{gpsro_input}"
