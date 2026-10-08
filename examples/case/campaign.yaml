@@ -10,7 +10,7 @@ campaign:
 profile: profile.yaml
 
 forecast:
-  run_on_last_cycle: true
+  run_on_last_cycle: false
 
 execution:
   swf_command: swf
