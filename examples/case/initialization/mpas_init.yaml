@@ -12,7 +12,7 @@ mpas_init:
   links:
     - source: "{monan_jedi_install_root}/bin/mpas_init_atmosphere"
       target: mpas_init_atmosphere
-    - source: "{tutorial_root}/x1.10242.invariant.nc"
+    - source: "{mesh_root}/static/x1.10242.invariant.nc"
       target: x1.10242.static.nc
     - source: "{mesh_root}/partitions/x1.10242.graph.info.part.128"
       target: x1.10242.graph.info.part.128
