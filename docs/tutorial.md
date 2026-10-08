@@ -306,13 +306,14 @@ python -m pip install -e .
 ```bash
 cd /p/projetos/monan_das/$USER/projects
 
-git clone https://github.com/joaogerd/monan-jedi-workflow.git
+git clone --branch feature/2025-reference-case https://github.com/joaogerd/monan-jedi-workflow.git
 cd monan-jedi-workflow
 python -m pip install -e .
 ```
 
-Se o repositório já existir, entre no checkout existente e execute
-`python -m pip install -e .`.
+Se o repositório já existir, confira `git status`, selecione a branch
+`feature/2025-reference-case` e atualize-a com `git pull --ff-only` antes de
+executar `python -m pip install -e .`. Preserve alterações locais; não use reset/clean.
 
 ### Checkpoint 3 — comandos do workflow
 
@@ -361,7 +362,7 @@ caso de referência a validar no JACI:
 
 ```text
 primeira análise : 2025-09-01 00Z
-fim P3D          : 2025-09-04 00Z
+fim P7D          : 2025-09-08 00Z
 cadência         : 6 h
 malha            : x1.10242 (~240 km)
 níveis           : 55
@@ -383,19 +384,36 @@ No JACI:
 export MONAN_JEDI_DATA_ROOT=/p/projetos/monan_das/$USER/external-inputs
 
 export MONAN_JEDI_MESH_ROOT=\
-/p/projetos/monan_das/$USER/projects/mpas_meshes/quasi_uniform/x1.10242_240km
+/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km
 
 export MONAN_JEDI_BMATRIX_ROOT=/caminho/para/B_Matrix-x1.10242-validada
 
 export MONAN_JEDI_GFS_ROOT=/p/projetos/monan_das/$USER/data/gfs
 
-export MONAN_JEDI_WORKFLOW_ROOT=/caminho/para/monan-jedi-workflow
+export MONAN_JEDI_WORKFLOW_ROOT=/p/projetos/monan_das/$USER/projects/monan-jedi-workflow
 ```
 
 `MONAN_JEDI_BMATRIX_ROOT` deve apontar para a B x1.10242 já produzida e
 validada. Não use uma B de outra malha/grade vertical.
 
-### 3.2 Dados necessários para iniciar P3D
+O `MONAN-JEDI-Data` versiona o catálogo e os hashes. Os arquivos científicos
+completos ficam na área compartilhada da JACI; clonar o GitHub não os baixa.
+Use a coleção já importada, sem repetir a importação nem instalar LFS.
+
+| Componente | Local consumido pelo caso |
+|---|---|
+| Grid | `$MONAN_JEDI_MESH_ROOT/mesh/x1.10242.grid.nc` |
+| Grafo | `$MONAN_JEDI_MESH_ROOT/graph/x1.10242.graph.info` |
+| Invariant | `$MONAN_JEDI_MESH_ROOT/static/x1.10242.invariant.nc` |
+| Partitions | `$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.N` |
+| Tabelas de física | `$MONAN_JEDI_DATA_ROOT/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files` |
+| Matriz B | `$MONAN_JEDI_BMATRIX_ROOT` |
+
+O catálogo de malhas não substitui tabelas de física, B, GFS ou observações.
+Os hashes verificam a identidade dos arquivos; não demonstram por si só
+compatibilidade científica do invariant com o caso de 55 níveis.
+
+### 3.2 Dados necessários para iniciar P7D
 
 A inicialização da primeira análise começa seis horas antes, em
 **2025-08-31 18Z**. O caso espera o GFS f000 em:
@@ -405,24 +423,27 @@ $MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000
 ```
 
 E espera PREPBUFR para cada análise de 2025-09-01 00Z até
-2025-09-04 00Z:
+2025-09-08 00Z:
 
 ```text
 $MONAN_JEDI_DATA_ROOT/observations/prepbufr/2025/
   prepbufr.gdas.20250901.t00z.nr.48h
   prepbufr.gdas.20250901.t06z.nr.48h
   ...
-  prepbufr.gdas.20250904.t00z.nr.48h
+  prepbufr.gdas.20250908.t00z.nr.48h
 ```
 
 O PREPBUFR é o produto GDAS/NCEP da coleção NSF NCAR GDEX d337000. O caso não
 silencia arquivos ausentes: `campaign check` lista os ciclos que ainda
 precisam ser staged.
 
-### Checkpoint 3 — assets fixos
+### Checkpoint — assets fixos
 
 ```bash
-test -s "$MONAN_JEDI_DATA_ROOT/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc"
+test -s "$MONAN_JEDI_MESH_ROOT/static/x1.10242.invariant.nc"
+test -s "$MONAN_JEDI_MESH_ROOT/mesh/x1.10242.grid.nc"
+test -s "$MONAN_JEDI_MESH_ROOT/graph/x1.10242.graph.info"
+test -s "$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.64"
 test -s "$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.128"
 test -s "$MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000"
 test -d "$MONAN_JEDI_BMATRIX_ROOT"
@@ -435,7 +456,7 @@ Todos devem terminar com status zero antes de iniciar a campanha.
 Volte à raiz do checkout do `monan-jedi-workflow`. Copie o diretório inteiro:
 
 ```bash
-cd /caminho/para/monan-jedi-workflow
+cd "$MONAN_JEDI_WORKFLOW_ROOT"
 cp -r examples/case my-experiment
 cd my-experiment
 ```
@@ -457,6 +478,9 @@ my-experiment/
   templates/
     README.md
 ```
+
+O diretório inclui também `initialization/templates/` e os templates científicos
+referenciados pelos YAMLs. Preserve-os na cópia; a lista acima resume o layout.
 
 O `workflow.yaml` **não existe ainda e não deve ser escrito pelo usuário**.
 Ele será produzido por `campaign create` depois que a configuração passar no
@@ -489,18 +513,18 @@ Para o primeiro experimento, defina:
 
 ```yaml
 campaign:
-  name: meu-experimento-3d
-  start: AAAA-MM-DDT00:00:00Z
-  duration: P3D
+  name: meu-experimento-7d
+  start: 2025-09-01T00:00:00Z
+  duration: P7D
   cycle_interval_hours: 6
-  destination: cases/meu-experimento-3d
+  destination: cases/meu-experimento-7d
 ```
 
 Você precisa decidir somente o nome, a primeira análise, a duração e a cadência.
 A data só pode ser escolhida depois de confirmar que inicialização e observações
 existem para todo o período.
 
-Não altere para P7D/P30D/P365D antes de validar P3D.
+Valide esta rodada de sete dias antes de ampliar para P30D.
 
 Referência completa: [configuração da campanha](configuration/campaign.md).
 
@@ -542,7 +566,7 @@ test -f initialization/mpas.yaml
 test -f obs2ioda.yaml
 ```
 
-Os quatro comandos devem terminar sem mensagem de erro.
+Os seis comandos devem terminar sem mensagem de erro.
 
 ### 5.3 `mpas.yaml` — forecast cíclico MONAN/MPAS
 
@@ -554,7 +578,8 @@ vi mpas.yaml
 
 Preencha, no mínimo:
 
-1. `static_root`: onde estão invariant, partição e demais dados fixos;
+1. `static_root`: invariant em `{mesh_root}/static`; partição em
+   `{mesh_root}/partitions`; tabelas de física em `physics_root`;
 2. `lead_hours`: horizonte de cada forecast;
 3. `forecast_contract.da_state_interval_hours`: frequência do estado usado
    pela DA/FGAT;
@@ -739,7 +764,7 @@ ambientes diferentes.
 
 ```bash
 test -s "$MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000"
-test -s "$MONAN_JEDI_DATA_ROOT/mpasjedi_tutorial202509NCAR/MPAS_namelist_stream_physics_files/x1.10242.invariant.nc"
+test -s "$MONAN_JEDI_MESH_ROOT/static/x1.10242.invariant.nc"
 test -s "$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.128"
 test -d "$MONAN_JEDI_BMATRIX_ROOT"
 
@@ -749,14 +774,14 @@ done
 ```
 
 Esse laço é apenas uma checagem rápida do primeiro dia. O preflight seguinte
-verifica automaticamente **todos os 13 ciclos** do P3D.
+verifica automaticamente **todos os 29 ciclos** do P7D.
 
-### Checkpoint 14 — preflight P3D
+### Checkpoint 14 — preflight P7D
 
 Da raiz do checkout:
 
 ```bash
-monan-jedi-workflow campaign check examples/case/campaign.yaml
+monan-jedi-workflow campaign check my-experiment/campaign.yaml
 ```
 
 O resultado deve terminar em:
@@ -798,7 +823,7 @@ Acompanhe:
 monan-jedi-workflow campaign status my-experiment/campaign.yaml
 ```
 
-## 9. Valide três dias
+## 9. Valide sete dias
 
 Antes de ampliar o período, confirme:
 
@@ -816,7 +841,7 @@ Antes de ampliar o período, confirme:
 Crie uma nova campanha/destination e altere apenas a duração:
 
 ```text
-P3D -> P7D -> P30D -> P365D
+P7D -> P30D
 ```
 
 Se for necessário alterar Python apenas porque a duração aumentou, isso deve
