@@ -1,11 +1,11 @@
 # Caso de referência MONAN-JEDI/JACI — setembro de 2025.
-# Primeiro objetivo: validar P3D. Depois altere somente duration/destination.
+# Primeiro objetivo: validar P7D. Depois de validar, amplie para P30D com outro name/destination.
 campaign:
-  name: monan-jedi-20250901-3d
+  name: monan-jedi-20250901-7d
   start: 2025-09-01T00:00:00Z
-  duration: P3D
+  duration: P7D
   cycle_interval_hours: 6
-  destination: cases/monan-jedi-20250901-3d
+  destination: cases/monan-jedi-20250901-7d
 
 profile: profile.yaml
 
