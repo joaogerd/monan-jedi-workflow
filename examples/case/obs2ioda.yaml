@@ -16,8 +16,8 @@ obs2ioda:
     libfabric_library_root: /opt/cray/libfabric/1.22.0/lib64
     prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
     gpsro_runner: "{workflow_root}/scripts/obs2ioda/run_gpsro.sh"
-    gpsro_input: "{data_root}/observations/gpsro/{cycle_year}/gdas.gpsro.t{cycle_hh}z.{cycle_yyyymmdd}.bufr"
-    prepbufr_input: "{data_root}/observations/prepbufr/{cycle_year}/prepbufr.gdas.{cycle_yyyymmdd}.t{cycle_hh}z.nr.48h"
+    gpsro_input: "{data_root}/observations/gpsro/{cycle_year}/gdas.gpsro.t{cycle_hour}z.{cycle_year}{cycle_month}{cycle_day}.bufr"
+    prepbufr_input: "{data_root}/observations/prepbufr/{cycle_year}/prepbufr.gdas.{cycle_year}{cycle_month}{cycle_day}.t{cycle_hour}z.nr.48h"
 
   work_dir: "work/obs/{cycle_yyyymmddhh}"
 
