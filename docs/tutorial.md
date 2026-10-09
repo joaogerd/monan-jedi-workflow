@@ -387,25 +387,19 @@ export MONAN_JEDI_DATA_ROOT=/p/projetos/monan_das/$USER/external-inputs
 export MONAN_JEDI_MESH_ROOT=\
 /p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km
 
-export MONAN_JEDI_BMATRIX_ROOT=/caminho/para/B_Matrix-x1.10242-validada
-
 export MONAN_JEDI_GFS_ROOT=/p/projetos/monan_das/$USER/data/gfs
 
 export MONAN_JEDI_WORKFLOW_ROOT=/p/projetos/monan_das/$USER/projects/monan-jedi-workflow
 ```
 
-`MONAN_JEDI_BMATRIX_ROOT` deve apontar para o diretório que contém
-`NICAS/`, `HDIAG/mpas.stddev.nc` e `VBAL/`. Ele será ligado como
-`Data/covariance` no JEDI. A referência usa SABER, não MPASstatic.
-Não use uma B de outra malha/grade vertical.
-
-O destino compartilhado proposto é
+A B compartilhada já foi copiada para
 `/p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels/`.
-Antes de copiar, identifique o destino real de `Data/covariance` no caso
-executado de três dias (`readlink -f Data/covariance`, dentro daquele caso).
-O GitHub registra o layout consumido, mas não confirma onde os arquivos
-estão atualmente na JACI. Copie o conjunto completo, preservando os três
-subdiretórios, e registre origem e hashes; não copie backgrounds ou observações de 2018.
+O `jedi.yaml` usa esse caminho diretamente: **não é necessário exportar
+MONAN_JEDI_BMATRIX_ROOT**. Em outro site, ajuste `jedi.variables.bmatrix_root`.
+O diretório contém `NICAS/`, `HDIAG/mpas.stddev.nc` e `VBAL/` e é ligado
+como `Data/covariance` no diretório JEDI de cada ciclo.
+A configuração usa SABER/BUMP. A cópia ainda precisa ter origem e hashes
+registrados; a compatibilidade científica de 2025 será verificada na execução.
 
 O `MONAN-JEDI-Data` versiona o catálogo e os hashes. Os arquivos científicos
 completos ficam na área compartilhada da JACI; clonar o GitHub não os baixa.
@@ -418,7 +412,7 @@ Use a coleção já importada, sem repetir a importação nem instalar LFS.
 | Invariant | `$MONAN_JEDI_MESH_ROOT/static/x1.10242.invariant.nc` |
 | Partitions | `$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.N` |
 | Tabelas de física | `/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files` |
-| Matriz B | `$MONAN_JEDI_BMATRIX_ROOT` |
+| Matriz B | `/p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels` |
 
 O MONAN-JEDI-Data reúne agora malhas e tabelas de física. B, GFS e
 observações continuam sendo conjuntos separados.
