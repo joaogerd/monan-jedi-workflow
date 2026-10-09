@@ -207,9 +207,9 @@ def test_single_case_template_uses_shared_runtime_contract() -> None:
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert "${MONAN_JEDI_INSTALL_ROOT}" in text
         assert "${STACK_ROOT}" in text
-        assert "/p/projetos/" not in text.replace(
-            "/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files", ""
-        )
+        assert "${MONAN_JEDI_DATA_ROOT}" not in text
+        assert "${MONAN_JEDI_MESH_ROOT}" not in text
+        assert "${MONAN_JEDI_BMATRIX_ROOT}" not in text
 
 def test_legacy_renderer_no_longer_derives_source_or_build_roots() -> None:
     source = (ROOT / "monan_jedi_workflow/render.py").read_text(encoding="utf-8")
