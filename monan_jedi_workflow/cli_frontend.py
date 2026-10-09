@@ -25,7 +25,7 @@ def _error(message: str) -> str:
 
 def _check_observations(config: Path) -> None:
     spec = load_campaign_spec(config)
-    cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)[1:]
+    cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)
     resolved = 0
     for cycle in cycles:
         resolved += len(check_obs_cycle_sources(spec.obs2ioda_config.parent, _iso(cycle)))
