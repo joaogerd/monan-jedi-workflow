@@ -377,20 +377,24 @@ Mantemos SABER/BUMP (NICAS, StdDev e balanço vertical), os três observers,
 os filtros QC e DRPCG com 10 iterações. As datas e os dados dinâmicos de
 2018 não são reutilizados. A execução de 2025 ainda precisa ser validada na JACI.
 
-### 3.1 Defina os dados do site
+### 3.1 Caminhos padrão da JACI
 
-No JACI:
+Não é necessário exportar DATA_ROOT, MESH_ROOT, BMATRIX_ROOT, GFS_ROOT ou
+WORKFLOW_ROOT. Os YAMLs do caso já declaram os caminhos padrão abaixo.
+`USER` é a variável da própria sessão de login. Mantenha o ambiente
+MONAN-JEDI carregado conforme a seção 2 (runtime e stack continuam necessários).
 
-```bash
-export MONAN_JEDI_DATA_ROOT=/p/projetos/monan_das/$USER/external-inputs
+| Conteúdo | Caminho padrão |
+|---|---|
+| Observações baixadas | `/p/projetos/monan_das/$USER/external-inputs/observations` |
+| Malha | `/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km` |
+| GFS inicial | `/p/projetos/monan_das/$USER/data/gfs` |
+| Checkout do workflow | `/p/projetos/monan_das/$USER/projects/monan-jedi-workflow` |
 
-export MONAN_JEDI_MESH_ROOT=\
-/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km
-
-export MONAN_JEDI_GFS_ROOT=/p/projetos/monan_das/$USER/data/gfs
-
-export MONAN_JEDI_WORKFLOW_ROOT=/p/projetos/monan_das/$USER/projects/monan-jedi-workflow
-```
+Se seu checkout ou armazenamento pessoal estiver em outro lugar, ajuste
+`variables.workflow_root`, `variables.data_root` e `variables.gfs_root`
+nos YAMLs correspondentes do caso copiado. Isso é configuração persistente;
+não precisa repetir exports em cada login.
 
 A B compartilhada já foi copiada para
 `/p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels/`.
@@ -407,10 +411,10 @@ Use a coleção já importada, sem repetir a importação nem instalar LFS.
 
 | Componente | Local consumido pelo caso |
 |---|---|
-| Grid | `$MONAN_JEDI_MESH_ROOT/mesh/x1.10242.grid.nc` |
-| Grafo | `$MONAN_JEDI_MESH_ROOT/graph/x1.10242.graph.info` |
-| Invariant | `$MONAN_JEDI_MESH_ROOT/static/x1.10242.invariant.nc` |
-| Partitions | `$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.N` |
+| Grid | `/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/mesh/x1.10242.grid.nc` |
+| Grafo | `/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/graph/x1.10242.graph.info` |
+| Invariant | `/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/static/x1.10242.invariant.nc` |
+| Partitions | `/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/partitions/x1.10242.graph.info.part.N` |
 | Tabelas de física | `/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files` |
 | Matriz B | `/p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels` |
 
@@ -487,14 +491,14 @@ A inicialização da primeira análise começa seis horas antes, em
 **2025-08-31 18Z**. O caso espera o GFS f000 em:
 
 ```text
-$MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000
+/p/projetos/monan_das/$USER/data/gfs/2025083118/gfs.t18z.pgrb2.0p25.f000
 ```
 
 E espera PREPBUFR para cada análise de 2025-09-01 00Z até
 2025-09-08 00Z:
 
 ```text
-$MONAN_JEDI_DATA_ROOT/observations/prepbufr/2025/
+/p/projetos/monan_das/$USER/external-inputs/observations/prepbufr/2025/
   prepbufr.gdas.20250901.t00z.nr.48h
   prepbufr.gdas.20250901.t06z.nr.48h
   ...
@@ -505,16 +509,51 @@ O PREPBUFR é o produto GDAS/NCEP da coleção NSF NCAR GDEX d337000. O caso nã
 silencia arquivos ausentes: `campaign check` lista os ciclos que ainda
 precisam ser staged.
 
+### 3.4 Aquisição dos dados dinâmicos
+
+Depois de copiar o caso (seção 4), execute na raiz dele:
+
+```bash
+monan-jedi-workflow campaign fetch campaign.yaml
+```
+
+O comando adquire PREPBUFR e GPSRO para as 29 análises. GPSRO usa o arquivo
+diário da coleção GDEX d735000 e extrai o BUFR da hora requerida. As entradas
+ficam em `external-inputs/observations/{prepbufr,gpsro}/2025/` do usuário.
+A aquisição não reutiliza observações de 2018 e não baixa a B ou as tabelas.
+
+O GFS inicial é um arquivo separado, necessário apenas para inicialização.
+Use uma cópia já disponível ou baixe o f000 de 2025-08-31 18Z do bucket NOAA:
+
+```bash
+(
+  set -e
+  destino=/p/projetos/monan_das/$USER/data/gfs/2025083118
+  arquivo="$destino/gfs.t18z.pgrb2.0p25.f000"
+  mkdir -p "$destino"
+  if [ ! -s "$arquivo" ]; then
+    curl --fail --location --retry 3 \
+      --output "$arquivo.part" \
+      https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.20250831/18/atmos/gfs.t18z.pgrb2.0p25.f000
+    test -s "$arquivo.part"
+    mv "$arquivo.part" "$arquivo"
+  fi
+)
+```
+
+Este download não inicia jobs. Se ele falhar, não prossiga com arquivo parcial.
+O nome do arquivo deve permanecer como declarado em `initialization/wps.yaml`.
+
 ### Checkpoint — assets fixos
 
 ```bash
-test -s "$MONAN_JEDI_MESH_ROOT/static/x1.10242.invariant.nc"
-test -s "$MONAN_JEDI_MESH_ROOT/mesh/x1.10242.grid.nc"
-test -s "$MONAN_JEDI_MESH_ROOT/graph/x1.10242.graph.info"
-test -s "$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.64"
-test -s "$MONAN_JEDI_MESH_ROOT/partitions/x1.10242.graph.info.part.128"
-test -s "$MONAN_JEDI_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000"
-test -d "$MONAN_JEDI_BMATRIX_ROOT"
+test -s "/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/static/x1.10242.invariant.nc"
+test -s "/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/mesh/x1.10242.grid.nc"
+test -s "/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/graph/x1.10242.graph.info"
+test -s "/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/partitions/x1.10242.graph.info.part.64"
+test -s "/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/partitions/x1.10242.graph.info.part.128"
+test -s "/p/projetos/monan_das/$USER/data/gfs/2025083118/gfs.t18z.pgrb2.0p25.f000"
+test -d "/p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels"
 ```
 
 Todos devem terminar com status zero antes de iniciar a campanha.
@@ -524,7 +563,7 @@ Todos devem terminar com status zero antes de iniciar a campanha.
 Volte à raiz do checkout do `monan-jedi-workflow`. Copie o diretório inteiro:
 
 ```bash
-cd "$MONAN_JEDI_WORKFLOW_ROOT"
+cd "/p/projetos/monan_das/$USER/projects/monan-jedi-workflow"
 cp -r examples/case my-experiment
 cd my-experiment
 ```
@@ -619,9 +658,11 @@ profile:
 Esses caminhos dizem ao materializador onde encontrar JEDI, forecast MPAS,
 inicialização e Obs2IODA. Eles não definem a ciência.
 
-Deixe `observation_acquisition.enabled: false` enquanto estiver fornecendo os
-arquivos de observação manualmente. Habilite aquisição automática somente
-quando os providers daquele período estiverem configurados e testados.
+O caso fornece `observation_acquisition.enabled: true` e providers PREPBUFR
+e GPSRO do experimento M3. `campaign fetch campaign.yaml` reutiliza entradas
+locais e baixa as ausentes. `campaign create` e `campaign run` também fazem
+essa aquisição. Os 29 ciclos incluem a primeira análise. O download precisa
+ser conferido na JACI; erros de acesso ou arquivos ausentes interrompem a preparação.
 
 ### Checkpoint 6 — ligação do caso
 
@@ -797,7 +838,114 @@ experimento sem verificar geometry, níveis, datas, B, observers e outputs.
 Da raiz de `my-experiment`:
 
 ```bash
-grep…756 tokens truncated…rro científico silencioso.
+grep -RIn 'EDITAR' \
+  campaign.yaml profile.yaml mpas.yaml obs2ioda.yaml jedi.yaml initialization templates
+```
+
+Para um caso pronto, o comando não deve retornar nenhuma configuração ativa
+não resolvida.
+
+## 6. Primeiro teste no JACI
+
+A partir deste ponto, pare de editar o caso e teste exatamente o que será
+executado. Faça os checkpoints abaixo no mesmo shell limpo preparado na seção 2.
+
+### Checkpoint 12 — ambiente final
+
+```bash
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+echo "MONAN_JEDI_INSTALL_ROOT=$MONAN_JEDI_INSTALL_ROOT"
+echo "STACK_ROOT=$STACK_ROOT"
+
+command -v python
+command -v swf
+command -v monan-jedi-workflow
+```
+
+Não prossiga se alguma âncora estiver vazia ou se os comandos Python vierem de
+ambientes diferentes.
+
+### Checkpoint 13 — arquivos científicos mínimos
+
+```bash
+test -s "/p/projetos/monan_das/$USER/data/gfs/2025083118/gfs.t18z.pgrb2.0p25.f000"
+test -s "/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/static/x1.10242.invariant.nc"
+test -s "/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km/partitions/x1.10242.graph.info.part.128"
+test -d "/p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels"
+
+for hh in 00 06 12 18; do
+  test -s "/p/projetos/monan_das/$USER/external-inputs/observations/prepbufr/2025/prepbufr.gdas.20250901.t${hh}z.nr.48h"
+done
+```
+
+Esse laço é apenas uma checagem rápida do primeiro dia. O preflight seguinte
+verifica automaticamente **todos os 29 ciclos** do P7D.
+
+Antes do preflight, adquira as observações para todos os ciclos:
+
+```bash
+monan-jedi-workflow campaign fetch my-experiment/campaign.yaml
+```
+
+### Checkpoint 14 — preflight P7D
+
+Da raiz do checkout:
+
+```bash
+monan-jedi-workflow campaign check my-experiment/campaign.yaml
+```
+
+O resultado deve terminar em:
+
+```text
+Preflight PASS
+```
+
+Se aparecer `FAIL`, **não use `campaign run`**. O erro do preflight passa a
+ser o próximo problema a corrigir e deve ser resolvido antes de qualquer
+submissão PBS.
+
+## 7. Materialize sem submeter
+
+```bash
+monan-jedi-workflow campaign create my-experiment/campaign.yaml
+```
+
+O diretório indicado por `campaign.destination` será criado. Agora sim ele
+conterá o `workflow.yaml`.
+
+Inspecione:
+
+```bash
+swf plan CAMPAIGN_DESTINATION/workflow.yaml
+```
+
+Até aqui nenhum experimento científico deve ter sido submetido.
+
+## 8. Execute
+
+```bash
+monan-jedi-workflow campaign run my-experiment/campaign.yaml
+```
+
+Acompanhe:
+
+```bash
+monan-jedi-workflow campaign status my-experiment/campaign.yaml
+```
+
+## 9. Valide sete dias
+
+Antes de ampliar o período, confirme:
+
+- todos os ciclos terminaram;
+- observações foram convertidas e usadas;
+- JEDI terminou com seus marcadores de sucesso;
+- análises foram produzidas;
+- forecasts MPAS terminaram;
+- cada forecast forneceu o estado esperado ao ciclo seguinte;
+- horários NetCDF são coerentes;
+- logs não mostram erro científico silencioso.
 
 ## 10. Amplie sem mudar a ciência
 
