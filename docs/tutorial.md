@@ -517,6 +517,12 @@ Depois de copiar o caso (seção 4), execute na raiz dele:
 monan-jedi-workflow campaign fetch campaign.yaml
 ```
 
+O comando mostra `[CYCLE n/29]`, arquivo, URL e destino antes da transferência.
+A cada cinco segundos, `[PROGRESS]` informa MiB recebidos ou espera pelo servidor;
+`[DONE]` indica a conclusão, `[EXTRACT]` a extração do GPSRO e `[RETRY]` uma
+nova tentativa de transporte. Se interromper com Ctrl+C, execute novamente:
+entradas já concluídas são reutilizadas; transferências incompletas são refeitas.
+
 O comando adquire PREPBUFR e GPSRO para as 29 análises. GPSRO usa o arquivo
 diário da coleção GDEX d735000 e extrai o BUFR da hora requerida. As entradas
 ficam em `external-inputs/observations/{prepbufr,gpsro}/2025/` do usuário.
