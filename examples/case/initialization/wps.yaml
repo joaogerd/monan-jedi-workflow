@@ -2,7 +2,7 @@
 wps:
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
-    gfs_root: ${MONAN_JEDI_GFS_ROOT}
+    gfs_root: /p/projetos/monan_das/${USER}/data/gfs
     gfs_file: "{gfs_root}/{cycle_yyyymmddhh}/gfs.t{cycle_hour}z.pgrb2.0p25.f000"
     vtable: "{monan_jedi_install_root}/share/wps/Variable_Tables/Vtable.GFS"
 
