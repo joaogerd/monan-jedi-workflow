@@ -7,9 +7,9 @@ mpas:
     campaign_root: "."
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     stack_root: ${STACK_ROOT}
-    data_root: ${MONAN_JEDI_DATA_ROOT}
+    data_root: /p/projetos/monan_das/${USER}/external-inputs
+    mesh_root: /p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km
     static_root: "{mesh_root}/static"
-    mesh_root: ${MONAN_JEDI_MESH_ROOT}
     # Tabelas compartilhadas no JACI; altere este caminho em outro site.
     # Origem e SHA-256: physics/mpas/manifest.yaml no MONAN-JEDI-Data.
     physics_root: "/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files"
