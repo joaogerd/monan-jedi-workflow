@@ -11,7 +11,9 @@ jedi:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     stack_root: ${STACK_ROOT}
     data_root: ${MONAN_JEDI_DATA_ROOT}
-    bmatrix_root: ${MONAN_JEDI_BMATRIX_ROOT}
+    # B compartilhada x1.10242/55 níveis: NICAS, HDIAG e VBAL.
+    # Em outro site, ajuste este caminho; não é necessário exportar uma variável.
+    bmatrix_root: /p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels
     model_tstep: PT20M
 
   run_dir: "work/jedi/{cycle_id}"
