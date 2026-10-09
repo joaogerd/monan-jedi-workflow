@@ -34,7 +34,7 @@ def _check_observations(config: Path) -> None:
 
 
 def _fetch_observations(config: Path) -> None:
-    print("Observation acquisition")
+    print("Observation acquisition", flush=True)
     records = acquire_campaign_observations(config)
     remote_count = 0
     local_count = 0
