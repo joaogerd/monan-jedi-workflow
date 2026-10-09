@@ -9,6 +9,8 @@ import ssl
 import subprocess
 import tarfile
 import tempfile
+import threading
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -219,7 +221,41 @@ def _wget_download(
     return f"wget exited {process.returncode}: {(process.stderr or process.stdout).strip()}"
 
 
-def _download(
+DOWNLOAD_PROGRESS_SECONDS = 5.0
+
+
+def _download(url: str, destination: Path, *, timeout: int,
+              ca_bundle: Path | None = None) -> tuple[int, str]:
+    """Report activity throughout all HTTPS transports, including connection waits."""
+    print(f"  [DOWNLOAD] {url}\n          -> {destination}", flush=True)
+    temporary = destination.with_name(destination.name + ".part")
+    started = time.monotonic()
+    stopped = threading.Event()
+
+    def report() -> None:
+        while not stopped.wait(DOWNLOAD_PROGRESS_SECONDS):
+            try:
+                size = temporary.stat().st_size
+            except OSError:
+                size = 0
+            elapsed = time.monotonic() - started
+            activity = (f"{size / 1048576:.1f} MiB recebidos" if size
+                        else "aguardando conexão/resposta do servidor")
+            print(f"  [PROGRESS] {destination.name}: {activity} ({elapsed:.0f} s)", flush=True)
+
+    monitor = threading.Thread(target=report, daemon=True)
+    monitor.start()
+    try:
+        result = _download_transfer(url, destination, timeout=timeout, ca_bundle=ca_bundle)
+    finally:
+        stopped.set()
+        monitor.join()
+    print(f"  [DONE] {destination.name}: {result[0] / 1048576:.1f} MiB "
+          f"em {time.monotonic() - started:.1f} s ({result[1]})", flush=True)
+    return result
+
+
+def _download_transfer(
     url: str,
     destination: Path,
     *,
@@ -242,6 +278,7 @@ def _download(
     except (urllib.error.URLError, TimeoutError, OSError, ssl.SSLError) as error:
         temporary.unlink(missing_ok=True)
         urllib_problem = str(error)
+        print("  [RETRY] Python HTTPS falhou; tentando curl.", flush=True)
         curl_result = _curl_download(
             url, temporary, timeout=timeout, ca_bundle=ca_bundle
         )
@@ -249,6 +286,7 @@ def _download(
             transport = "curl-https"
         else:
             temporary.unlink(missing_ok=True)
+            print("  [RETRY] curl indisponível/falhou; tentando wget.", flush=True)
             wget_result = _wget_download(
                 url, temporary, timeout=timeout, ca_bundle=ca_bundle
             )
@@ -334,6 +372,7 @@ def _acquire_remote(candidate: Path, cycle, converter: str, provider: dict[str, 
         with tempfile.TemporaryDirectory(prefix="monan-jedi-obs-") as temporary_dir:
             archive = Path(temporary_dir) / Path(url).name
             _, transport = _download(url, archive, timeout=timeout, ca_bundle=ca_bundle)
+            print(f"  [EXTRACT] {Path(member).name} -> {candidate}", flush=True)
             size = _extract_member(archive, Path(member).name, candidate)
         record = AcquisitionRecord(
             converter,
@@ -359,8 +398,10 @@ def acquire_campaign_observations(config_path: Path) -> list[AcquisitionRecord |
     roots = _search_roots(config) if config else []
     results: list[AcquisitionRecord | InputResolution] = []
 
-    for cycle_dt in _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours):
+    cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)
+    for index, cycle_dt in enumerate(cycles, start=1):
         cycle_time = _iso(cycle_dt)
+        print(f"[CYCLE {index}/{len(cycles)}] {cycle_time}", flush=True)
         run = load_obs2ioda_run(spec.obs2ioda_config.parent, cycle_time)
         plan = _build_plan(run)
         for raw_converter in plan.get("converters", []):
@@ -372,6 +413,7 @@ def acquire_campaign_observations(config_path: Path) -> list[AcquisitionRecord |
                 configured = Path(str(raw_input))
                 candidate, changed = cycle_candidate(configured, run.cycle)
                 if not changed and candidate.is_file():
+                    print(f"  [LOCAL] {candidate}", flush=True)
                     continue
                 found = find_local_cycle_input(candidate, run.cycle, converter, roots)
                 if found is not None:
@@ -393,6 +435,7 @@ def acquire_campaign_observations(config_path: Path) -> list[AcquisitionRecord |
                         f"  Converter: {converter}\n"
                         f"  Expected file: {candidate}"
                     )
+                print(f"  [FETCH] {converter}: {candidate.name}", flush=True)
                 results.append(_acquire_remote(candidate, run.cycle, converter, provider))
 
     return results
