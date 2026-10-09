@@ -2,8 +2,9 @@
 mpas_init:
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
-    data_root: ${MONAN_JEDI_DATA_ROOT}
-    mesh_root: ${MONAN_JEDI_MESH_ROOT}
+    data_root: /p/projetos/monan_das/${USER}/external-inputs
+    mesh_root: /p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km
+    static_root: "{mesh_root}/static"
 
   run_dir: "work/mpas-init/{cycle_id}"
   clean_patterns: ["x1.10242.init.*.nc", "log.init_atmosphere.*.out"]
