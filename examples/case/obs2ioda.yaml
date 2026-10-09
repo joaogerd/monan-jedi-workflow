@@ -1,18 +1,33 @@
-# PASSO 4 — observações.
-# Declare somente famílias realmente assimiladas pelo JEDI.
-# Veja docs/configuration/observations.md.
+# Observações GDAS PREPBUFR + GNSS-RO -> IODA (M3/3dias).
+#
+# Os caminhos padrão usam USER, já definido pela sessão JACI.
+# Em outro layout, ajuste data_root e workflow_root abaixo.
+#
+# Stage esperado:
+#   /p/projetos/monan_das/$USER/external-inputs/observations/prepbufr/YYYY/
+#     prepbufr.gdas.YYYYMMDD.tHHz.nr.48h
 obs2ioda:
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
-    raw_obs_root: EDITAR-caminho-dados-brutos
-    converter: EDITAR-executavel-ou-wrapper
+    data_root: /p/projetos/monan_das/${USER}/external-inputs
+    workflow_root: /p/projetos/monan_das/${USER}/projects/monan-jedi-workflow
+    obs2ioda_executable: "{monan_jedi_install_root}/bin/obs2ioda_v3"
+    obs2ioda_library_root: "{monan_jedi_install_root}/lib"
+    libfabric_library_root: /opt/cray/libfabric/1.22.0/lib64
+    prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
+    gpsro_runner: "{workflow_root}/scripts/obs2ioda/run_gpsro.sh"
+    gpsro_input: "{data_root}/observations/gpsro/{cycle_year}/gdas.gpsro.t{cycle_hour}z.{cycle_year}{cycle_month}{cycle_day}.bufr"
+    prepbufr_input: "{data_root}/observations/prepbufr/{cycle_year}/prepbufr.gdas.{cycle_year}{cycle_month}{cycle_day}.t{cycle_hour}z.nr.48h"
 
   work_dir: "work/obs/{cycle_yyyymmddhh}"
 
   runtime:
-    library_paths: []
+    library_paths:
+      - "{obs2ioda_library_root}"
+      - "{obs2ioda_library_root}/cxx"
+      - "{libfabric_library_root}"
     dependency_checks:
-      - "{converter}"
+      - "{obs2ioda_executable}"
 
   inspection:
     argv: [ncdump, -h, "{output}"]
@@ -23,14 +38,32 @@ obs2ioda:
     sha256: true
 
   converters:
-    # Duplique este bloco para cada conversor necessário.
-    - name: EDITAR-nome
+    - name: prepbufr-conventional
       inputs:
-        - "EDITAR-input-{cycle_yyyymmddhh}"
+        - "{prepbufr_input}"
+        - "{prepbufr_runner}"
       outputs:
-        # Estes nomes são consumidos pelo workflow; não existem famílias
-        # observacionais hardcoded no motor.
-        - "{work_dir}/EDITAR-output-{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/sondes_obs_{cycle_yyyymmddhh}.h5"
+        - "{work_dir}/sfc_obs_{cycle_yyyymmddhh}.h5"
+      timeout_seconds: 1800
       argv:
-        - "{converter}"
-        - EDITAR-argumentos
+        - bash
+        - "{prepbufr_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
+        - --input
+        - "{prepbufr_input}"
+    - name: gpsro-gnssro
+      inputs:
+        - "{gpsro_input}"
+        - "{gpsro_runner}"
+      outputs:
+        - "{work_dir}/gnssro_obs_{cycle_yyyymmddhh}.h5"
+      timeout_seconds: 1800
+      argv:
+        - bash
+        - "{gpsro_runner}"
+        - --executable
+        - "{obs2ioda_executable}"
+        - --input
+        - "{gpsro_input}"

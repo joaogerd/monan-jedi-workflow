@@ -97,9 +97,11 @@ monan-jedi-workflow campaign run campaign.yaml
 monan-jedi-workflow campaign status campaign.yaml
 ```
 
-Comece com `P3D`. Depois de validar cientificamente os três dias, mantenha a
-mesma configuração científica e altere somente o período para `P7D`,
-`P30D` ou `P365D`.
+O tutorial desta branch prepara a rodada de `P7D` (2025-09-01 00Z a
+2025-09-08 00Z, 29 análises). Depois de validar os sete dias, mantenha a
+configuração científica e crie outra campanha com duração `P30D` e
+name/destination próprios. Os dados de malha são consumidos da coleção
+compartilhada da JACI; o GitHub MONAN-JEDI-Data mantém somente o catálogo.
 
 ## Desenvolvimento
 

@@ -84,12 +84,20 @@ def _validation_gate(
 def _initialization_tasks(
     start_cycle: datetime, cycle_interval_hours: int
 ) -> list[dict[str, Any]]:
+    """Build the complete first-background chain: WPS -> init -> forecast."""
     source_cycle = start_cycle - timedelta(hours=cycle_interval_hours)
     source_iso = _iso(source_cycle)
     source_id = _cycle_id(source_cycle)
     target_iso = _iso(start_cycle)
     target_id = _cycle_id(start_cycle)
     root = "{experiment_dir}"
+
+    wps_run = f"{root}/initialization/work/wps/{source_id}"
+    wps_validation = f"{wps_run}/.monan-jedi-workflow/wps-validation.json"
+    init_run = f"{root}/initialization/work/mpas-init/{source_id}"
+    init_manifest = f"{init_run}/.monan-jedi-workflow/mpas-init.json"
+    init_validation = f"{init_run}/.monan-jedi-workflow/mpas-init-validation.json"
+
     run = f"{root}/work/initialization/mpas/{source_id}"
     submission = f"{run}/.monan-jedi-workflow/mpas-submission.json"
     validation = f"{run}/.monan-jedi-workflow/mpas-validation.json"
@@ -97,86 +105,82 @@ def _initialization_tasks(
 
     return [
         {
+            "name": "wps_prepare",
+            "argv": ["monan-jedi-workflow", "wps-prepare", f"{root}/initialization", "--cycle", source_iso],
+            "inputs": {"required": [f"{root}/initialization/wps.yaml"]},
+        },
+        {
+            "name": "wps_run",
+            "depends_on": ["wps_prepare"],
+            "argv": ["monan-jedi-workflow", "wps-run", f"{root}/initialization", "--cycle", source_iso],
+        },
+        {
+            "name": "wps_validate",
+            "depends_on": ["wps_run"],
+            "argv": ["monan-jedi-workflow", "wps-validate", f"{root}/initialization", "--cycle", source_iso],
+            "outputs": {"required": [wps_validation]},
+        },
+        _validation_gate("wps_gate", "wps_validate", wps_validation),
+        {
+            "name": "mpas_init_prepare",
+            "depends_on": ["wps_gate"],
+            "argv": ["monan-jedi-workflow", "mpas-init-prepare", f"{root}/initialization", "--cycle", source_iso],
+            "inputs": {"required": [f"{root}/initialization/mpas_init.yaml"]},
+            "outputs": {"required": [init_manifest]},
+        },
+        {
+            "name": "mpas_init_submit",
+            "depends_on": ["mpas_init_prepare"],
+            "argv": ["monan-jedi-workflow", "mpas-init-submit", f"{root}/initialization", "--cycle", source_iso],
+            "outputs": {"required": [init_manifest]},
+        },
+        {
+            "name": "mpas_init_wait",
+            "depends_on": ["mpas_init_submit"],
+            "argv": ["monan-jedi-workflow", "mpas-init-wait", f"{root}/initialization", "--cycle", source_iso, "--poll-seconds", "30"],
+            "outputs": {"required": [init_manifest]},
+        },
+        {
+            "name": "mpas_init_validate",
+            "depends_on": ["mpas_init_wait"],
+            "argv": ["monan-jedi-workflow", "mpas-init-validate", f"{root}/initialization", "--cycle", source_iso],
+            "outputs": {"required": [init_validation]},
+        },
+        _validation_gate("mpas_init_gate", "mpas_init_validate", init_validation),
+        {
             "name": "mpas_initial_prepare",
-            "argv": [
-                "monan-jedi-workflow",
-                "mpas-prepare",
-                f"{root}/initialization",
-                "--cycle",
-                source_iso,
-            ],
+            "depends_on": ["mpas_init_gate"],
+            "argv": ["monan-jedi-workflow", "mpas-prepare", f"{root}/initialization", "--cycle", source_iso],
             "inputs": {"required": [f"{root}/initialization/mpas.yaml"]},
-            "outputs": {
-                "required": [
-                    f"{run}/run_mpas.pbs",
-                    submission,
-                ]
-            },
+            "outputs": {"required": [f"{run}/run_mpas.pbs", submission]},
         },
         {
             "name": "mpas_initial_submit",
             "depends_on": ["mpas_initial_prepare"],
-            "argv": [
-                "monan-jedi-workflow",
-                "mpas-submit",
-                f"{root}/initialization",
-                "--cycle",
-                source_iso,
-            ],
+            "argv": ["monan-jedi-workflow", "mpas-submit", f"{root}/initialization", "--cycle", source_iso],
             "outputs": {"required": [submission]},
         },
         {
             "name": "mpas_initial_wait",
             "depends_on": ["mpas_initial_submit"],
-            "argv": [
-                "monan-jedi-workflow",
-                "mpas-wait",
-                f"{root}/initialization",
-                "--cycle",
-                source_iso,
-                "--poll-seconds",
-                "30",
-            ],
+            "argv": ["monan-jedi-workflow", "mpas-wait", f"{root}/initialization", "--cycle", source_iso, "--poll-seconds", "30"],
             "outputs": {"required": [submission]},
         },
         {
             "name": "mpas_initial_validate",
             "depends_on": ["mpas_initial_wait"],
-            "argv": [
-                "monan-jedi-workflow",
-                "mpas-validate",
-                f"{root}/initialization",
-                "--cycle",
-                source_iso,
-            ],
+            "argv": ["monan-jedi-workflow", "mpas-validate", f"{root}/initialization", "--cycle", source_iso],
             "outputs": {"required": [validation]},
         },
         _validation_gate("mpas_initial_gate", "mpas_initial_validate", validation),
         {
             "name": "initial_background",
             "depends_on": ["mpas_initial_gate"],
-            "argv": [
-                "monan-jedi-workflow",
-                "background-publish",
-                root,
-                "--mpas-config-dir",
-                f"{root}/initialization",
-                "--source-cycle",
-                source_iso,
-                "--target-cycle",
-                target_iso,
-            ],
+            "argv": ["monan-jedi-workflow", "background-publish", root, "--mpas-config-dir", f"{root}/initialization", "--source-cycle", source_iso, "--target-cycle", target_iso],
             "inputs": {"required": [validation]},
-            "outputs": {
-                "required": [
-                    f"{background}/trajectory.nc",
-                    f"{background}/state.nc",
-                    f"{background}/background.json",
-                ]
-            },
+            "outputs": {"required": [f"{background}/trajectory.nc", f"{background}/state.nc", f"{background}/background.json"]},
         },
     ]
-
 
 def _cycle_tasks(
     *,
@@ -514,18 +518,44 @@ def _validate_cycling_contract(mpas: dict[str, Any]) -> None:
 
 
 def _absolutize_mpas_assets(mpas: dict[str, Any], source_case: Path) -> None:
+    def fixed_asset(value: Any) -> Any:
+        # Values containing render placeholders are runtime paths/products and
+        # must not be anchored to the source template checkout.
+        if isinstance(value, str) and "{" in value:
+            return value
+        return absolutize_case_path(value, source_case)
+
     for entry in mpas.get("templates", []):
         if isinstance(entry, dict):
-            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = fixed_asset(entry.get("source"))
     directories = mpas.get("link_directories", [])
     for index, entry in enumerate(directories):
         if isinstance(entry, dict):
-            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = fixed_asset(entry.get("source"))
         elif isinstance(entry, str):
-            directories[index] = absolutize_case_path(entry, source_case)
+            directories[index] = fixed_asset(entry)
     for entry in mpas.get("links", []):
         if isinstance(entry, dict):
-            entry["source"] = absolutize_case_path(entry.get("source"), source_case)
+            entry["source"] = fixed_asset(entry.get("source"))
+
+
+def _patch_initialization_assets(source_case: Path, destination: Path) -> None:
+    """Copy WPS/MPAS-init configuration with stable references to source templates."""
+    source_case = source_case.resolve()
+    target = destination / "initialization"
+    for filename in ("wps.yaml", "mpas_init.yaml"):
+        source = source_case / filename
+        if not source.is_file():
+            raise StageConfigurationError(f"initialization configuration is missing: {source}")
+        data = load_yaml(source)
+        root_key = "wps" if filename == "wps.yaml" else "mpas_init"
+        stage = data.get(root_key)
+        if not isinstance(stage, dict):
+            raise StageConfigurationError(f"{filename} must define {root_key} mapping")
+        for entry in stage.get("templates", []):
+            if isinstance(entry, dict):
+                entry["source"] = absolutize_case_path(entry.get("source"), source_case)
+        write_yaml(target / filename, data)
 
 
 def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
@@ -539,6 +569,8 @@ def _patch_initial_mpas(source_case: Path, destination: Path) -> None:
     pbs = mpas.get("pbs")
     if not isinstance(pbs, dict):
         raise StageConfigurationError("initial MPAS configuration must define pbs")
+    variables = mpas.setdefault("variables", {})
+    variables["campaign_root"] = str(destination.resolve())
     mpas["run_dir"] = str(
         destination.resolve() / "work/initialization/mpas/{cycle_id}"
     )
@@ -561,6 +593,8 @@ def _patch_cycling_mpas(source_case: Path, destination: Path) -> None:
             "mpas.pbs.mpiprocs must match mpas.forecast_contract.mpi_ranks"
         )
     pbs["setup"] = []
+    variables = mpas.setdefault("variables", {})
+    variables["campaign_root"] = str(destination.resolve())
     mpas["run_dir"] = str(destination.resolve() / "work/mpas/{cycle_id}")
     _absolutize_mpas_assets(mpas, source_case)
 
@@ -693,6 +727,7 @@ def materialize_corrected_campaign(
         copy_clean_case(cycling_jedi_case.resolve(), destination)
         (destination / "initialization").mkdir(parents=True, exist_ok=True)
         _patch_jedi_native(destination, start_cycle)
+        _patch_initialization_assets(initial_mpas_case.resolve(), destination)
         _patch_initial_mpas(initial_mpas_case.resolve(), destination)
         _patch_cycling_mpas(mpas_case.resolve(), destination)
         obs_data = load_yaml(obs2ioda_config.resolve())

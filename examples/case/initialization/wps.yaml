@@ -1,0 +1,34 @@
+# WPS/UNGRIB for the first background initialization (2025-08-31 18Z).
+wps:
+  variables:
+    monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
+    gfs_root: /p/projetos/monan_das/${USER}/data/gfs
+    gfs_file: "{gfs_root}/{cycle_yyyymmddhh}/gfs.t{cycle_hour}z.pgrb2.0p25.f000"
+    vtable: "{monan_jedi_install_root}/share/wps/Variable_Tables/Vtable.GFS"
+
+  work_dir: "work/wps/{cycle_id}"
+  clean_patterns: ["GRIBFILE.*", "GFS:*", "namelist.wps"]
+
+  links:
+    - source: "{monan_jedi_install_root}/bin/link_grib.csh"
+      target: link_grib.csh
+    - source: "{monan_jedi_install_root}/bin/ungrib.exe"
+      target: ungrib.exe
+    - source: "{vtable}"
+      target: Vtable
+    - source: "{gfs_file}"
+      target: "gfs.input.grib2"
+
+  templates:
+    - source: templates/namelist.wps.in
+      target: namelist.wps
+
+  run:
+    link_grib_argv: ["./link_grib.csh", "gfs.input.grib2"]
+    ungrib_argv: ["./ungrib.exe"]
+
+  validation:
+    log: logs/ungrib.stdout.log
+    required_log_markers: []
+    required_outputs:
+      - "work/wps/{cycle_id}/GFS:{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}"

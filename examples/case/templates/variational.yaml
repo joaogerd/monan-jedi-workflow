@@ -1,0 +1,304 @@
+# Scientific reference: monan-jedi-2026, M3/3dias, commit 5aeed60857447bf229416327441589ca52e29e39.
+cost function:
+  cost type: 3D-FGAT
+  time window:
+    begin: '{window_begin_time}'
+    length: {window_length}
+
+  geometry:
+    nml_file: {run_dir}/namelist.atmosphere.outer
+    streams_file: {run_dir}/streams.atmosphere.outer
+    bump vunit: avgheight
+    alias: &bmatrix_alias
+    - in code: air_horizontal_streamfunction
+      in file: stream_function
+    - in code: air_horizontal_velocity_potential
+      in file: velocity_potential
+    - in code: air_temperature
+      in file: temperature
+    - in code: water_vapor_mixing_ratio_wrt_moist_air
+      in file: spechum
+    - in code: air_pressure_at_surface
+      in file: surface_pressure
+
+  model:
+    name: MPAS
+    tstep: {model_tstep}
+    model variables: &modvars
+    - air_temperature
+    - water_vapor_mixing_ratio_wrt_moist_air
+    - eastward_wind
+    - northward_wind
+    - air_pressure_at_surface
+    - air_potential_temperature
+    - dry_air_density
+    - u
+    - water_vapor_mixing_ratio_wrt_dry_air
+    - air_pressure
+    - landmask
+    - seaice_fraction
+    - snowc
+    - skin_temperature_at_surface
+    - ivgtyp
+    - isltyp
+    - cloud_liquid_water
+    - cloud_liquid_ice
+    - rain_water
+    - snow_water
+    - graupel
+    - pressure_p
+    - snowh
+    - vegetation_area_fraction
+    - eastward_wind_at_10m
+    - northward_wind_at_10m
+    - lai
+    - smois
+    - tslb
+    - w
+
+  analysis variables: &incvars
+  - eastward_wind
+  - northward_wind
+  - air_temperature
+  - water_vapor_mixing_ratio_wrt_moist_air
+  - air_pressure_at_surface
+
+  background:
+    state variables: *modvars
+    filename: {run_dir}/background/mpasout.{background_mpas_file_time}.nc
+    date: '{background_time}'
+
+  background error:
+    covariance model: SABER
+    no outer loop update: true
+
+    saber central block:
+      saber block name: BUMP_NICAS
+      active variables: &ctlvars
+      - air_horizontal_streamfunction
+      - air_horizontal_velocity_potential
+      - air_temperature
+      - water_vapor_mixing_ratio_wrt_moist_air
+      - air_pressure_at_surface
+
+      read:
+        io:
+          data directory: {run_dir}/Data/covariance/NICAS
+          files prefix: mpas
+          alias: *bmatrix_alias
+
+        drivers:
+          multivariate strategy: univariate
+          read local nicas: true
+
+        grids:
+        - model:
+            variables:
+            - air_horizontal_streamfunction
+            - air_horizontal_velocity_potential
+            - air_temperature
+            - water_vapor_mixing_ratio_wrt_moist_air
+        - model:
+            variables:
+            - air_pressure_at_surface
+
+    saber outer blocks:
+    - saber block name: StdDev
+      read:
+        model file:
+          filename: {run_dir}/Data/covariance/HDIAG/mpas.stddev.nc
+          date: '{analysis_time}'
+          stream name: control
+
+    - saber block name: BUMP_VerticalBalance
+      read:
+        io:
+          data directory: {run_dir}/Data/covariance/VBAL
+          files prefix: mpas
+          alias:
+          - in code: air_horizontal_streamfunction
+            in file: stream_function
+          - in code: air_horizontal_velocity_potential
+            in file: velocity_potential
+          - in code: air_temperature
+            in file: temperature
+          - in code: water_vapor_mixing_ratio_wrt_moist_air
+            in file: spechum
+          - in code: air_pressure_at_surface
+            in file: surface_pressure
+
+          # Aliases para grupos compostos do arquivo mpas_vbal.nc
+          - in code: air_horizontal_streamfunction-air_horizontal_streamfunction
+            in file: stream_function-stream_function
+          - in code: air_horizontal_streamfunction-water_vapor_mixing_ratio_wrt_moist_air
+            in file: stream_function-spechum
+          - in code: water_vapor_mixing_ratio_wrt_moist_air-water_vapor_mixing_ratio_wrt_moist_air
+            in file: spechum-spechum
+          - in code: air_horizontal_streamfunction-air_horizontal_velocity_potential
+            in file: stream_function-velocity_potential
+          - in code: water_vapor_mixing_ratio_wrt_moist_air-air_horizontal_velocity_potential
+            in file: spechum-velocity_potential
+          - in code: air_horizontal_velocity_potential-air_horizontal_velocity_potential
+            in file: velocity_potential-velocity_potential
+          - in code: air_horizontal_streamfunction-air_temperature
+            in file: stream_function-temperature
+          - in code: water_vapor_mixing_ratio_wrt_moist_air-air_temperature
+            in file: spechum-temperature
+          - in code: air_horizontal_velocity_potential-air_temperature
+            in file: velocity_potential-temperature
+          - in code: air_temperature-air_temperature
+            in file: temperature-temperature
+          - in code: air_horizontal_streamfunction-air_pressure_at_surface
+            in file: stream_function-surface_pressure
+          - in code: water_vapor_mixing_ratio_wrt_moist_air-air_pressure_at_surface
+            in file: spechum-surface_pressure
+          - in code: air_horizontal_velocity_potential-air_pressure_at_surface
+            in file: velocity_potential-surface_pressure
+          - in code: air_temperature-air_pressure_at_surface
+            in file: temperature-surface_pressure
+          - in code: air_pressure_at_surface-air_pressure_at_surface
+            in file: surface_pressure-surface_pressure
+
+        drivers:
+          read local sampling: true
+          read vertical balance: true
+
+        model:
+          nearest 3d level: bottom
+
+        vertical balance:
+          vbal:
+          - balanced variable: air_horizontal_velocity_potential
+            unbalanced variable: air_horizontal_streamfunction
+            diagonal regression: true
+
+          - balanced variable: air_temperature
+            unbalanced variable: air_horizontal_streamfunction
+
+          - balanced variable: air_pressure_at_surface
+            unbalanced variable: air_horizontal_streamfunction
+
+    linear variable change:
+      linear variable change name: Control2Analysis
+      input variables: *ctlvars
+      output variables: *incvars
+
+  observations:
+    observers:
+    - obs space:
+        name: Radiosonde
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: Data/ufo/testinput_tier_1/sondes_obs_{analysis_yyyymmddhh}_m.nc4
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: Data/os/obsout_3dvar_sondes.nc4
+        simulated variables: [airTemperature, windEastward, windNorthward, specificHumidity]
+      get values:
+        time interpolation: nearest
+      obs operator:
+        name: VertInterp
+        observation alias file: testinput/obsop_name_map.yaml
+      obs error:
+        covariance model: diagonal
+      obs filters:
+      - filter: PreQC
+        maxvalue: 3
+      - filter: Background Check
+        apply at iterations: 0,1,2
+        threshold: 3
+
+    - obs space:
+        name: GnssroRefNCEP
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: Data/ufo/testinput_tier_1/gnssro_obs_{analysis_yyyymmddhh}_s.nc4
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: Data/os/obsout_3dvar_gnssroref.nc4
+        simulated variables: [atmosphericRefractivity]
+      get values:
+        time interpolation: nearest
+      obs operator:
+        name: GnssroRefNCEP
+        obs options:
+          use_compress: 0
+      obs error:
+        covariance model: diagonal
+      obs filters:
+      - filter: Domain Check
+        where:
+        - variable:
+            name: MetaData/height
+          minvalue: 0
+          maxvalue: 30000
+        - variable:
+            name: MetaData/earthRadiusCurvature
+          minvalue: 6250000
+          maxvalue: 6450000
+        - variable:
+            name: MetaData/geoidUndulation
+          minvalue: -200
+          maxvalue: 200
+      - filter: Background Check
+        apply at iterations: 0,1
+        threshold: 3
+      - filter: ROobserror
+        apply at iterations: 0,1
+        variable: refractivity
+        errmodel: NCEP
+
+    - obs space:
+        name: SfcCorrected
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: Data/ufo/testinput_tier_1/sfc_obs_{analysis_yyyymmddhh}_m.nc4
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: Data/os/obsout_3dvar_sfc.nc4
+        simulated variables: [stationPressure]
+      get values:
+        time interpolation: nearest
+      obs operator:
+        name: SfcCorrected
+        correction scheme to use: UKMO
+      linear obs operator:
+        name: Identity
+        observation alias file: testinput/obsop_name_map.yaml
+      obs error:
+        covariance model: diagonal
+      obs filters:
+      - filter: PreQC
+        maxvalue: 3
+      - filter: Difference Check
+        apply at iterations: 0,1
+        reference: MetaData/stationElevation
+        value: GeoVaLs/height_above_mean_sea_level_at_surface
+        threshold: 500
+      - filter: Background Check
+        apply at iterations: 0,1
+        threshold: 3
+
+output:
+  filename: Data/states/mpas.3dfgat.$Y-$M-$D_$h.$m.$s.nc
+  stream name: analysis
+
+variational:
+  minimizer:
+    algorithm: DRPCG
+  iterations:
+  - geometry:
+      nml_file: {run_dir}/namelist.atmosphere.inner
+      streams_file: {run_dir}/streams.atmosphere.inner
+      deallocate non-da fields: true
+      bump vunit: avgheight
+      alias: *bmatrix_alias
+    ninner: 10
+    gradient norm reduction: 1e-10
+    test: 'on'

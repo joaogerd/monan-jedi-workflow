@@ -398,3 +398,36 @@ def test_existing_campaign_request_is_reusable_for_restart(tmp_path: Path) -> No
     )
 
     assert campaign.materialize_campaign(spec) == spec.destination
+
+
+def test_preflight_rejects_unresolved_edit_placeholders(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    spec = _spec(tmp_path)
+    spec.cycling_jedi_case.mkdir()
+    spec.initial_mpas_case.mkdir()
+    spec.mpas_case.mkdir()
+    spec.obs2ioda_config.write_text(
+        "obs2ioda:\n  variables:\n    raw_obs_root: EDITAR-caminho\n",
+        encoding="utf-8",
+    )
+    (spec.cycling_jedi_case / "jedi.yaml").write_text("jedi: {}\n", encoding="utf-8")
+    (spec.mpas_case / "mpas.yaml").write_text("mpas: {}\n", encoding="utf-8")
+    (spec.initial_mpas_case / "mpas.yaml").write_text("mpas: {}\n", encoding="utf-8")
+    spec.config_path.write_text("campaign: {}\n", encoding="utf-8")
+    spec.destination.parent.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(
+        campaign,
+        "_initial_mpas_detail",
+        lambda _: PreflightItem("initial MPAS case", True, "valid"),
+    )
+    monkeypatch.setattr(campaign, "_command_available", lambda _: True)
+    monkeypatch.setattr(campaign, "_rendered_obs_inputs", lambda *_: ([], []))
+
+    report = preflight_campaign(spec)
+    item = next(i for i in report.items if i.label == "configuration placeholders")
+
+    assert not item.ok
+    assert "EDITAR-caminho" in item.detail
+    assert not report.valid
