@@ -1,24 +1,23 @@
 # Observações GDAS PREPBUFR + GNSS-RO -> IODA (M3/3dias).
 #
-# Antes de executar, defina:
-#   export MONAN_JEDI_DATA_ROOT=/p/projetos/monan_das/$USER/external-inputs
-#   export MONAN_JEDI_WORKFLOW_ROOT=/caminho/para/monan-jedi-workflow
+# Os caminhos padrão usam USER, já definido pela sessão JACI.
+# Em outro layout, ajuste data_root e workflow_root abaixo.
 #
 # Stage esperado:
-#   $MONAN_JEDI_DATA_ROOT/observations/prepbufr/2025/
+#   /p/projetos/monan_das/$USER/external-inputs/observations/prepbufr/YYYY/
 #     prepbufr.gdas.YYYYMMDD.tHHz.nr.48h
 obs2ioda:
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
-    data_root: ${MONAN_JEDI_DATA_ROOT}
-    workflow_root: ${MONAN_JEDI_WORKFLOW_ROOT}
+    data_root: /p/projetos/monan_das/${USER}/external-inputs
+    workflow_root: /p/projetos/monan_das/${USER}/projects/monan-jedi-workflow
     obs2ioda_executable: "{monan_jedi_install_root}/bin/obs2ioda_v3"
     obs2ioda_library_root: "{monan_jedi_install_root}/lib"
     libfabric_library_root: /opt/cray/libfabric/1.22.0/lib64
     prepbufr_runner: "{workflow_root}/scripts/obs2ioda/run_prepbufr.sh"
     gpsro_runner: "{workflow_root}/scripts/obs2ioda/run_gpsro.sh"
-    gpsro_input: "{data_root}/observations/gpsro/2025/gdas.gpsro.t{cycle_hh}z.{cycle_yyyymmdd}.bufr"
-    prepbufr_input: "{data_root}/observations/prepbufr/2025/prepbufr.gdas.{cycle_yyyymmdd}.t{cycle_hh}z.nr.48h"
+    gpsro_input: "{data_root}/observations/gpsro/{cycle_year}/gdas.gpsro.t{cycle_hh}z.{cycle_yyyymmdd}.bufr"
+    prepbufr_input: "{data_root}/observations/prepbufr/{cycle_year}/prepbufr.gdas.{cycle_yyyymmdd}.t{cycle_hh}z.nr.48h"
 
   work_dir: "work/obs/{cycle_yyyymmddhh}"
 
