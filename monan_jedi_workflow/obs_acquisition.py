@@ -276,6 +276,15 @@ def _download_transfer(
         _urllib_download(url, temporary, timeout=timeout, ca_bundle=ca_bundle)
         transport = "python-https"
     except (urllib.error.URLError, TimeoutError, OSError, ssl.SSLError) as error:
+        if isinstance(error, urllib.error.HTTPError) and error.code == 404:
+            temporary.unlink(missing_ok=True)
+            raise ObservationInputError(
+                "HTTP 404: observation file not found at the configured source\n"
+                f"  URL: {url}\n  Destination: {destination}\n"
+                "  Check the source catalogue for this exact cycle. The server responded; "
+                "changing certificates or download tools does not restore a missing file.\n"
+                "  Do not substitute another cycle or rename a different data product."
+            ) from None
         temporary.unlink(missing_ok=True)
         urllib_problem = str(error)
         print("  [RETRY] Python HTTPS falhou; tentando curl.", flush=True)
