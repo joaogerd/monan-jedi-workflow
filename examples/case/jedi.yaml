@@ -10,7 +10,7 @@ jedi:
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     stack_root: ${STACK_ROOT}
-    data_root: ${MONAN_JEDI_DATA_ROOT}
+    data_root: /p/projetos/monan_das/${USER}/external-inputs
     # B compartilhada x1.10242/55 níveis: NICAS, HDIAG e VBAL.
     # Em outro site, ajuste este caminho; não é necessário exportar uma variável.
     bmatrix_root: /p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels
