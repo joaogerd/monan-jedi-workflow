@@ -352,14 +352,14 @@ def _acquire_remote(candidate: Path, cycle, converter: str, provider: dict[str, 
 
 
 def acquire_campaign_observations(config_path: Path) -> list[AcquisitionRecord | InputResolution]:
-    """Resolve/fetch every non-initial observation input required by a campaign."""
+    """Resolve/fetch observations for every analysis, including the first cycle."""
     spec = load_campaign_spec(config_path)
     config = _acquisition_config(config_path)
     enabled = bool(config.get("enabled", False))
     roots = _search_roots(config) if config else []
     results: list[AcquisitionRecord | InputResolution] = []
 
-    for cycle_dt in _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)[1:]:
+    for cycle_dt in _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours):
         cycle_time = _iso(cycle_dt)
         run = load_obs2ioda_run(spec.obs2ioda_config.parent, cycle_time)
         plan = _build_plan(run)
