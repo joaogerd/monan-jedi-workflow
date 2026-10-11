@@ -924,6 +924,15 @@ monan-jedi-workflow campaign fetch my-experiment/campaign.yaml
 
 ### Checkpoint 14 — preflight P7D
 
+Se o diretório pai de `campaign.destination` ainda não existir, o preflight
+emite `[WARN]` com o caminho e o cria automaticamente, incluindo os pais
+intermediários. Não é necessário executar `mkdir` manualmente. O diretório
+da campanha é criado posteriormente pelo materializador. Uma falha de
+permissão mostra o caminho e o erro do sistema. Um destino existente sem
+`workflow.yaml` e `campaign-request.yaml` é rejeitado com explicação;
+os arquivos existentes são preservados.
+
+
 Da raiz do checkout:
 
 ```bash
