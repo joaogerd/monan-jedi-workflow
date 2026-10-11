@@ -1,4 +1,4 @@
-"""Acquire cycle-correct observation inputs before a campaign starts."""
+"""Acquire cycle-correct observations within scientific stages or explicit prefetch."""
 
 from __future__ import annotations
 
@@ -80,6 +80,8 @@ def _acquisition_config(config_path: Path) -> dict[str, Any]:
         profile_doc = _expand(_load_yaml(profile_path))
         profile = profile_doc.get("profile", profile_doc)
         base = profile_path.parent
+    elif raw_profile is None:
+        return {}
     else:
         raise StageConfigurationError("campaign profile must be a mapping or YAML path")
     if not isinstance(profile, dict):
@@ -399,52 +401,65 @@ def _acquire_remote(candidate: Path, cycle, converter: str, provider: dict[str, 
     )
 
 
-def acquire_campaign_observations(config_path: Path) -> list[AcquisitionRecord | InputResolution]:
-    """Resolve/fetch observations for every analysis, including the first cycle."""
-    spec = load_campaign_spec(config_path)
-    config = _acquisition_config(config_path)
+def _acquire_cycle(config_dir: Path, cycle_time: str, config: dict[str, Any]) -> list[AcquisitionRecord | InputResolution]:
     enabled = bool(config.get("enabled", False))
     roots = _search_roots(config) if config else []
     results: list[AcquisitionRecord | InputResolution] = []
-
-    cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)
-    for index, cycle_dt in enumerate(cycles, start=1):
-        cycle_time = _iso(cycle_dt)
-        print(f"[CYCLE {index}/{len(cycles)}] {cycle_time}", flush=True)
-        run = load_obs2ioda_run(spec.obs2ioda_config.parent, cycle_time)
-        plan = _build_plan(run)
-        for raw_converter in plan.get("converters", []):
-            if not isinstance(raw_converter, dict):
+    run = load_obs2ioda_run(config_dir, cycle_time)
+    plan = _build_plan(run)
+    for raw_converter in plan.get("converters", []):
+        if not isinstance(raw_converter, dict):
+            continue
+        converter = str(raw_converter.get("name", "converter"))
+        provider = _provider_for(config, converter) if config else None
+        for raw_input in raw_converter.get("inputs", []):
+            configured = Path(str(raw_input))
+            candidate, changed = cycle_candidate(configured, run.cycle)
+            if not changed and candidate.is_file():
+                print(f"  [LOCAL] {candidate}", flush=True)
                 continue
-            converter = str(raw_converter.get("name", "converter"))
-            provider = _provider_for(config, converter) if config else None
-            for raw_input in raw_converter.get("inputs", []):
-                configured = Path(str(raw_input))
-                candidate, changed = cycle_candidate(configured, run.cycle)
-                if not changed and candidate.is_file():
-                    print(f"  [LOCAL] {candidate}", flush=True)
-                    continue
-                found = find_local_cycle_input(candidate, run.cycle, converter, roots)
-                if found is not None:
-                    if found != configured:
-                        results.append(
-                            InputResolution(
-                                converter=converter,
-                                cycle=run.cycle.cycle_time,
-                                configured=str(configured),
-                                resolved=str(found),
-                                method="cycle-pattern" if found == candidate else "local-search",
-                            )
+            found = find_local_cycle_input(candidate, run.cycle, converter, roots)
+            if found is not None:
+                if found != configured:
+                    results.append(
+                        InputResolution(
+                            converter=converter,
+                            cycle=run.cycle.cycle_time,
+                            configured=str(configured),
+                            resolved=str(found),
+                            method="cycle-pattern" if found == candidate else "local-search",
                         )
-                    continue
-                if not enabled or provider is None:
-                    raise ObservationInputError(
-                        "Observation input is missing and no automatic source is configured\n"
-                        f"  Requested cycle: {run.cycle.cycle_time}\n"
-                        f"  Converter: {converter}\n"
-                        f"  Expected file: {candidate}"
                     )
-                print(f"  [FETCH] {converter}: {candidate.name}", flush=True)
-                results.append(_acquire_remote(candidate, run.cycle, converter, provider))
+                continue
+            if not enabled or provider is None:
+                raise ObservationInputError(
+                    "Observation input is missing and no automatic source is configured\n"
+                    f"  Requested cycle: {run.cycle.cycle_time}\n"
+                    f"  Converter: {converter}\n"
+                    f"  Expected file: {candidate}"
+                )
+            print(f"  [FETCH] {converter}: {candidate.name}", flush=True)
+            results.append(_acquire_remote(candidate, run.cycle, converter, provider))
 
+    return results
+
+
+def acquire_cycle_observations(config_dir: Path, cycle_time: str) -> list[AcquisitionRecord | InputResolution]:
+    """Acquire only the requested cycle using the case's profile, if present."""
+    profile = config_dir / "profile.yaml"
+    config = _acquisition_config(profile) if profile.is_file() else {}
+    print(f"[OBS] acquiring inputs for cycle {cycle_time}", flush=True)
+    return _acquire_cycle(config_dir, cycle_time, config)
+
+
+def acquire_campaign_observations(config_path: Path) -> list[AcquisitionRecord | InputResolution]:
+    """Explicit optional prefetch of the entire campaign."""
+    spec = load_campaign_spec(config_path)
+    config = _acquisition_config(config_path)
+    results: list[AcquisitionRecord | InputResolution] = []
+    cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)
+    for index, cycle in enumerate(cycles, start=1):
+        cycle_time = _iso(cycle)
+        print(f"[CYCLE {index}/{len(cycles)}] {cycle_time}", flush=True)
+        results.extend(_acquire_cycle(spec.obs2ioda_config.parent, cycle_time, config))
     return results
