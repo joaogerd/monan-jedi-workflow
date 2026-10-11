@@ -452,12 +452,35 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
         workflow = spec.destination / "workflow.yaml"
         request = spec.destination / "campaign-request.yaml"
         ok = spec.destination.is_dir() and workflow.is_file() and request.is_file()
-        detail = "existing restartable campaign" if ok else "destination exists but is not a complete campaign"
+        detail = (
+            f"existing restartable campaign: {spec.destination}"
+            if ok else
+            f"destination exists but is not a complete campaign: {spec.destination}; "
+            "expected a directory containing workflow.yaml and campaign-request.yaml. "
+            "Inspect this path or choose a new campaign.destination; existing files are preserved."
+        )
         items.append(PreflightItem("destination", ok, detail))
     else:
         parent = spec.destination.parent
-        ok = parent.exists() and os.access(parent, os.W_OK)
-        items.append(PreflightItem("destination", ok, str(spec.destination)))
+        if not parent.exists():
+            print(f"  [WARN] destination parent does not exist; creating directory: {parent}",
+                  flush=True)
+            try:
+                parent.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                items.append(PreflightItem(
+                    "destination", False,
+                    f"cannot create destination parent {parent}: {error}. "
+                    "Check permissions or choose another campaign.destination."
+                ))
+                return PreflightReport(spec=spec, items=tuple(items))
+        ok = parent.is_dir() and os.access(parent, os.W_OK)
+        detail = str(spec.destination) if ok else (
+            f"destination parent is not a writable directory: {parent}; "
+            f"campaign destination: {spec.destination}. "
+            "Check permissions or choose another campaign.destination."
+        )
+        items.append(PreflightItem("destination", ok, detail))
     return PreflightReport(spec=spec, items=tuple(items))
 
 
