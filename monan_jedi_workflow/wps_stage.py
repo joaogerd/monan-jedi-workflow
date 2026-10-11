@@ -1,6 +1,6 @@
 """Cycle-aware WPS/UNGRIB preparation, execution and validation.
 
-This module never downloads GRIB data and never builds WPS.  It consumes the
+This module optionally acquires declared GRIB data and never builds WPS. It consumes the
 WPS tools published by MONAN-JEDI and transforms one declared GRIB input into
 the WPS intermediate file required by ``mpas_init_atmosphere``.
 """
@@ -157,9 +157,32 @@ def _load_manifest(run: WPSRun) -> dict[str, Any]:
     return payload
 
 
+def acquire_wps_input(run: WPSRun) -> None:
+    """Reuse a nonempty local GRIB or fetch the explicitly configured source."""
+    acquisition = run.config.get("acquisition")
+    if acquisition is None:
+        return
+    acquisition = _mapping(acquisition, "wps.acquisition")
+    destination = resolve_path(
+        _string(acquisition.get("source"), "wps.acquisition.source"),
+        config_dir=run.config_dir, context=run.context, label="wps.acquisition.source",
+    )
+    if destination.is_file() and destination.stat().st_size > 0:
+        print(f"[LOCAL] GFS: {destination}", flush=True)
+        return
+    url = render_text(_string(acquisition.get("url"), "wps.acquisition.url"),
+                      run.context, label="wps.acquisition.url")
+    from .obs_acquisition import _download
+    _download(url, destination, timeout=int(acquisition.get("timeout_seconds", 300)),
+              ca_bundle=acquisition.get("ca_bundle"))
+    if not destination.is_file() or destination.stat().st_size == 0:
+        raise StageConfigurationError(f"GFS acquisition produced no data: {destination}")
+
+
 def prepare_wps(config_dir: Path, cycle_time: str) -> WPSRun:
     """Stage declared WPS tools, GRIB link and rendered namelist for one cycle."""
     run = load_wps_run(config_dir, cycle_time)
+    acquire_wps_input(run)
     run.work_dir.mkdir(parents=True, exist_ok=True)
     _clean(run)
 
