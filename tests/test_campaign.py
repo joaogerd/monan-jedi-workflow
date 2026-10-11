@@ -431,3 +431,40 @@ def test_preflight_rejects_unresolved_edit_placeholders(
     assert not item.ok
     assert "EDITAR-caminho" in item.detail
     assert not report.valid
+
+
+def test_preflight_creates_missing_destination_parent_with_warning(tmp_path, capsys):
+    from dataclasses import replace
+    spec = replace(_spec(tmp_path), destination=tmp_path / 'new' / 'cases' / 'run')
+    report = preflight_campaign(spec, require_swf=False)
+    item = next(item for item in report.items if item.label == 'destination')
+    assert item.ok
+    assert spec.destination.parent.is_dir()
+    assert not spec.destination.exists()
+    output = capsys.readouterr().out
+    assert '[WARN]' in output
+    assert str(spec.destination.parent) in output
+
+
+def test_preflight_explains_destination_parent_creation_failure(tmp_path, monkeypatch):
+    from dataclasses import replace
+    spec = replace(_spec(tmp_path), destination=tmp_path / 'blocked' / 'run')
+    def denied(*args, **kwargs):
+        raise PermissionError('permission denied')
+    monkeypatch.setattr(Path, 'mkdir', denied)
+    report = preflight_campaign(spec, require_swf=False)
+    item = next(item for item in report.items if item.label == 'destination')
+    assert not item.ok
+    assert 'permission denied' in item.detail
+    assert str(spec.destination.parent) in item.detail
+
+
+def test_preflight_explains_existing_incomplete_destination(tmp_path):
+    spec = _spec(tmp_path)
+    spec.destination.mkdir()
+    report = preflight_campaign(spec, require_swf=False)
+    item = next(item for item in report.items if item.label == 'destination')
+    assert not item.ok
+    assert str(spec.destination) in item.detail
+    assert 'workflow.yaml' in item.detail
+    assert 'campaign-request.yaml' in item.detail
