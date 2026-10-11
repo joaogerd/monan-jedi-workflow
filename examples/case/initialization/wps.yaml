@@ -6,6 +6,12 @@ wps:
     gfs_file: "{gfs_root}/{cycle_yyyymmddhh}/gfs.t{cycle_hour}z.pgrb2.0p25.f000"
     vtable: "{monan_jedi_install_root}/share/wps/Variable_Tables/Vtable.GFS"
 
+  # Reuse local GFS; fetch only this initialization time when absent.
+  acquisition:
+    source: "{gfs_file}"
+    url: "https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{cycle_year}{cycle_month}{cycle_day}/{cycle_hour}/atmos/gfs.t{cycle_hour}z.pgrb2.0p25.f000"
+    timeout_seconds: 300
+
   work_dir: "work/wps/{cycle_id}"
   clean_patterns: ["GRIBFILE.*", "GFS:*", "namelist.wps"]
 
