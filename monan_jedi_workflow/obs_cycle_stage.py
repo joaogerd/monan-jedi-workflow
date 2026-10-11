@@ -16,6 +16,7 @@ from .obs2ioda_stage import (
     prepare_obs2ioda,
     run_obs2ioda,
 )
+from .obs_acquisition import acquire_cycle_observations
 from .obs_cycle_inputs import InputResolution, resolve_cycle_input
 
 
@@ -99,6 +100,7 @@ def _repair_manifest(config_dir: Path, cycle_time: str) -> list[InputResolution]
 
 
 def doctor_obs2ioda_resolved(config_dir: Path, cycle_time: str) -> Path:
+    acquire_cycle_observations(config_dir, cycle_time)
     resolutions = check_obs_cycle_sources(config_dir, cycle_time)
     for item in resolutions:
         print(f"[OBS] source available for {item.cycle}: {item.resolved}")
