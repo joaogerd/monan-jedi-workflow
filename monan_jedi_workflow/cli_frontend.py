@@ -78,11 +78,6 @@ def _dispatch(args: list[str]) -> int:
             _fetch_observations(config)
             _check_observations(config)
             return 0
-        if action in {"create", "run"}:
-            _fetch_observations(config)
-            _check_observations(config)
-        elif action == "check":
-            _check_observations(config)
 
     return cli_extended.main(args)
 
