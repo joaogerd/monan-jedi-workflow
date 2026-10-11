@@ -60,7 +60,9 @@ jedi:
     ncpus: 64
     mpiprocs: 64
     walltime: "00:30:00"
-    launcher: mpiexec
+    # JACI: use the Cray PALS launcher explicitly (validated M3 configuration).
+    # A bare mpiexec may select the incompatible SGI launcher from PATH.
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
     command:
       - "{monan_jedi_install_root}/bin/mpasjedi_variational.x"
       - variational.yaml
