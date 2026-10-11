@@ -517,19 +517,15 @@ Depois de copiar o caso (seção 4), execute na raiz dele:
 monan-jedi-workflow campaign fetch campaign.yaml
 ```
 
-O comando mostra `[CYCLE n/29]`, arquivo, URL e destino antes da transferência.
-A cada cinco segundos, `[PROGRESS]` informa MiB recebidos ou espera pelo servidor;
-`[DONE]` indica a conclusão, `[EXTRACT]` a extração do GPSRO e `[RETRY]` uma
-nova tentativa de transporte. Se interromper com Ctrl+C, execute novamente:
-entradas já concluídas são reutilizadas; transferências incompletas são refeitas.
-
 O comando adquire PREPBUFR e GPSRO para as 29 análises. GPSRO usa o arquivo
 diário da coleção GDEX d735000 e extrai o BUFR da hora requerida. As entradas
 ficam em `external-inputs/observations/{prepbufr,gpsro}/2025/` do usuário.
 A aquisição não reutiliza observações de 2018 e não baixa a B ou as tabelas.
 
 O GFS inicial é um arquivo separado, necessário apenas para inicialização.
-Use uma cópia já disponível ou baixe o f000 de 2025-08-31 18Z do bucket NOAA:
+O template declara `wps.acquisition`: durante `wps_prepare`, reutiliza o
+arquivo local não vazio ou adquire o f000 correspondente à inicialização.
+O download manual abaixo é uma alternativa opcional para antecipar a aquisição:
 
 ```bash
 (
@@ -549,35 +545,6 @@ Use uma cópia já disponível ou baixe o f000 de 2025-08-31 18Z do bucket NOAA:
 
 Este download não inicia jobs. Se ele falhar, não prossiga com arquivo parcial.
 O nome do arquivo deve permanecer como declarado em `initialization/wps.yaml`.
-
-### Arquivo PREP48H ausente no catálogo
-
-A coleção PREP48H de 2025 não lista o ciclo 2025-09-01 18Z:
-https://gdex.ucar.edu/datasets/d337000/filelist/32025/
-O servidor retorna HTTP 404; não é erro de certificado.
-A coleção PREPNR lista o mesmo ciclo e todos os 29 ciclos de P7D:
-https://gdex.ucar.edu/datasets/d337000/filelist/42025/
-
-PREPNR exclui ACARS/AMDAR; PREP48H os inclui. Este caso assimila somente
-radiossondas e superfície do PREPBUFR, além de GPSRO separado. Uma alternativa
-é selecionar PREPNR para **toda a campanha**, conservando datas, operators e QC.
-Os produtos não são declarados equivalentes byte a byte; registre a coleção
-selecionada e confira contagens/QC após conversão. Não misture silenciosamente
-as coleções nem renomeie PREPNR como PREP48H.
-
-Para selecionar PREPNR no caso copiado, ajuste somente estas duas entradas:
-
-```yaml
-# obs2ioda.yaml -> obs2ioda.variables.prepbufr_input
-prepbufr_input: "{data_root}/observations/prepnr/{cycle_year}/prepbufr.gdas.{cycle_yyyymmddhh}.nr"
-
-# profile.yaml -> profile.observation_acquisition.providers.prepbufr-conventional.url
-url: "https://data.gdex.ucar.edu/d337000/prepnr/{cycle_year}/prepbufr.gdas.{cycle_year}{cycle_month}{cycle_day}{cycle_hour}.nr"
-```
-
-Execute novamente `campaign fetch`. Arquivos PREP48H já baixados permanecem
-guardados e não são consumidos por esse caminho PREPNR. A disponibilidade
-do catálogo confirma a entrada; o acesso HTTPS deve ser validado na JACI.
 
 ### Checkpoint — assets fixos
 
@@ -695,9 +662,11 @@ inicialização e Obs2IODA. Eles não definem a ciência.
 
 O caso fornece `observation_acquisition.enabled: true` e providers PREPBUFR
 e GPSRO do experimento M3. `campaign fetch campaign.yaml` reutiliza entradas
-locais e baixa as ausentes. `campaign create` e `campaign run` também fazem
-essa aquisição. Os 29 ciclos incluem a primeira análise. O download precisa
-ser conferido na JACI; erros de acesso ou arquivos ausentes interrompem a preparação.
+locais e baixa as ausentes quando a antecipação é solicitada explicitamente.
+`campaign create` não baixa dados; `campaign run` entrega as tarefas ao simpleWorkflow.
+Em cada ciclo, `observations_doctor` adquire os ausentes antes de verificar as
+entradas e preparar a conversão. Os 29 ciclos incluem a primeira análise.
+Falhas de aquisição interrompem a etapa daquele ciclo com URL e destino.
 
 ### Checkpoint 6 — ligação do caso
 
@@ -914,24 +883,15 @@ done
 ```
 
 Esse laço é apenas uma checagem rápida do primeiro dia. O preflight seguinte
-verifica automaticamente **todos os 29 ciclos** do P7D.
+verifica as entradas e fontes declaradas dos **29 ciclos**, sem baixar dados.
 
-Antes do preflight, adquira as observações para todos os ciclos:
+Opcionalmente, antecipe a aquisição das observações para todos os ciclos:
 
 ```bash
 monan-jedi-workflow campaign fetch my-experiment/campaign.yaml
 ```
 
 ### Checkpoint 14 — preflight P7D
-
-Se o diretório pai de `campaign.destination` ainda não existir, o preflight
-emite `[WARN]` com o caminho e o cria automaticamente, incluindo os pais
-intermediários. Não é necessário executar `mkdir` manualmente. O diretório
-da campanha é criado posteriormente pelo materializador. Uma falha de
-permissão mostra o caminho e o erro do sistema. Um destino existente sem
-`workflow.yaml` e `campaign-request.yaml` é rejeitado com explicação;
-os arquivos existentes são preservados.
-
 
 Da raiz do checkout:
 
@@ -1018,3 +978,10 @@ ativa e permanece preservado em `archive/pre-cleanup-2026-10-01`.
 Os comandos de stage (`jedi-prepare`, `mpas-prepare`, `obs2ioda-run` etc.)
 são usados pelo workflow e servem para diagnóstico/desenvolvimento. Para uma
 campanha normal, use a interface `campaign`.
+
+## Retomada arquitetural após a apresentação
+
+As decisões e pendências para 14/10/2026 estão em
+[architecture-resume-2026-10-14.md](architecture-resume-2026-10-14.md).
+A correção de urgência preserva prepare/submit/wait/validate e adquire dados
+dentro das etapas existentes; a uniformização completa fica para a retomada.
