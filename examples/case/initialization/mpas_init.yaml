@@ -33,7 +33,9 @@ mpas_init:
     ncpus: 128
     mpiprocs: 128
     walltime: "00:30:00"
-    launcher: mpiexec
+    # JACI: use the Cray PALS launcher explicitly (validated M3 configuration).
+    # A bare mpiexec may select the incompatible SGI launcher from PATH.
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
     command: ["./mpas_init_atmosphere"]
     environment:
       OMP_NUM_THREADS: "1"
