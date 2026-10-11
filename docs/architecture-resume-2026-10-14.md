@@ -90,3 +90,10 @@ Commits 5da363d até b1b9f274 na mesma branch:
 
 Limite temporário: aquisição permanece dentro de comandos existentes (observations_doctor e wps_prepare), não na futura interface uniforme. Submissão/espera PBS ainda pertencem aos comandos atuais. Validação científica real no JACI continua pendente; não declarar 7 dias concluídos sem evidência.
 Próximo passo do operador: pull da branch, executar o script com tutorial-2025-7d/campaign.yaml, executar campaign check e, se PASS, campaign run. Não recriar a campanha nem apagar dados/estado. Registrar o resultado efetivo aqui depois.
+
+## Checkpoint JACI, 11/10 à noite
+
+WPS prepare/run/validate/gate passaram. MPAS init job 669185.pbs-ha executou em cn-0001 com 128 CPUs, terminou em 1 segundo e Exit_status=1; stderr: mpiexec unexpected error - sgicheckppversion returned 0. Nenhum primeiro ciclo validado.
+Comparação com M3 mostrou launcher explícito /opt/cray/pals/1.6/bin/mpiexec nos arquivos experiments/M3/native-cycle/{initial-mpas,cycling-mpas}/mpas.yaml, setup vazio. O workflow de 3dias executado começou em JEDI e usou background inicial já disponível; não comprova a nova inicialização GFS/WPS.
+Templates corrigidos para PALS; script scripts/configure_jaci_pals.py corrige fontes e caso materializado mantendo backups e comentários, e recusa lançador customizado. 154 testes locais passaram; script verificado para preservação e reexecução.
+Próximo passo: pull, executar configure_jaci_pals.py, reset do estado operacional simpleWorkflow (histórico preservado; seguro neste ponto porque o único job científico terminou com falha e nenhum ciclo começou), retomar campanha. Não presumir sucesso MPI antes do log real.
