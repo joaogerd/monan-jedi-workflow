@@ -427,19 +427,31 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
 
     cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)
     missing_obs: list[str] = []
+    deferred_obs: list[str] = []
     missing_tools: set[str] = set()
+    # Acquisition is checked as a declared capability; preflight never downloads.
+    from .obs_acquisition import _acquisition_config, _provider_for
+    acquisition = _acquisition_config(spec.config_path) if spec.config_path.is_file() else {}
     if spec.obs2ioda_config.is_file():
         for cycle in cycles:
             inputs, tools = _rendered_obs_inputs(spec.obs2ioda_config, cycle)
-            missing_obs.extend(str(path) for path in inputs if not path.is_file())
+            allowed: set[str] = set()
+            if acquisition.get("enabled"):
+                run = load_obs2ioda_run(spec.obs2ioda_config.parent, _iso(cycle))
+                for converter in _build_plan(run).get("converters", []):
+                    provider = _provider_for(acquisition, converter["name"])
+                    if provider is not None and provider.get("url"):
+                        allowed.update(converter.get("inputs", []))
+            for path in inputs:
+                if not path.is_file():
+                    (deferred_obs if str(path) in allowed else missing_obs).append(str(path))
             missing_tools.update(tool for tool in tools if not _command_available(tool))
-    items.append(
-        PreflightItem(
-            f"observation inputs ({len(cycles)} cycles)",
-            not missing_obs,
-            "all available" if not missing_obs else "; ".join(sorted(set(missing_obs))),
-        )
-    )
+    detail = "all available"
+    if missing_obs:
+        detail = "; ".join(sorted(set(missing_obs))) + "; configure profile.observation_acquisition or provide local inputs"
+    elif deferred_obs:
+        detail = f"{len(set(deferred_obs))} missing input(s) have declared providers; acquisition will run per cycle"
+    items.append(PreflightItem(f"observation inputs ({len(cycles)} cycles)", not missing_obs, detail))
     items.append(
         PreflightItem(
             "Obs2IODA tools",
@@ -542,6 +554,16 @@ def materialize_campaign(spec: CampaignSpec) -> Path:
         run_mpas_on_last_cycle=spec.run_mpas_on_last_cycle,
         cycle_interval_hours=spec.cycle_interval_hours,
     )
+    from .obs_acquisition import _acquisition_config, _search_roots
+    acquisition = _acquisition_config(spec.config_path)
+    if acquisition:
+        acquisition["search_roots"] = [str(path) for path in _search_roots(acquisition)]
+    acquisition.pop("_base_dir", None)
+    if acquisition:
+        profile_path = spec.destination / "profile.yaml"
+        document = _load_mapping(profile_path, "profile") if profile_path.is_file() else {"profile": {}}
+        document.setdefault("profile", {})["observation_acquisition"] = acquisition
+        profile_path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
     (spec.destination / "campaign-request.yaml").write_text(
         yaml.safe_dump(_request_document(spec), sort_keys=False), encoding="utf-8"
     )
