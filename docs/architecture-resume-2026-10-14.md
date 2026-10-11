@@ -76,3 +76,17 @@ Nenhum download global oculto em geração; aquisição rastreável por etapa/ci
 Produtos validados antes de consumo; falhas não promovem análise/background inválidos.
 Retomada preserva tentativas e reusa apenas produtos compatíveis.
 Configuração simples, documentada, com parâmetros científicos efetivos e versões registrados.
+
+## Atualização de urgência publicada em 11/10
+
+Commits 5da363d até b1b9f274 na mesma branch:
+- create/run/check não fazem aquisição global implícita;
+- observations_doctor adquire somente o ciclo solicitado antes da verificação/conversão;
+- wps_prepare adquire o GFS quando wps.acquisition está declarado e reutiliza arquivo local não vazio;
+- preflight aceita observações ausentes com provider habilitado e URL declarada, sem baixar;
+- materialização registra configuração de aquisição no profile.yaml do caso;
+- scripts/configure_gfs_acquisition.py habilita aquisição no caso de origem e na inicialização materializada, mantendo comentários e parâmetros, com backup .before-acquisition;
+- tutorial atualizado; 154 testes locais passaram.
+
+Limite temporário: aquisição permanece dentro de comandos existentes (observations_doctor e wps_prepare), não na futura interface uniforme. Submissão/espera PBS ainda pertencem aos comandos atuais. Validação científica real no JACI continua pendente; não declarar 7 dias concluídos sem evidência.
+Próximo passo do operador: pull da branch, executar o script com tutorial-2025-7d/campaign.yaml, executar campaign check e, se PASS, campaign run. Não recriar a campanha nem apagar dados/estado. Registrar o resultado efetivo aqui depois.
