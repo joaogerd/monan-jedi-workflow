@@ -54,6 +54,10 @@ obs2ioda:
         - --input
         - "{prepbufr_input}"
     - name: gpsro-gnssro
+      # GNSS-RO não usa o filtro PreQC no caso M3; o conversor não grava esse grupo.
+      # Mantém os grupos IODA necessários ao operador e ao erro de observação.
+      validation:
+        required_header_markers: [MetaData, ObsValue, ObsError]
       inputs:
         - "{gpsro_input}"
         - "{gpsro_runner}"
