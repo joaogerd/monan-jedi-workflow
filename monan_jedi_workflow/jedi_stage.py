@@ -971,6 +971,78 @@ def _read_submission_manifest(run: JEDIRun) -> dict[str, Any]:
     return value
 
 
+def _validate_geometry_runtime(run: JEDIRun) -> None:
+    """Reject missing declared geometry inputs before creating a PBS submission.
+
+    Inspect outer and inner geometries and XML stream-list dependencies. Paths
+    are interpreted from the application's working directory, as MPAS does.
+    This checks preparation completeness, not scientific NetCDF validity.
+    """
+    import yaml
+    import xml.etree.ElementTree as ET
+
+    application = run.run_dir / "variational.yaml"
+    if not application.is_file():
+        return
+    document = yaml.safe_load(application.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        return
+    cost = document.get("cost function", {})
+    if not isinstance(cost, dict):
+        return
+    geometries = [cost.get("geometry", {})]
+    variational = document.get("variational", {})
+    if isinstance(variational, dict):
+        geometries.extend(item.get("geometry", {}) for item in variational.get("iterations", [])
+                          if isinstance(item, dict))
+    missing: list[str] = []
+
+    def require(raw: str) -> Path:
+        path = Path(raw)
+        if not path.is_absolute():
+            path = run.run_dir / path
+        if not path.is_file() or path.stat().st_size == 0:
+            missing.append(str(path))
+        return path
+
+    for geometry in geometries:
+        if not isinstance(geometry, dict):
+            continue
+        for key in ("nml_file", "streams_file"):
+            raw = geometry.get(key)
+            if not isinstance(raw, str):
+                continue
+            path = require(raw)
+            if key == "streams_file" and path.is_file():
+                try:
+                    streams = ET.parse(path)
+                except ET.ParseError as error:
+                    raise StageConfigurationError(f"Invalid JEDI streams XML {path}: {error}") from error
+                for entry in streams.iter("file"):
+                    name = entry.get("name")
+                    if name:
+                        require(name)
+                for entry in streams.getroot():
+                    name = entry.get("filename_template", "")
+                    if (entry.get("name") in {"invariant", "input"}
+                            and "input" in entry.get("type", "") and name and "$" not in name):
+                        require(name)
+            if key == "nml_file" and path.is_file():
+                match = re.search(r"config_block_decomp_file_prefix\s*=\s*['\"]([^'\"]+)['\"]", path.read_text())
+                ranks = run.config.get("pbs", {}).get("mpiprocs", 64)
+                if match and int(ranks) > 1:
+                    require(match.group(1) + str(ranks))
+    if isinstance(cost.get("model"), dict) and cost["model"].get("name") == "MPAS" and cost.get("geometry"):
+        for name in ("geovars.yaml", "keptvars.yaml", "testinput/obsop_name_map.yaml"):
+            require(name)
+    if missing:
+        raise StageConfigurationError(
+            "JEDI geometry runtime is incomplete; missing or empty file(s): "
+            + "; ".join(dict.fromkeys(missing))
+            + ". Stage the mesh, partition, streams and installed MPAS-JEDI support files in jedi.yaml before submitting."
+        )
+
+
 def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
     """Prepare one analysis runtime without submitting or orchestrating it.
 
@@ -1032,6 +1104,7 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
             target = run.run_dir / target
         _render_template(source, target, run.context)
 
+    _validate_geometry_runtime(run)
     _materialize_jedi_output_directories(run)
     trajectory_time = _validate_nonlinear_trajectory_time(run)
     analysis_base_state = _initialize_analysis_output(run)
