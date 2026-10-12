@@ -110,7 +110,10 @@ de B faz parte do reinício imediato.
   campos temporais genéricos. Corrigido na geração dos caminhos; campanhas já
   materializadas recebem a mesma correção ao retomar, com backup do workflow,
   sem reset do estado nem alteração das configurações científicas.
-- Sete dias de 2025 ainda não concluídos.
+- Operador informou conclusão dos sete dias em 12/10/2026: último ciclo
+  2025-09-08T00:00:00Z passou por `jedi_validate` e `jedi_gate`.
+  Métricas e figuras de 2025 ainda devem ser extraídas dos resultados na JACI;
+  não usar os valores de 2018 como resultados da nova campanha.
 
 ## Comandos para o próximo passo na JACI
 
@@ -165,3 +168,56 @@ passaram nesse validador. Comandos e 986 caminhos obrigatórios dos 29 ciclos
 foram resolvidos usando o `CycleContext` e `resolve_task_artifacts` reais do
 simpleWorkflow. Isso verifica o adaptador; não substitui as validações
 científicas na JACI.
+
+## Figuras da campanha de sete dias concluída
+
+As mesmas três categorias do relatório M3 de três dias são produzidas por:
+
+```bash
+cd /p/projetos/monan_das/$USER/projects/monan-jedi-workflow
+git pull --ff-only origin feature/2025-reference-case
+python scripts/generate_campaign_figures.py \
+  experiments/2025-reference/cases/monan-jedi-20250901-7d
+```
+
+O script exige NumPy, netCDF4, PyYAML e Matplotlib, já listados no ambiente do
+tutorial. Ele não submete jobs nem modifica os estados/arquivos científicos.
+Lê SQLite em modo somente leitura, confere os ciclos contra a campanha,
+valida os manifests JEDI/MPAS/Obs2IODA e exige `OOPS Ending` por ciclo.
+Emite progresso por ciclo e erro com o arquivo/grupo ausente.
+
+Saída: `cases/monan-jedi-20250901-7d/diagnostics/`:
+
+- `figures/campaign_completion.{png,pdf,svg}`: contagem acumulada de análises
+  e previsões entre ciclos validadas.
+- `figures/jedi_cost_convergence.{png,pdf,svg}`: J/J₀ para cada ciclo;
+  J₀ vem do custo não linear antes do minimizador, os demais valores são
+  os custos quadráticos J das iterações internas. Componentes Jb/JoJc são
+  excluídos. Mais de um outer loop é rejeitado explicitamente.
+- `figures/omb_oma_rmse_airTemperature.{png,pdf,svg}`: RMSE de O−B/O−A
+  da temperatura de radiossondas em cada ciclo, incluindo todos os níveis.
+- `campaign_summary.csv`, `jedi_convergence.csv`, `jedi_cost_iterations.csv`,
+  `omb_oma_sondes_airTemperature.csv`, `diagnostic_summary.json` e `report.md`.
+
+As estatísticas observacionais usam a mesma amostra para O−B e O−A: valores
+finitos, missing values excluídos, QC=0 na interseção dos grupos EffectiveQC0/1
+disponíveis, ou EffectiveQC quando não houver grupos numerados. Grupos usados
+são registrados por ciclo. Ausência de QC interrompe o cálculo, sem incluir
+rejeitados silenciosamente. A seleção QC do script histórico de três dias
+não está preservada nos CSVs: temos as mesmas métricas e tipos de figura,
+mas a equivalência exata de seleção entre anos precisa ser conferida.
+
+RMSE médio do período é a média aritmética dos RMSEs de cada ciclo, como
+no relatório M3; não é o RMSE de todas as observações concatenadas. Melhorar
+O−A em todos os ciclos não é condição artificial de sucesso: eventuais
+aumentos são registrados. São observações assimiladas, não verificação
+independente de previsões. O número de conversões vem do estado real do
+workflow, não é inferido do número de previsões.
+
+O script recusa sobrescrever um diretório de evidências existente. Para outra
+geração, escolha `--output CAMINHO_NOVO`. Para transferir os resultados:
+
+```bash
+tar -czf experiments/2025-reference/diagnostics-7d-2025.tar.gz \
+  -C experiments/2025-reference/cases/monan-jedi-20250901-7d diagnostics
+```
