@@ -44,6 +44,7 @@ mpas_init:
 
   validation:
     log: log.init_atmosphere.0000.out
-    required_log_markers: []
+    required_log_markers: ["Finished running the init_atmosphere core"]
+    geometry_reference: "{mesh_root}/static/x1.10242.invariant.nc"
     required_outputs:
       - "work/mpas-init/{cycle_id}/x1.10242.init.{mpas_file_time}.nc"
