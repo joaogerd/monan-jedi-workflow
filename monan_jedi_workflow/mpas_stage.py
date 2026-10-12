@@ -566,7 +566,7 @@ def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
         path = Path(path_text)
         path = path if path.is_absolute() else run.run_dir / path
         if not path.is_file() or path.stat().st_size == 0:
-            missing_outputs.append(value)
+            missing_outputs.append(str(path))
 
     netcdf_issues: list[str] = []
     netcdf_checks = _require_list(validation.get("netcdf", []), "mpas.validation.netcdf")
