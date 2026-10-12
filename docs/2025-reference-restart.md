@@ -103,8 +103,8 @@ de B faz parte do reinício imediato.
   preserva as fontes observacionais do tutorial e confere entradas fixas.
 - Preparação completa da geometria conferida em teste local com fixtures NetCDF.
 - Case novo criado na JACI. Inicialização WPS/init/MPAS, primeiro background e
-  observações 00Z passaram pelas validações. Primeiro job JEDI terminou no
-  escalonador; sua validação científica ainda não foi confirmada.
+  observações 00Z passaram pelas validações. A primeira análise JEDI 00Z também
+  passou no comando `jedi-validate` na JACI.
 - Retomada bloqueou antes de `jedi_validate`: o adaptador tinha emitido
   `{analysis_mpas_file_time}` como artefato do simpleWorkflow, que só conhece
   campos temporais genéricos. Corrigido na geração dos caminhos; campanhas já
@@ -133,7 +133,16 @@ O case `experiments/2025-reference` já existe. Não executar novamente o gerado
 nem `swf reset`. O código atualizado corrige os caminhos de saída de
 `jedi_validate` e entrada de `mpas_prepare` no workflow existente. Backup:
 `workflow.yaml.before-analysis-artifact-fix`. O caminho científico continua
-`Data/states/mpas.3dfgat.YYYY-MM-DD_HH.MM.SS.nc`, incluindo minutos e segundos.
+`Data/states/mpas.3dfgat.YYYY-MM-DD_HH.00.00.nc` nos ciclos horários da campanha.
+O adaptador de campanha exige início em hora UTC inteira e intervalo em horas
+inteiras; rejeita minutos/segundos não nulos em vez de produzir nomes errados.
+Comandos de etapas individuais mantêm suporte aos timestamps completos.
+
+A primeira tradução tentou usar índices `{cycle_id[11]}` para minutos e
+segundos; o validador de caminhos do simpleWorkflow rejeitou os colchetes como
+glob. A tradução agora usa apenas campos genéricos de data e hora, sem índices.
+A retomada também reconhece e corrige o workflow dessa tentativa intermediária.
+Não é necessário atualizar o simpleWorkflow.
 
 ```bash
 cd /p/projetos/monan_das/$USER/projects/monan-jedi-workflow
@@ -150,6 +159,9 @@ monan-jedi-workflow campaign run experiments/2025-reference/campaign.yaml \
   2>&1 | tee -a experiments/2025-reference/teste-continuidade.log
 ```
 
-Verificação local da correção: 176 testes passaram; comandos e caminhos de
-artefatos dos 29 ciclos renderizados com o `CycleContext` real do simpleWorkflow.
-Isso verifica o adaptador; não substitui as validações científicas na JACI.
+Verificação local da correção: 178 testes passaram. O erro dos colchetes foi
+reproduzido no `load_workflow` real do simpleWorkflow; workflows novos e migrados
+passaram nesse validador. Comandos e 986 caminhos obrigatórios dos 29 ciclos
+foram resolvidos usando o `CycleContext` e `resolve_task_artifacts` reais do
+simpleWorkflow. Isso verifica o adaptador; não substitui as validações
+científicas na JACI.

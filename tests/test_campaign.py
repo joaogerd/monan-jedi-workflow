@@ -400,10 +400,15 @@ def test_existing_campaign_request_is_reusable_for_restart(tmp_path: Path) -> No
     assert campaign.materialize_campaign(spec) == spec.destination
 
 
-def test_restart_repairs_only_legacy_analysis_artifacts(tmp_path: Path) -> None:
+@pytest.mark.parametrize("timestamp", [
+    "{analysis_mpas_file_time}",
+    "{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}."
+    "{cycle_id[11]}{cycle_id[12]}.{cycle_id[13]}{cycle_id[14]}",
+])
+def test_restart_repairs_only_legacy_analysis_artifacts(tmp_path: Path, timestamp) -> None:
     spec = _spec(tmp_path)
     spec.destination.mkdir()
-    legacy = "{experiment_dir}/work/jedi/{cycle_id}/analysis.{analysis_mpas_file_time}.nc"
+    legacy = "{experiment_dir}/work/jedi/{cycle_id}/analysis." + timestamp + ".nc"
     document = {"tasks": [
         {"name": "jedi_validate", "outputs": {"required": [legacy]}},
         {"name": "mpas_prepare", "inputs": {"required": [legacy]}},
@@ -419,6 +424,7 @@ def test_restart_repairs_only_legacy_analysis_artifacts(tmp_path: Path) -> None:
     assert campaign.materialize_campaign(spec) == spec.destination
     repaired = yaml.safe_load(spec.workflow_path.read_text())
     assert "analysis_mpas_file_time" not in spec.workflow_path.read_text()
+    assert "cycle_id[" not in spec.workflow_path.read_text()
     assert repaired["tasks"][-1] == document["tasks"][-1]
     backup = spec.workflow_path.with_name("workflow.yaml.before-analysis-artifact-fix")
     assert backup.read_text() == original

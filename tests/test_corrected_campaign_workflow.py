@@ -25,7 +25,7 @@ def _initialization_task_map(document: dict) -> dict[str, dict]:
 
 
 @pytest.mark.parametrize("timestamp", [
-    "2025-09-01T00:00:00", "2025-09-01T06:00:00", "2025-12-31T23:17:42",
+    "2025-09-01T00:00:00", "2025-09-01T06:00:00", "2025-12-31T18:00:00",
 ])
 def test_analysis_artifacts_render_with_generic_orchestrator_context(timestamp):
     value = datetime.fromisoformat(timestamp)
@@ -46,11 +46,26 @@ def test_analysis_artifacts_render_with_generic_orchestrator_context(timestamp):
         "cycle_hour": value.strftime("%H"),
     }
     tasks = _task_map(document)
+    for task in document["tasks"]:
+        for section in ("inputs", "outputs"):
+            for path in task.get(section, {}).get("required", []):
+                assert not any(marker in path for marker in ("*", "?", "["))
     output = tasks["jedi_validate"]["outputs"]["required"][-1].format(**context)
     input_ = tasks["mpas_prepare"]["inputs"]["required"][-1].format(**context)
     expected = (f"/tmp/campaign/work/jedi/{context['cycle_id']}/Data/states/"
                 + value.strftime("mpas.3dfgat.%Y-%m-%d_%H.%M.%S.nc"))
     assert output == input_ == expected
+
+
+def test_analysis_filename_rejects_non_hour_aligned_campaign():
+    with pytest.raises(StageConfigurationError, match="whole UTC hour"):
+        build_corrected_campaign_workflow(
+            observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+            analysis_output="analysis.{analysis_mpas_file_time}.nc",
+            start_cycle="2025-09-01T00:17:42Z",
+            end_cycle="2025-09-01T06:17:42Z",
+            experiment_dir="/tmp/campaign",
+        )
 
 
 @pytest.mark.parametrize(

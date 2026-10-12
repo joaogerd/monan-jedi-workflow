@@ -29,15 +29,23 @@ from .stage_config import StageConfigurationError
 def _workflow_analysis_path(value: str) -> str:
     """Adapt the JEDI analysis filename to simpleWorkflow's generic time fields.
 
-    Analysis time equals cycle time. String indexing uses standard str.format
-    syntax and preserves minutes/seconds without adding MPAS concepts to SWF.
+    Campaigns use whole UTC hours and integer-hour steps. SWF rejects bracket
+    indexing in required paths as glob syntax; use its plain date/hour fields.
     Scientific stage configuration retains its original JEDI placeholders.
     """
-    return value.replace(
-        "{analysis_mpas_file_time}",
-        "{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}."
-        "{cycle_id[11]}{cycle_id[12]}.{cycle_id[13]}{cycle_id[14]}",
-    )
+    timestamp = "{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}.00.00"
+    indexed = ("{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}."
+               "{cycle_id[11]}{cycle_id[12]}.{cycle_id[13]}{cycle_id[14]}")
+    return value.replace("{analysis_mpas_file_time}", timestamp).replace(indexed, timestamp)
+
+
+def _require_whole_hour(cycle: datetime) -> None:
+    if cycle.minute or cycle.second or cycle.microsecond:
+        raise StageConfigurationError(
+            "native campaign analysis filenames require a whole UTC hour "
+            "(minutes and seconds must be zero); single-stage commands retain "
+            "their full timestamp support"
+        )
 
 
 def repair_analysis_artifact_paths(path: Path) -> bool:
@@ -60,6 +68,8 @@ def repair_analysis_artifact_paths(path: Path) -> bool:
                             changed = True
     if not changed:
         return False
+    if document.get("cycle", {}).get("start"):
+        _require_whole_hour(_parse_cycle(document["cycle"]["start"]))
     backup = path.with_name(path.name + ".before-analysis-artifact-fix")
     if not backup.exists():
         shutil.copy2(path, backup)
@@ -508,6 +518,7 @@ def build_corrected_campaign_workflow(
 ) -> dict[str, Any]:
     """Build a constant-size native-cycle workflow for a corrected campaign."""
     cycles = _cycles(start_cycle, end_cycle, cycle_interval_hours)
+    _require_whole_hour(cycles[0])
     return {
         "format_version": 1,
         "workflow": {"name": "monan_jedi_corrected_campaign"},
