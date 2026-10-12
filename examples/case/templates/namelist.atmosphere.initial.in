@@ -6,6 +6,12 @@
     config_split_dynamics_transport = true
     config_number_of_sub_steps = 2
     config_dynamics_split_steps = 3
+    config_h_mom_eddy_visc2 = 0.0
+    config_h_mom_eddy_visc4 = 0.0
+    config_v_mom_eddy_visc2 = 0.0
+    config_h_theta_eddy_visc2 = 0.0
+    config_h_theta_eddy_visc4 = 0.0
+    config_v_theta_eddy_visc2 = 0.0
     config_horiz_mixing = '2d_smagorinsky'
     config_len_disp = 240000.0
     config_visc4_2dsmag = 0.05
@@ -38,6 +44,10 @@
     config_do_restart = .false.
     config_do_DAcycling = .false.
 /
+&printout
+    config_print_global_minmax_vel = true
+    config_print_detailed_minmax_vel = true
+/
 &IAU
     config_IAU_option = 'off'
     config_IAU_window_length_s = 21600.
@@ -52,6 +62,9 @@
     config_bucket_update = 'none'
     config_physics_suite = 'mesoscale_reference'
     config_microp_re = true
+/
+&soundings
+    config_sounding_interval = 'none'
 /
 &assimilation
     config_jedi_da = true
