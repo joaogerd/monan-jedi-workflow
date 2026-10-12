@@ -584,3 +584,16 @@ def test_prepare_rejects_geometry_streams_missing_before_pbs(tmp_path):
     with pytest.raises(StageConfigurationError, match='streams.atmosphere.outer'):
         prepare_jedi(config, '2018-04-15T00:00:00Z')
     assert not (tmp_path/'work/jedi/20180415T000000Z/run_jedi.pbs').exists()
+
+
+def test_prepare_checks_geometry_in_custom_application_yaml(tmp_path):
+    config, _ = _case(tmp_path)
+    path = config/'jedi.yaml'
+    data = yaml.safe_load(path.read_text())
+    template = Path(data['jedi']['templates'][0]['source'])
+    template.write_text('cost function:\n  geometry:\n    streams_file: missing-reference-streams.xml\n')
+    data['jedi']['templates'][0]['target'] = '3dfgat.bmatrix.yaml'
+    data['jedi']['pbs']['command'] = ['/bin/echo', '3dfgat.bmatrix.yaml']
+    path.write_text(yaml.safe_dump(data))
+    with pytest.raises(StageConfigurationError, match='missing-reference-streams.xml'):
+        prepare_jedi(config, '2018-04-15T00:00:00Z')

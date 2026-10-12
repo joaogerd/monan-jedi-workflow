@@ -96,7 +96,26 @@ de B faz parte do reinício imediato.
 
 ## Estado na publicação deste documento
 
-- Capturador preparado e testado localmente.
-- Captura real na JACI pendente.
-- Case novo de 2025 e teste de dois ciclos pendentes da conferência dos arquivos.
+- Captura real recebida: 5541 arquivos, sem erros de captura; todos os hashes conferidos.
+- Doze arquivos do runtime JEDI executado preservados em `examples/m3-reference-assets/`.
+- MPI real da referência: 128 processos, endian GNU explícito e namelists outer/inner distintos.
+- Gerador do case novo: `scripts/create_2025_reference.py`; recusa sobrescrita,
+  preserva as fontes observacionais do tutorial e confere entradas fixas.
+- Preparação completa da geometria conferida em teste local com fixtures NetCDF.
+- Criação real do case novo e teste científico de dois ciclos na JACI pendentes.
 - Sete dias de 2025 ainda não concluídos.
+
+## Comandos para o próximo passo na JACI
+
+```bash
+cd /p/projetos/monan_das/$USER/projects/monan-jedi-workflow
+git pull --ff-only origin feature/2025-reference-case
+python scripts/create_2025_reference.py \
+  --source tutorial-2025-7d \
+  --destination experiments/2025-reference
+monan-jedi-workflow campaign check experiments/2025-reference/campaign.yaml
+```
+
+Após o preflight passar, executar o teste com `campaign run`. Antes de iniciar
+a campanha `campaign-7d.yaml`, conferir as duas análises e a previsão entre elas.
+Uma tentativa anterior ativa precisa terminar antes de iniciar outro controlador.

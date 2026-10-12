@@ -981,8 +981,8 @@ def _validate_geometry_runtime(run: JEDIRun) -> None:
     import yaml
     import xml.etree.ElementTree as ET
 
-    application = run.run_dir / "variational.yaml"
-    if not application.is_file():
+    application = _jedi_application_yaml_path(run)
+    if application is None or not application.is_file():
         return
     document = yaml.safe_load(application.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
@@ -1104,10 +1104,10 @@ def prepare_jedi(config_dir: Path, cycle_time: str) -> JEDIRun:
             target = run.run_dir / target
         _render_template(source, target, run.context)
 
-    _validate_geometry_runtime(run)
     _materialize_jedi_output_directories(run)
     trajectory_time = _validate_nonlinear_trajectory_time(run)
     analysis_base_state = _initialize_analysis_output(run)
+    _validate_geometry_runtime(run)
 
     _render_pbs(run)
     _write_json(
