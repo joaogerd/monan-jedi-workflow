@@ -400,6 +400,34 @@ def test_existing_campaign_request_is_reusable_for_restart(tmp_path: Path) -> No
     assert campaign.materialize_campaign(spec) == spec.destination
 
 
+def test_restart_repairs_only_legacy_analysis_artifacts(tmp_path: Path) -> None:
+    spec = _spec(tmp_path)
+    spec.destination.mkdir()
+    legacy = "{experiment_dir}/work/jedi/{cycle_id}/analysis.{analysis_mpas_file_time}.nc"
+    document = {"tasks": [
+        {"name": "jedi_validate", "outputs": {"required": [legacy]}},
+        {"name": "mpas_prepare", "inputs": {"required": [legacy]}},
+        {"name": "wps_prepare", "argv": ["unchanged"]},
+    ]}
+    original = yaml.safe_dump(document, sort_keys=False)
+    spec.workflow_path.write_text(original)
+    (spec.destination / "campaign-request.yaml").write_text(
+        yaml.safe_dump(campaign._request_document(spec), sort_keys=False))
+    state = spec.workdir / "preserved-state"
+    state.parent.mkdir()
+    state.write_text("successful tasks and PBS jobs")
+    assert campaign.materialize_campaign(spec) == spec.destination
+    repaired = yaml.safe_load(spec.workflow_path.read_text())
+    assert "analysis_mpas_file_time" not in spec.workflow_path.read_text()
+    assert repaired["tasks"][-1] == document["tasks"][-1]
+    backup = spec.workflow_path.with_name("workflow.yaml.before-analysis-artifact-fix")
+    assert backup.read_text() == original
+    assert state.read_text() == "successful tasks and PBS jobs"
+    current = spec.workflow_path.read_bytes()
+    campaign.materialize_campaign(spec)
+    assert spec.workflow_path.read_bytes() == current
+
+
 def test_preflight_rejects_unresolved_edit_placeholders(
     tmp_path: Path, monkeypatch,
 ) -> None:

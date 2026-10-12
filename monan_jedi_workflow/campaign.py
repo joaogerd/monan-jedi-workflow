@@ -25,6 +25,7 @@ from .corrected_campaign import (
     _iso,
     _parse_cycle,
     materialize_corrected_campaign,
+    repair_analysis_artifact_paths,
 )
 from .mpas_stage import load_mpas_run
 from .obs2ioda_stage import _build_plan, load_obs2ioda_run
@@ -541,6 +542,9 @@ def materialize_campaign(spec: CampaignSpec) -> Path:
     """Create the campaign once, or verify an existing restartable campaign."""
     if spec.destination.exists():
         _validate_existing_campaign(spec)
+        if repair_analysis_artifact_paths(spec.workflow_path):
+            print(f"[OK] corrected analysis artifact paths: {spec.workflow_path}; "
+                  "previous workflow backed up; campaign state preserved", flush=True)
         return spec.destination
     materialize_corrected_campaign(
         initial_jedi_case=spec.initial_jedi_case,

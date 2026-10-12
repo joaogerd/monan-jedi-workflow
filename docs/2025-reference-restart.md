@@ -102,7 +102,14 @@ de B faz parte do reinício imediato.
 - Gerador do case novo: `scripts/create_2025_reference.py`; recusa sobrescrita,
   preserva as fontes observacionais do tutorial e confere entradas fixas.
 - Preparação completa da geometria conferida em teste local com fixtures NetCDF.
-- Criação real do case novo e teste científico de dois ciclos na JACI pendentes.
+- Case novo criado na JACI. Inicialização WPS/init/MPAS, primeiro background e
+  observações 00Z passaram pelas validações. Primeiro job JEDI terminou no
+  escalonador; sua validação científica ainda não foi confirmada.
+- Retomada bloqueou antes de `jedi_validate`: o adaptador tinha emitido
+  `{analysis_mpas_file_time}` como artefato do simpleWorkflow, que só conhece
+  campos temporais genéricos. Corrigido na geração dos caminhos; campanhas já
+  materializadas recebem a mesma correção ao retomar, com backup do workflow,
+  sem reset do estado nem alteração das configurações científicas.
 - Sete dias de 2025 ainda não concluídos.
 
 ## Comandos para o próximo passo na JACI
@@ -119,3 +126,30 @@ monan-jedi-workflow campaign check experiments/2025-reference/campaign.yaml
 Após o preflight passar, executar o teste com `campaign run`. Antes de iniciar
 a campanha `campaign-7d.yaml`, conferir as duas análises e a previsão entre elas.
 Uma tentativa anterior ativa precisa terminar antes de iniciar outro controlador.
+
+## Retomada após o erro de artefato da análise
+
+O case `experiments/2025-reference` já existe. Não executar novamente o gerador
+nem `swf reset`. O código atualizado corrige os caminhos de saída de
+`jedi_validate` e entrada de `mpas_prepare` no workflow existente. Backup:
+`workflow.yaml.before-analysis-artifact-fix`. O caminho científico continua
+`Data/states/mpas.3dfgat.YYYY-MM-DD_HH.MM.SS.nc`, incluindo minutos e segundos.
+
+```bash
+cd /p/projetos/monan_das/$USER/projects/monan-jedi-workflow
+git pull --ff-only origin feature/2025-reference-case
+CASE=experiments/2025-reference/cases/monan-jedi-20250901-smoke
+monan-jedi-workflow jedi-validate "$CASE" --cycle 2025-09-01T00:00:00Z
+```
+
+Se a validação científica passar, retomar a mesma campanha:
+
+```bash
+set -o pipefail
+monan-jedi-workflow campaign run experiments/2025-reference/campaign.yaml \
+  2>&1 | tee -a experiments/2025-reference/teste-continuidade.log
+```
+
+Verificação local da correção: 176 testes passaram; comandos e caminhos de
+artefatos dos 29 ciclos renderizados com o `CycleContext` real do simpleWorkflow.
+Isso verifica o adaptador; não substitui as validações científicas na JACI.

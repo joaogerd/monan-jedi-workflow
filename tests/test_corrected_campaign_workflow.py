@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,35 @@ def _task_map(document: dict) -> dict[str, dict]:
 
 def _initialization_task_map(document: dict) -> dict[str, dict]:
     return {task["name"]: task for task in document["initialization"]["tasks"]}
+
+
+@pytest.mark.parametrize("timestamp", [
+    "2025-09-01T00:00:00", "2025-09-01T06:00:00", "2025-12-31T23:17:42",
+])
+def test_analysis_artifacts_render_with_generic_orchestrator_context(timestamp):
+    value = datetime.fromisoformat(timestamp)
+    document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/mpas.3dfgat.{analysis_mpas_file_time}.nc",
+        start_cycle="2025-09-01T00:00:00Z",
+        end_cycle="2025-09-01T06:00:00Z",
+        experiment_dir="/tmp/campaign",
+    )
+    # Public generic time fields supplied by simpleWorkflow, without JEDI aliases.
+    context = {
+        "experiment_dir": "/tmp/campaign",
+        "cycle_id": value.strftime("%Y%m%dT%H%M%SZ"),
+        "cycle_year": value.strftime("%Y"),
+        "cycle_month": value.strftime("%m"),
+        "cycle_day": value.strftime("%d"),
+        "cycle_hour": value.strftime("%H"),
+    }
+    tasks = _task_map(document)
+    output = tasks["jedi_validate"]["outputs"]["required"][-1].format(**context)
+    input_ = tasks["mpas_prepare"]["inputs"]["required"][-1].format(**context)
+    expected = (f"/tmp/campaign/work/jedi/{context['cycle_id']}/Data/states/"
+                + value.strftime("mpas.3dfgat.%Y-%m-%d_%H.%M.%S.nc"))
+    assert output == input_ == expected
 
 
 @pytest.mark.parametrize(

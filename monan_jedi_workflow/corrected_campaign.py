@@ -9,6 +9,8 @@ does not grow with the number of analysis times.
 from __future__ import annotations
 
 import shutil
+import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -22,6 +24,54 @@ from .case_utils import (
     write_yaml,
 )
 from .stage_config import StageConfigurationError
+
+
+def _workflow_analysis_path(value: str) -> str:
+    """Adapt the JEDI analysis filename to simpleWorkflow's generic time fields.
+
+    Analysis time equals cycle time. String indexing uses standard str.format
+    syntax and preserves minutes/seconds without adding MPAS concepts to SWF.
+    Scientific stage configuration retains its original JEDI placeholders.
+    """
+    return value.replace(
+        "{analysis_mpas_file_time}",
+        "{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}."
+        "{cycle_id[11]}{cycle_id[12]}.{cycle_id[13]}{cycle_id[14]}",
+    )
+
+
+def repair_analysis_artifact_paths(path: Path) -> bool:
+    """Upgrade only the known legacy artifact alias in a materialized workflow."""
+    original = path.read_text(encoding="utf-8")
+    document = yaml.safe_load(original)
+    changed = False
+    for task in document.get("tasks", []):
+        if task.get("name") not in {"jedi_validate", "mpas_prepare"}:
+            continue
+        for section in ("inputs", "outputs"):
+            for paths in task.get(section, {}).values():
+                if not isinstance(paths, list):
+                    continue
+                for index, value in enumerate(paths):
+                    if isinstance(value, str):
+                        replacement = _workflow_analysis_path(value)
+                        if replacement != value:
+                            paths[index] = replacement
+                            changed = True
+    if not changed:
+        return False
+    backup = path.with_name(path.name + ".before-analysis-artifact-fix")
+    if not backup.exists():
+        shutil.copy2(path, backup)
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                     delete=False) as stream:
+        temporary = Path(stream.name)
+        yaml.safe_dump(document, stream, sort_keys=False)
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return True
 
 def _parse_cycle(value: str) -> datetime:
     try:
@@ -212,6 +262,7 @@ def _cycle_tasks(
     jedi_submission = f"{jedi_run}/.monan-jedi-workflow/jedi-submission.json"
     jedi_validation = f"{jedi_run}/.monan-jedi-workflow/jedi-validation.json"
     jedi_artifacts = f"{jedi_run}/.monan-jedi-workflow/jedi-artifacts.json"
+    analysis_output = _workflow_analysis_path(analysis_output)
     analysis = (
         analysis_output
         if analysis_output.startswith("/")
