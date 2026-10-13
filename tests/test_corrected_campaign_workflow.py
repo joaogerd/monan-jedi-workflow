@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from monan_jedi_workflow.corrected_campaign import (
     _cycles,
     build_corrected_campaign_workflow,
     materialize_corrected_campaign,
+    _patch_initialization_assets,
 )
 from monan_jedi_workflow.stage_config import StageConfigurationError
 
@@ -20,6 +22,50 @@ def _task_map(document: dict) -> dict[str, dict]:
 
 def _initialization_task_map(document: dict) -> dict[str, dict]:
     return {task["name"]: task for task in document["initialization"]["tasks"]}
+
+
+@pytest.mark.parametrize("timestamp", [
+    "2025-09-01T00:00:00", "2025-09-01T06:00:00", "2025-12-31T18:00:00",
+])
+def test_analysis_artifacts_render_with_generic_orchestrator_context(timestamp):
+    value = datetime.fromisoformat(timestamp)
+    document = build_corrected_campaign_workflow(
+        observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+        analysis_output="Data/states/mpas.3dfgat.{analysis_mpas_file_time}.nc",
+        start_cycle="2025-09-01T00:00:00Z",
+        end_cycle="2025-09-01T06:00:00Z",
+        experiment_dir="/tmp/campaign",
+    )
+    # Public generic time fields supplied by simpleWorkflow, without JEDI aliases.
+    context = {
+        "experiment_dir": "/tmp/campaign",
+        "cycle_id": value.strftime("%Y%m%dT%H%M%SZ"),
+        "cycle_year": value.strftime("%Y"),
+        "cycle_month": value.strftime("%m"),
+        "cycle_day": value.strftime("%d"),
+        "cycle_hour": value.strftime("%H"),
+    }
+    tasks = _task_map(document)
+    for task in document["tasks"]:
+        for section in ("inputs", "outputs"):
+            for path in task.get(section, {}).get("required", []):
+                assert not any(marker in path for marker in ("*", "?", "["))
+    output = tasks["jedi_validate"]["outputs"]["required"][-1].format(**context)
+    input_ = tasks["mpas_prepare"]["inputs"]["required"][-1].format(**context)
+    expected = (f"/tmp/campaign/work/jedi/{context['cycle_id']}/Data/states/"
+                + value.strftime("mpas.3dfgat.%Y-%m-%d_%H.%M.%S.nc"))
+    assert output == input_ == expected
+
+
+def test_analysis_filename_rejects_non_hour_aligned_campaign():
+    with pytest.raises(StageConfigurationError, match="whole UTC hour"):
+        build_corrected_campaign_workflow(
+            observation_outputs=["obs_{cycle_yyyymmddhh}.h5"],
+            analysis_output="analysis.{analysis_mpas_file_time}.nc",
+            start_cycle="2025-09-01T00:17:42Z",
+            end_cycle="2025-09-01T06:17:42Z",
+            experiment_dir="/tmp/campaign",
+        )
 
 
 @pytest.mark.parametrize(
@@ -56,12 +102,11 @@ def test_72_hour_campaign_uses_one_native_cycle_graph() -> None:
         "step": "PT6H",
     }
     assert set(initialization) == {
-        "mpas_initial_prepare",
-        "mpas_initial_submit",
-        "mpas_initial_wait",
-        "mpas_initial_validate",
-        "mpas_initial_gate",
-        "initial_background",
+        "wps_prepare", "wps_run", "wps_validate", "wps_gate",
+        "mpas_init_prepare", "mpas_init_submit", "mpas_init_wait",
+        "mpas_init_validate", "mpas_init_gate",
+        "mpas_initial_prepare", "mpas_initial_submit", "mpas_initial_wait",
+        "mpas_initial_validate", "mpas_initial_gate", "initial_background",
     }
     assert set(tasks) == {
         "background_check",
@@ -174,6 +219,8 @@ def test_campaign_validation_gates_are_content_fingerprinted() -> None:
     ]
 
     assert {task["name"] for task in gates} == {
+        "wps_gate",
+        "mpas_init_gate",
         "mpas_initial_gate",
         "observations_gate",
         "jedi_gate",
@@ -234,7 +281,7 @@ def test_campaign_accepts_arbitrary_aligned_start_cycle() -> None:
         "end": "2025-08-08T00:00:00Z",
         "step": "PT6H",
     }
-    assert len(document["initialization"]["tasks"]) == 6
+    assert len(document["initialization"]["tasks"]) == 15
     assert len(document["tasks"]) == 17
 
 
@@ -253,7 +300,7 @@ def test_materialized_campaign_records_compact_scope(tmp_path: Path) -> None:
     assert loaded["context"]["experiment_dir"] == str(tmp_path / "campaign")
     assert loaded["cycle"]["start"] == "2025-01-01T00:00:00Z"
     assert loaded["cycle"]["end"] == "2025-01-04T00:00:00Z"
-    assert len(loaded["initialization"]["tasks"]) == 6
+    assert len(loaded["initialization"]["tasks"]) == 15
     assert len(loaded["tasks"]) == 17
     assert materialize_corrected_campaign is not None
 
@@ -267,3 +314,24 @@ def test_campaign_workflow_requires_explicit_start_cycle() -> None:
             end_cycle="2025-01-04T00:00:00Z",
             experiment_dir="/tmp/campaign",
         )
+
+
+def test_initialization_assets_are_materialized_with_absolute_template_sources(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    (source / "templates").mkdir(parents=True)
+    for filename, root in (("wps.yaml", "wps"), ("mpas_init.yaml", "mpas_init")):
+        (source / filename).write_text(
+            yaml.safe_dump({root: {"templates": [{"source": "templates/input.in", "target": "input"}]}}),
+            encoding="utf-8",
+        )
+    (source / "templates" / "input.in").write_text("test\n", encoding="utf-8")
+
+    destination = tmp_path / "campaign"
+    (destination / "initialization").mkdir(parents=True)
+    _patch_initialization_assets(source, destination)
+
+    for filename, root in (("wps.yaml", "wps"), ("mpas_init.yaml", "mpas_init")):
+        data = yaml.safe_load((destination / "initialization" / filename).read_text())
+        template = data[root]["templates"][0]["source"]
+        assert Path(template).is_absolute()
+        assert Path(template) == (source / "templates" / "input.in").resolve()

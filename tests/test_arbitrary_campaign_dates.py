@@ -47,7 +47,7 @@ def test_august_2025_workflow_remains_structurally_compact() -> None:
 
     assert document["cycle"]["start"] == "2025-08-01T00:00:00Z"
     assert document["cycle"]["end"] == "2025-08-08T00:00:00Z"
-    assert len(document["initialization"]["tasks"]) == 6
+    assert len(document["initialization"]["tasks"]) == 15
     assert len(document["tasks"]) == 17
 
 

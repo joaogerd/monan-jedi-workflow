@@ -65,3 +65,16 @@ def test_download_reports_all_secure_transport_failures(
     assert "curl: unavailable" in message
     assert "wget: unavailable" in message
     assert "TLS verification was not disabled" in message
+
+
+def test_http_404_reports_missing_file_without_certificate_advice(tmp_path, monkeypatch):
+    def missing(*args, **kwargs):
+        raise urllib.error.HTTPError('https://example.invalid/obs', 404, 'Not Found', {}, None)
+    monkeypatch.setattr(obs_acquisition, '_urllib_download', missing)
+    def no_retry(*args, **kwargs):
+        raise AssertionError('HTTP 404 is not a transport failure')
+    monkeypatch.setattr(obs_acquisition, '_curl_download', no_retry)
+    with pytest.raises(obs_acquisition.ObservationInputError) as error:
+        obs_acquisition._download('https://example.invalid/obs', tmp_path / 'obs', timeout=30)
+    assert 'HTTP 404' in str(error.value)
+    assert 'ca_bundle' not in str(error.value)

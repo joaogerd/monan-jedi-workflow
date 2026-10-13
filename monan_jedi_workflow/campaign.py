@@ -25,6 +25,7 @@ from .corrected_campaign import (
     _iso,
     _parse_cycle,
     materialize_corrected_campaign,
+    repair_analysis_artifact_paths,
 )
 from .mpas_stage import load_mpas_run
 from .obs2ioda_stage import _build_plan, load_obs2ioda_run
@@ -34,6 +35,7 @@ _DURATION = re.compile(r"^(?:P(?P<days>[1-9][0-9]*)D|PT(?P<hours>[1-9][0-9]*)H)$
 _UNRESOLVED_ENV = re.compile(
     r"\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)"
 )
+_PLACEHOLDER = re.compile(r"EDITAR", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -332,6 +334,36 @@ def _rendered_obs_inputs(config: Path, cycle: datetime) -> tuple[list[Path], lis
     return inputs, tools
 
 
+def _configuration_placeholders(spec: CampaignSpec) -> PreflightItem:
+    """Reject maintained-template placeholders before any campaign is created."""
+    roots = {
+        spec.config_path.resolve(),
+        (spec.cycling_jedi_case / "jedi.yaml").resolve(),
+        (spec.mpas_case / "mpas.yaml").resolve(),
+        (spec.initial_mpas_case / "mpas.yaml").resolve(),
+        (spec.initial_mpas_case / "wps.yaml").resolve(),
+        (spec.initial_mpas_case / "mpas_init.yaml").resolve(),
+        spec.obs2ioda_config.resolve(),
+    }
+    profile_path = spec.config_path.parent / "profile.yaml"
+    if profile_path.is_file():
+        roots.add(profile_path.resolve())
+
+    found: list[str] = []
+    for path in sorted(roots):
+        if not path.is_file():
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if _PLACEHOLDER.search(line):
+                found.append(f"{path}:{lineno}: {line.strip()}")
+
+    return PreflightItem(
+        "configuration placeholders",
+        not found,
+        "none" if not found else "; ".join(found),
+    )
+
+
 def _initial_mpas_detail(spec: CampaignSpec) -> PreflightItem:
     config = spec.initial_mpas_case / "mpas.yaml"
     if not config.is_file():
@@ -359,6 +391,7 @@ def _initial_mpas_detail(spec: CampaignSpec) -> PreflightItem:
 def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> PreflightReport:
     """Check everything knowable before creating or submitting the campaign."""
     items: list[PreflightItem] = []
+    items.append(_configuration_placeholders(spec))
     for label, path, kind in (
         ("cycling JEDI case", spec.cycling_jedi_case, "dir"),
         ("MPAS case", spec.mpas_case, "dir"),
@@ -395,19 +428,31 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
 
     cycles = _cycles(spec.start_cycle, spec.end_cycle, spec.cycle_interval_hours)
     missing_obs: list[str] = []
+    deferred_obs: list[str] = []
     missing_tools: set[str] = set()
+    # Acquisition is checked as a declared capability; preflight never downloads.
+    from .obs_acquisition import _acquisition_config, _provider_for
+    acquisition = _acquisition_config(spec.config_path) if spec.config_path.is_file() else {}
     if spec.obs2ioda_config.is_file():
         for cycle in cycles:
             inputs, tools = _rendered_obs_inputs(spec.obs2ioda_config, cycle)
-            missing_obs.extend(str(path) for path in inputs if not path.is_file())
+            allowed: set[str] = set()
+            if acquisition.get("enabled"):
+                run = load_obs2ioda_run(spec.obs2ioda_config.parent, _iso(cycle))
+                for converter in _build_plan(run).get("converters", []):
+                    provider = _provider_for(acquisition, converter["name"])
+                    if provider is not None and provider.get("url"):
+                        allowed.update(converter.get("inputs", []))
+            for path in inputs:
+                if not path.is_file():
+                    (deferred_obs if str(path) in allowed else missing_obs).append(str(path))
             missing_tools.update(tool for tool in tools if not _command_available(tool))
-    items.append(
-        PreflightItem(
-            f"observation inputs ({len(cycles)} cycles)",
-            not missing_obs,
-            "all available" if not missing_obs else "; ".join(sorted(set(missing_obs))),
-        )
-    )
+    detail = "all available"
+    if missing_obs:
+        detail = "; ".join(sorted(set(missing_obs))) + "; configure profile.observation_acquisition or provide local inputs"
+    elif deferred_obs:
+        detail = f"{len(set(deferred_obs))} missing input(s) have declared providers; acquisition will run per cycle"
+    items.append(PreflightItem(f"observation inputs ({len(cycles)} cycles)", not missing_obs, detail))
     items.append(
         PreflightItem(
             "Obs2IODA tools",
@@ -420,12 +465,35 @@ def preflight_campaign(spec: CampaignSpec, *, require_swf: bool = True) -> Prefl
         workflow = spec.destination / "workflow.yaml"
         request = spec.destination / "campaign-request.yaml"
         ok = spec.destination.is_dir() and workflow.is_file() and request.is_file()
-        detail = "existing restartable campaign" if ok else "destination exists but is not a complete campaign"
+        detail = (
+            f"existing restartable campaign: {spec.destination}"
+            if ok else
+            f"destination exists but is not a complete campaign: {spec.destination}; "
+            "expected a directory containing workflow.yaml and campaign-request.yaml. "
+            "Inspect this path or choose a new campaign.destination; existing files are preserved."
+        )
         items.append(PreflightItem("destination", ok, detail))
     else:
         parent = spec.destination.parent
-        ok = parent.exists() and os.access(parent, os.W_OK)
-        items.append(PreflightItem("destination", ok, str(spec.destination)))
+        if not parent.exists():
+            print(f"  [WARN] destination parent does not exist; creating directory: {parent}",
+                  flush=True)
+            try:
+                parent.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                items.append(PreflightItem(
+                    "destination", False,
+                    f"cannot create destination parent {parent}: {error}. "
+                    "Check permissions or choose another campaign.destination."
+                ))
+                return PreflightReport(spec=spec, items=tuple(items))
+        ok = parent.is_dir() and os.access(parent, os.W_OK)
+        detail = str(spec.destination) if ok else (
+            f"destination parent is not a writable directory: {parent}; "
+            f"campaign destination: {spec.destination}. "
+            "Check permissions or choose another campaign.destination."
+        )
+        items.append(PreflightItem("destination", ok, detail))
     return PreflightReport(spec=spec, items=tuple(items))
 
 
@@ -474,6 +542,9 @@ def materialize_campaign(spec: CampaignSpec) -> Path:
     """Create the campaign once, or verify an existing restartable campaign."""
     if spec.destination.exists():
         _validate_existing_campaign(spec)
+        if repair_analysis_artifact_paths(spec.workflow_path):
+            print(f"[OK] corrected analysis artifact paths: {spec.workflow_path}; "
+                  "previous workflow backed up; campaign state preserved", flush=True)
         return spec.destination
     materialize_corrected_campaign(
         initial_jedi_case=spec.initial_jedi_case,
@@ -487,6 +558,16 @@ def materialize_campaign(spec: CampaignSpec) -> Path:
         run_mpas_on_last_cycle=spec.run_mpas_on_last_cycle,
         cycle_interval_hours=spec.cycle_interval_hours,
     )
+    from .obs_acquisition import _acquisition_config, _search_roots
+    acquisition = _acquisition_config(spec.config_path)
+    if acquisition:
+        acquisition["search_roots"] = [str(path) for path in _search_roots(acquisition)]
+    acquisition.pop("_base_dir", None)
+    if acquisition:
+        profile_path = spec.destination / "profile.yaml"
+        document = _load_mapping(profile_path, "profile") if profile_path.is_file() else {"profile": {}}
+        document.setdefault("profile", {})["observation_acquisition"] = acquisition
+        profile_path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
     (spec.destination / "campaign-request.yaml").write_text(
         yaml.safe_dump(_request_document(spec), sort_keys=False), encoding="utf-8"
     )

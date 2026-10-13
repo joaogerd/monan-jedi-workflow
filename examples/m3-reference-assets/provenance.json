@@ -1,0 +1,66 @@
+{
+  "reference": "M3 historical 3-day executed runtime, first analysis 2018-04-15T00:00:00Z",
+  "capture_sha256": "ba7079e395e1658af0494abb1d9648fd60ffa582cbe13dc5799fba8b31202ea4",
+  "files": [
+    {
+      "path": "templates/namelist.atmosphere.outer.in",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/jedi-2018041500-fgat-corrected/templates/namelist.atmosphere.outer.in",
+      "sha256": "a0faf08531a9ae43ec7c5aed50ca6263ae8b3bd6c7d23b16a97c10d73d71e967"
+    },
+    {
+      "path": "templates/namelist.atmosphere.inner.in",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/jedi-2018041500-fgat-corrected/templates/namelist.atmosphere.inner.in",
+      "sha256": "de56575d52b7b3c530104750c40f04b8466858541321dd57a5b4240621eb1dd5"
+    },
+    {
+      "path": "templates/variational.yaml",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/jedi-2018041500-fgat-corrected/templates/3dfgat.bmatrix.yaml.in",
+      "sha256": "0351cca09edc43dae307c221e58f4e5f391a38fec98fde14d416f8b813ebdfc4"
+    },
+    {
+      "path": "templates/streams.atmosphere.jedi.outer.in",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/geometry/2018041500/streams.atmosphere.outer",
+      "sha256": "9fe6e6acf8c1e7c2fb940c1996a638e68f4f6cd381202a275cd9417429cc56b9"
+    },
+    {
+      "path": "templates/streams.atmosphere.jedi.inner.in",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/geometry/2018041500/streams.atmosphere.inner",
+      "sha256": "9fe6e6acf8c1e7c2fb940c1996a638e68f4f6cd381202a275cd9417429cc56b9"
+    },
+    {
+      "path": "runtime-skeleton/geovars.yaml",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/geovars.yaml",
+      "sha256": "bd599b474142c72c9f7c1df43236cfebbb8dd8fed0048b085c4682d7583404d3"
+    },
+    {
+      "path": "runtime-skeleton/keptvars.yaml",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/keptvars.yaml",
+      "sha256": "e9d136ee947c34a4390f7c8dd45844bbb5b510c6410d40a4e0afa397b9425e02"
+    },
+    {
+      "path": "runtime-skeleton/stream_list.atmosphere.background",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/stream_list.atmosphere.background",
+      "sha256": "c1ca2be88dbf055df63bc8ce5c6c04f48ba2cd822f662c181f95de07aadf2f51"
+    },
+    {
+      "path": "runtime-skeleton/stream_list.atmosphere.analysis",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/stream_list.atmosphere.analysis",
+      "sha256": "0a456f2c3a8ec553eb25af2caac10398f04213ae2c3392b0754a99e0fc7f1edc"
+    },
+    {
+      "path": "runtime-skeleton/stream_list.atmosphere.control",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/stream_list.atmosphere.control",
+      "sha256": "eafc5046c92a535577c93dc3523ee70c82edbefe42f62f24a40735676d20d1bb"
+    },
+    {
+      "path": "runtime-skeleton/stream_list.atmosphere.ensemble",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/stream_list.atmosphere.ensemble",
+      "sha256": "158454ef857042cb2f2b3ab607cbb325be48a3537d388c0d69f3487b5aa243a7"
+    },
+    {
+      "path": "runtime-skeleton/testinput/obsop_name_map.yaml",
+      "source": "/p/projetos/monan_das/joao.gerd/work/CASE/cases/m3-3days-20180415/work/jedi/20180415T000000Z/testinput/obsop_name_map.yaml",
+      "sha256": "250f4018e2e04ad1fae9ab137ab5eb165b14ed610e7fc5ea0e375ee7ea409ade"
+    }
+  ]
+}

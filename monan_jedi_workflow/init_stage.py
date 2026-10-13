@@ -106,7 +106,15 @@ def validate_mpas_init(config_dir: Path, cycle_time: str) -> Path:
     text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
     missing_markers = [m for m in spec.get("required_log_markers", []) if m not in text]
     missing_outputs = [str(resolve_path(path, config_dir=run.config_dir, context=run.context, label="mpas_init.validation.output")) for path in spec["required_outputs"] if not resolve_path(path, config_dir=run.config_dir, context=run.context, label="mpas_init.validation.output").is_file()]
-    report = {"cycle_time": run.cycle.cycle_time, "job_id": manifest.get("job_id"), "valid": not missing_markers and not missing_outputs, "missing_log_markers": missing_markers, "missing_outputs": missing_outputs}
+    geometry_issues = []
+    reference = spec.get("geometry_reference")
+    if reference is not None and not missing_outputs:
+        from .geometry_validation import compare_vertical_geometry
+        reference_path = resolve_path(reference, config_dir=run.config_dir, context=run.context, label="mpas_init.validation.geometry_reference")
+        for output in spec["required_outputs"]:
+            state = resolve_path(output, config_dir=run.config_dir, context=run.context, label="mpas_init.validation.output")
+            geometry_issues.extend(compare_vertical_geometry(state, reference_path))
+    report = {"cycle_time": run.cycle.cycle_time, "job_id": manifest.get("job_id"), "valid": not missing_markers and not missing_outputs and not geometry_issues, "missing_log_markers": missing_markers, "missing_outputs": missing_outputs, "geometry_issues": geometry_issues}
     path = run.manifest_path.with_name("mpas-init-validation.json")
     path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     if not report["valid"]:
