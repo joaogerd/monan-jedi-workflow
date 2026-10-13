@@ -188,14 +188,17 @@ Emite progresso por ciclo e erro com o arquivo/grupo ausente.
 
 Saída: `cases/monan-jedi-20250901-7d/diagnostics/`:
 
-- `figures/campaign_completion.{png,pdf,svg}`: contagem acumulada de análises
-  e previsões entre ciclos validadas.
+- `figures/campaign_completion.{png,pdf,svg}`: linha do tempo com um marcador
+  verde por análise validada, dias alternados e contagem de sucesso no subtítulo.
 - `figures/jedi_cost_convergence.{png,pdf,svg}`: J/J₀ para cada ciclo;
   J₀ vem do custo não linear antes do minimizador, os demais valores são
   os custos quadráticos J das iterações internas. Componentes Jb/JoJc são
   excluídos. Mais de um outer loop é rejeitado explicitamente.
+  Cores identificam os ciclos cronologicamente; a mediana aparece em preto.
 - `figures/omb_oma_rmse_airTemperature.{png,pdf,svg}`: RMSE de O−B/O−A
   da temperatura de radiossondas em cada ciclo, incluindo todos os níveis.
+  O−B é azul e O−A verde, com marcadores abertos, médias tracejadas e quadro
+  de médias. O estilo segue os relatórios M3 de referência de 2018.
 - `campaign_summary.csv`, `jedi_convergence.csv`, `jedi_cost_iterations.csv`,
   `omb_oma_sondes_airTemperature.csv`, `diagnostic_summary.json` e `report.md`.
 

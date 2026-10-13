@@ -176,42 +176,114 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-def figures(output, dates, observations, curves):
+def figures(output, dates, observations, curves, summary=None):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
-    plt.rcParams.update({'font.size': 11, 'axes.spines.top': False, 'axes.spines.right': False})
+    from matplotlib.colors import Normalize
+    from matplotlib.cm import ScalarMappable
+    # Match the established M3 reports: left-aligned headings, gray subtitles,
+    # green timeline, chronological viridis curves and blue/teal innovations.
+    ink, muted, grid = '#111827', '#6b7280', '#d1d5db'
+    blue, teal, green = '#355f8d', '#159d82', '#18864b'
+    plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 10,
+                         'text.color': ink, 'axes.labelcolor': ink,
+                         'axes.spines.top': False, 'axes.spines.right': False,
+                         'axes.edgecolor': '#4b5563', 'axes.labelsize': 11,
+                         'xtick.labelsize': 9, 'ytick.labelsize': 9})
     directory = output / 'figures'
     directory.mkdir()
-    title = f'MONAN-JEDI | {dates[0]:%d/%m/%Y}–{dates[-1]:%d/%m/%Y} | UTC'
     def save(fig, name):
-        fig.tight_layout()
         for extension in ('png', 'pdf', 'svg'):
             fig.savefig(directory / f'{name}.{extension}', dpi=200, bbox_inches='tight')
         plt.close(fig)
-    def time_axis(ax):
-        ax.xaxis.set_major_locator(mdates.DayLocator())
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m', tz=timezone.utc))
-        ax.set_xlabel('Data (UTC)')
-        ax.grid(alpha=.2)
-    fig, ax = plt.subplots(figsize=(10, 4.8))
-    ax.step(dates, np.arange(1, len(dates)+1), where='post', marker='o', ms=4, label='Análises JEDI validadas')
-    ax.step(dates[1:], np.arange(1, len(dates)), where='post', marker='s', ms=3, label='Previsões entre ciclos validadas')
-    ax.set(title=title+'\nConclusão dos ciclos', ylabel='Número acumulado')
-    ax.legend(); time_axis(ax); save(fig, 'campaign_completion')
-    fig, ax = plt.subplots(figsize=(10, 5))
-    colors = plt.cm.viridis(np.linspace(0, 1, len(curves)))
-    for color, (cid, curve) in zip(colors, curves.items()):
-        ax.plot([i for i, _ in curve], [j/curve[0][1] for _, j in curve], color=color, alpha=.75, lw=1.3)
-    ax.set(title=title+'\nConvergência da minimização — uma curva por ciclo',
-           xlabel='Iteração interna (0 = estado inicial)', ylabel='J/J₀')
-    ax.grid(alpha=.2); save(fig, 'jedi_cost_convergence')
-    fig, ax = plt.subplots(figsize=(10, 4.8))
-    ax.plot(dates, [r['omb_rmse'] for r in observations], 'o-', ms=4, label='O−B')
-    ax.plot(dates, [r['oma_rmse'] for r in observations], 's-', ms=4, label='O−A')
-    ax.set(title=title+'\nRadiossondas — temperatura do ar (mesma amostra, QC=0)', ylabel='RMSE (K)')
-    ax.legend(); time_axis(ax); save(fig, 'omb_oma_rmse_airTemperature')
+    def heading(fig, title, subtitle, left=.08):
+        fig.text(left, .965, title, fontsize=17, fontweight='bold', va='top')
+        fig.text(left, .965-30/(72*fig.get_figheight()), subtitle,
+                 fontsize=10.5, color=muted, va='top')
+    def time_axis(ax, max_ticks=11):
+        stride = max(1, int(np.ceil((len(dates)-1)/(max_ticks-1))))
+        indices = list(range(0, len(dates), stride))
+        if indices[-1] != len(dates)-1:
+            if len(indices) > 1 and len(dates)-1-indices[-1] < stride/2:
+                indices.pop()
+            indices.append(len(dates)-1)
+        ax.set_xticks([dates[i] for i in indices])
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%HZ', tz=timezone.utc))
+        ax.set_xlabel('Ciclo de análise', labelpad=8)
+        ax.margins(x=.015)
+    duration = (dates[-1]-dates[0]).total_seconds()/3600
+    subtitle = f'{duration:g} horas • {len(dates)}/{len(dates)} ciclos concluídos'
+    if summary:
+        subtitle += f' • {summary["workflow_success"]}/{summary["workflow_tasks"]} tarefas executadas com sucesso'
+    fig, ax = plt.subplots(figsize=(12.2, 3.8))
+    fig.subplots_adjust(left=.035, right=.985, bottom=.22, top=.79)
+    heading(fig, 'Continuidade da campanha MONAN-JEDI 3DVar/FGAT', subtitle, left=.035)
+    day = dates[0].replace(hour=0, minute=0, second=0, microsecond=0)
+    index = 0
+    while day <= dates[-1]:
+        if index % 2 == 0:
+            ax.axvspan(day, day+timedelta(days=1), color='#f3f4f6', alpha=.8, zorder=0)
+        label_at = min(day+timedelta(hours=12), dates[-1])
+        ax.text(label_at, .36, day.strftime('%d/%m'), ha='center', color=muted, fontsize=9)
+        day += timedelta(days=1)
+        index += 1
+    ax.plot(dates, np.zeros(len(dates)), color='#9ca3af', lw=2, zorder=1)
+    ax.scatter(dates, np.zeros(len(dates)), s=210, color=green, edgecolor='white', linewidth=2, zorder=2)
+    for date in dates:
+        ax.text(date, 0, '✓', color='white', ha='center', va='center', fontsize=11, fontweight='bold', zorder=3)
+    ax.set_ylim(-.48, .56)
+    ax.set_yticks([]); ax.spines['left'].set_visible(False)
+    ax.spines['bottom'].set_color(grid)
+    time_axis(ax, 15); save(fig, 'campaign_completion')
+
+    fig, ax = plt.subplots(figsize=(12.2, 6.6))
+    fig.subplots_adjust(left=.085, right=.985, bottom=.13, top=.85)
+    reduction = np.mean([100*(1-curve[-1][1]/curve[0][1]) for curve in curves.values()])
+    monotonic = sum(bool(np.all(np.diff([j for _, j in curve]) <= 0)) for curve in curves.values())
+    heading(fig, 'Convergência da função custo',
+            f'{len(curves)} ciclos • redução média de J = {reduction:.1f}% • redução monotônica em {monotonic}/{len(curves)} ciclos', left=.085)
+    norm = Normalize(0, max(1, len(curves)-1))
+    iterations = sorted({i for curve in curves.values() for i, _ in curve})
+    matrix = np.full((len(curves), len(iterations)), np.nan)
+    for n, (cid, curve) in enumerate(curves.items()):
+        values = [j/curve[0][1] for _, j in curve]
+        ax.plot([i for i, _ in curve], values, color=plt.cm.viridis(norm(n)), alpha=.85, lw=1.5, marker='o', ms=2.5)
+        for (i, _), value in zip(curve, values):
+            matrix[n, iterations.index(i)] = value
+    ax.plot(iterations, np.nanmedian(matrix, axis=0), color=ink, lw=3, label='Mediana dos ciclos', zorder=4)
+    ax.axhline(1, ls='--', color='#9ca3af', lw=1, alpha=.65)
+    ax.set(xlabel='Iteração do minimizador DRPCG', ylabel=r'Função custo normalizada  $J/J_0$')
+    ax.set_xticks(iterations); ax.margins(x=.015)
+    ax.grid(axis='y', color=grid, alpha=.65, lw=.8)
+    ax.legend(loc='lower left', frameon=False, fontsize=10)
+    bar = fig.colorbar(ScalarMappable(norm=norm, cmap='viridis'), ax=ax, pad=.025, fraction=.045)
+    positions = np.unique(np.linspace(0, len(curves)-1, min(6, len(curves))).astype(int))
+    bar.set_ticks(positions)
+    bar.set_ticklabels([datetime.strptime(list(curves)[i], '%Y%m%dT%H%M%SZ').strftime('%d/%m %HZ') for i in positions])
+    bar.set_label('Ciclo da campanha'); bar.outline.set_visible(False)
+    save(fig, 'jedi_cost_convergence')
+
+    fig, ax = plt.subplots(figsize=(12.2, 5.7))
+    fig.subplots_adjust(left=.085, right=.985, bottom=.17, top=.84)
+    b = np.asarray([r['omb_rmse'] for r in observations])
+    a = np.asarray([r['oma_rmse'] for r in observations])
+    improvement = 100*(1-a.mean()/b.mean())
+    heading(fig, 'Consistência observacional — Radiossondas',
+            f'Temperatura do ar • O-A ≤ O-B em {int(np.sum(a <= b))}/{len(a)} ciclos • redução média do RMSE = {improvement:.1f}%', left=.085)
+    for values, color, label in ((b, blue, 'O-B — background'), (a, teal, 'O-A — análise')):
+        ax.plot(dates, values, color=color, lw=2.2, marker='o', ms=5, mfc='white', mew=1.8, label=label)
+        ax.axhline(values.mean(), color=color, alpha=.5, ls='--', lw=1)
+    ax.fill_between(dates, a, b, color=teal, alpha=.1)
+    ax.set_ylabel('RMSE (K)'); ax.grid(axis='y', color=grid, alpha=.65, lw=.8)
+    span = max(float(max(b.max(), a.max())-min(b.min(), a.min())), .05)
+    ax.set_ylim(min(b.min(), a.min())-.06*span, max(b.max(), a.max())+.15*span)
+    ax.legend(loc='upper right', ncol=2, frameon=False, fontsize=10)
+    ax.text(.84, .025, f'RMSE médio\nO-B   {b.mean():.3f}\nO-A   {a.mean():.3f}',
+            transform=ax.transAxes, va='bottom', fontsize=10,
+            bbox={'boxstyle': 'round,pad=.5', 'facecolor': 'white', 'edgecolor': grid, 'alpha': .95})
+    time_axis(ax); save(fig, 'omb_oma_rmse_airTemperature')
 
 
 def main():
@@ -232,7 +304,7 @@ def main():
         write_csv(output / 'omb_oma_sondes_airTemperature.csv', observations)
         write_csv(output / 'campaign_summary.csv', [{'metric': key, 'value': value} for key, value in summary.items() if key != 'sources'])
         (output / 'diagnostic_summary.json').write_text(json.dumps(summary, indent=2, ensure_ascii=False)+'\n')
-        figures(output, dates, observations, curves)
+        figures(output, dates, observations, curves, summary)
         report = (f'# MONAN-JEDI — campanha de {summary["duration_hours"]:g} h\n\n'
                   f'{summary["start"]} → {summary["end"]}\n\n'
                   f'- Análises: {summary["cycles"]}; previsões entre ciclos: {summary["forecast_legs"]}.\n'
