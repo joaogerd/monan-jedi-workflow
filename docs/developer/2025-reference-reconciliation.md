@@ -1,5 +1,12 @@
 # Reconciliação da referência de setembro de 2025
 
+## Coleta recebida e conferida
+
+O pacote inicial foi recebido em 14/10/2026. Os resultados e limites estão no
+[resultado da reconciliação](2025-reference-reconciliation-result.md).
+O procedimento abaixo continua documentado para futuras capturas; não é
+necessário repeti-lo para o pacote já recebido.
+
 ## Resultado e limites
 
 A referência concluída é `monan-jedi-20250901-7d`, de 01/09/2025 00Z a
@@ -120,3 +127,4 @@ e verificar a associação entre os manifests dos 29 ciclos e seus produtos.
 Manter a campanha concluída como referência imutável. Mudanças arquiteturais
 usam branch e diretório de experimento separados. O pacote inicial pode ser
 analisado sem nova submissão de jobs.
+

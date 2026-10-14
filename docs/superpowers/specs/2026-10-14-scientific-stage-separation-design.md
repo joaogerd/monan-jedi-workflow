@@ -5,6 +5,16 @@ Base de código inspecionada:
 `dc0ac5d5a2343ddab646bb2c82f3ad133c31eb34` da branch
 `feature/2025-reference-case`.
 
+## Checkpoint de reconciliação recebido
+
+A [captura JACI de 14/10](../../developer/2025-reference-reconciliation-result.md)
+confirma configuração materializada, 29 ciclos e 502 metadados de tentativas.
+O workflow capturado é idêntico à saída do gerador puro auditado e está
+preservado como referência de equivalência. A primeira entrega pode ser
+planejada/testada localmente após revisão desta especificação. A proveniência
+histórica completa de builds, simpleWorkflow e dados segue necessária para
+adoção e reprodução científica, conforme os limites do resultado da coleta.
+
 ## Objetivo e restrições acordados
 
 Oferecer inicialização, OBS, JEDI e MPAS como etapas independentes com
@@ -188,3 +198,4 @@ Esta proposta delimita a migração futura; não anuncia que a nova API já exis
 para os ciclos nativos atuais. A regra ali que restringe o primeiro background
 à inicialização será revisada em entrega posterior para permitir entrada pronta
 explicitamente validada. Nada muda no cold start do caso concluído.
+

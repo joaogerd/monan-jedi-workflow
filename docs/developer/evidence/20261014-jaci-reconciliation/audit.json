@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "source_archive": "reconciliation-20261014.HFRacu.tar.gz",
+  "archive_sha256": "30144c0fa2aa33d9a6af44e1e4317345657247f0b35bda5432022b375abcf67a",
+  "capture_time": "2026-10-14T18:50:58Z",
+  "git_head_at_capture": "f9b37019ed6b7a27bb9b99c714fb97f5e00b67a3",
+  "git_branch_at_capture": "feature/2025-reference-case",
+  "tracked_diff_bytes": 0,
+  "counts": {
+    "config_files": 2419,
+    "jedi_validations": 29,
+    "obs_validations": 29,
+    "cycling_mpas_validations": 28,
+    "initial_mpas_validation": 1,
+    "mpas_init_validation": 1,
+    "background_manifests": 29,
+    "task_metadata_success": 502,
+    "pbs_jobs": 59,
+    "native_workflow_initial_tasks": 15,
+    "native_workflow_cycle_tasks": 17,
+    "archived_run_records": 30,
+    "lineage_matches": 29,
+    "issues": 0
+  },
+  "recipe_contract": {
+    "nouter": 1,
+    "ninner": 10,
+    "gradient_norm_reduction": "1e-10",
+    "algorithm": "DRPCG",
+    "outer_dt": 1200.0,
+    "inner_dt": 1800.0,
+    "outer_len_disp": 240000.0,
+    "inner_len_disp": 480000.0,
+    "sst_update": "false",
+    "physics": "'mesoscale_reference'"
+  },
+  "current_packages": {
+    "monan-jedi-workflow": {
+      "name": "monan-jedi-workflow",
+      "version": "0.2.0",
+      "editable_project_location": "/p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow"
+    },
+    "netCDF4": {
+      "name": "netCDF4",
+      "version": "1.7.4"
+    },
+    "numpy": {
+      "name": "numpy",
+      "version": "1.26.4"
+    },
+    "PyYAML": {
+      "name": "PyYAML",
+      "version": "6.0.3"
+    },
+    "simpleworkflow": {
+      "name": "simpleworkflow",
+      "version": "0.6.2",
+      "editable_project_location": "/p/projetos/monan_das/joao.gerd/projects/simpleWorkflow"
+    }
+  },
+  "python_current": "Python 3.11.16",
+  "recorded_execution_start": "2026-10-12T21:09:42.297906Z",
+  "recorded_execution_end": "2026-10-12T22:02:58.000659Z",
+  "initialization_jobs": {
+    "mpas_init": "674260.pbs-ha",
+    "initial_forecast": "674262.pbs-ha"
+  },
+  "jedi_executable_hash_at_creation": "07e993f128b60053602a4cf343bbaba71516cf9a0246fa2833d0661e358511df",
+  "published_diagnostic_summary_identical": true,
+  "limitations": [
+    "NetCDF/BUFR/executables/raw logs/SQLite were not attached; validation and artifact existence are recorded claims, not a fresh revalidation of scientific files.",
+    "HEAD and Python package versions are the state at capture, not a complete snapshot of code and libraries at execution.",
+    "simpleWorkflow is editable; its Git revision and local diff were not collected.",
+    "The creation-time JEDI executable hash is recorded; unchanged execution-time binary and other executable hashes are not proven.",
+    "Symbolic link destinations were inventoried without copying external configuration/data targets."
+  ],
+  "native_workflow_matches_audited_generator": true,
+  "mpas_analysis_links_match_jedi_artifacts": 28
+}

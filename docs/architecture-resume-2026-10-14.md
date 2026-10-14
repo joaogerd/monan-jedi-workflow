@@ -1,5 +1,29 @@
 # Retomada da arquitetura científica — 14/10/2026
 
+## Captura JACI recebida em 14/10 — checkpoint mais recente
+
+O pacote `reconciliation-20261014.HFRacu.tar.gz` foi conferido: 2.419/2.419
+arquivos com checksums corretos. HEAD na coleta: `f9b3701`, sem patch em
+arquivos rastreados; Python 3.11.16, simpleWorkflow 0.6.2 editável.
+Os 29 PBS JEDI confirmam 128 processos. Os manifests registram 29 análises,
+28 forecasts cíclicos, 29 conversões, inicialização validada e 59 jobs PBS
+distintos. Os 502 metadados de tentativas registram sucesso e retorno zero.
+
+O workflow materializado coincide integralmente com o gerador auditado;
+tempos e hashes do handoff de background coincidem nos 29 ciclos.
+Primeiro/último job JEDI: `674264.pbs-ha` / `674397.pbs-ha`.
+Não foi identificado motivo para regenerar ou reiniciar a campanha concluída.
+
+Receita confirmada: um outer loop, dez inner iterations, DRPCG;
+outer PT20M/1200 s, forecast 1200 s; inner 1800 s, preservado separadamente.
+A diferença do HEAD JACI para `dc0ac5d` corresponde à padronização visual.
+
+Ver [resultado da reconciliação](developer/2025-reference-reconciliation-result.md)
+e suas tabelas. A captura é atual; identidade histórica de builds, commit do
+simpleWorkflow, logs/produtos originais e SQLite ainda precisam ser completados
+para reprodução plena. Configuração e topologia já permitem preparar os testes
+locais da descrição comum/exportador após revisão da especificação.
+
 ## Estado reconciliado em 14/10/2026 — leitura prioritária
 
 A campanha `monan-jedi-20250901-7d` foi concluída segundo o operador em
@@ -46,8 +70,8 @@ Diretório de referência:
 **Próxima ação:** seguir o [procedimento de reconciliação](developer/2025-reference-reconciliation.md),
 preservar produtos e estado operacional, e revisar a
 [especificação da separação científica](superpowers/specs/2026-10-14-scientific-stage-separation-design.md).
-A reconciliação documental foi feita; a captura efetiva da JACI ainda não foi
-recebida. A migração arquitetural não foi implementada.
+A captura efetiva da JACI foi recebida e conferida no checkpoint acima.
+A migração arquitetural não foi implementada.
 
 Os checkpoints abaixo são históricos. Seus comandos de correção, download
 ou reset não são instruções atuais para a campanha concluída.
@@ -156,3 +180,4 @@ Próximo passo: pull, executar configure_jaci_pals.py, reset do estado operacion
 
 PALS permitiu MPAS init validar. Previsão inicial job 669358.pbs-ha falhou com signal 11 durante integração (~18:40Z), mensagem Stream diagnostics does not exist e extremos de velocidade anormais no primeiro passo. Referência M3/native-cycle/initial-mpas no commit 5aeed608 foi comparada: template novo omitia diagnostics/restart nos streams, seis coeficientes de difusão explícitos zero, printout/soundings e GFORTRAN_CONVERT_UNIT=big_endian:101-200. DT=1200 e mesoscale_reference são iguais e foram mantidos. Templates cíclicos coincidem com os da revisão científica 60cf1ea.
 Correção publicada até b1522f10: namelist inicial restaurado literalmente, streams restaurados preservando nome de entrada mpas.init, endian adicionado e relatório de validação MPAS mostra caminhos resolvidos (o código já verificava caminhos resolvidos; não era erro de cálculo da data). Script restore_initial_mpas_reference.py atualiza fontes e configuração materializada com backups. 157 testes locais passaram. Não há prova de correção da queda científica até novo log real. Solicitar início de stderr para identificar exceção anterior ao backtrace, preservar produtos de WPS/init e não executar novo reset global.
+
