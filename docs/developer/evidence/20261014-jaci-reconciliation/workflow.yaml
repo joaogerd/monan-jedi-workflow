@@ -1,0 +1,452 @@
+format_version: 1
+workflow:
+  name: monan_jedi_corrected_campaign
+context:
+  experiment_dir: /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow/experiments/2025-reference/cases/monan-jedi-20250901-7d
+initialization:
+  tasks:
+  - name: wps_prepare
+    argv:
+    - monan-jedi-workflow
+    - wps-prepare
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    inputs:
+      required:
+      - '{experiment_dir}/initialization/wps.yaml'
+  - name: wps_run
+    depends_on:
+    - wps_prepare
+    argv:
+    - monan-jedi-workflow
+    - wps-run
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+  - name: wps_validate
+    depends_on:
+    - wps_run
+    argv:
+    - monan-jedi-workflow
+    - wps-validate
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    outputs:
+      required:
+      - '{experiment_dir}/initialization/work/wps/20250831T180000Z/.monan-jedi-workflow/wps-validation.json'
+  - name: wps_gate
+    depends_on:
+    - wps_validate
+    argv:
+    - monan-jedi-workflow
+    - validation-gate
+    - '{experiment_dir}/initialization/work/wps/20250831T180000Z/.monan-jedi-workflow/wps-validation.json'
+    input_fingerprint: sha256
+    inputs:
+      required:
+      - '{experiment_dir}/initialization/work/wps/20250831T180000Z/.monan-jedi-workflow/wps-validation.json'
+  - name: mpas_init_prepare
+    depends_on:
+    - wps_gate
+    argv:
+    - monan-jedi-workflow
+    - mpas-init-prepare
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    inputs:
+      required:
+      - '{experiment_dir}/initialization/mpas_init.yaml'
+    outputs:
+      required:
+      - '{experiment_dir}/initialization/work/mpas-init/20250831T180000Z/.monan-jedi-workflow/mpas-init.json'
+  - name: mpas_init_submit
+    depends_on:
+    - mpas_init_prepare
+    argv:
+    - monan-jedi-workflow
+    - mpas-init-submit
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    outputs:
+      required:
+      - '{experiment_dir}/initialization/work/mpas-init/20250831T180000Z/.monan-jedi-workflow/mpas-init.json'
+  - name: mpas_init_wait
+    depends_on:
+    - mpas_init_submit
+    argv:
+    - monan-jedi-workflow
+    - mpas-init-wait
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    - --poll-seconds
+    - '30'
+    outputs:
+      required:
+      - '{experiment_dir}/initialization/work/mpas-init/20250831T180000Z/.monan-jedi-workflow/mpas-init.json'
+  - name: mpas_init_validate
+    depends_on:
+    - mpas_init_wait
+    argv:
+    - monan-jedi-workflow
+    - mpas-init-validate
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    outputs:
+      required:
+      - '{experiment_dir}/initialization/work/mpas-init/20250831T180000Z/.monan-jedi-workflow/mpas-init-validation.json'
+  - name: mpas_init_gate
+    depends_on:
+    - mpas_init_validate
+    argv:
+    - monan-jedi-workflow
+    - validation-gate
+    - '{experiment_dir}/initialization/work/mpas-init/20250831T180000Z/.monan-jedi-workflow/mpas-init-validation.json'
+    input_fingerprint: sha256
+    inputs:
+      required:
+      - '{experiment_dir}/initialization/work/mpas-init/20250831T180000Z/.monan-jedi-workflow/mpas-init-validation.json'
+  - name: mpas_initial_prepare
+    depends_on:
+    - mpas_init_gate
+    argv:
+    - monan-jedi-workflow
+    - mpas-prepare
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    inputs:
+      required:
+      - '{experiment_dir}/initialization/mpas.yaml'
+    outputs:
+      required:
+      - '{experiment_dir}/work/initialization/mpas/20250831T180000Z/run_mpas.pbs'
+      - '{experiment_dir}/work/initialization/mpas/20250831T180000Z/.monan-jedi-workflow/mpas-submission.json'
+  - name: mpas_initial_submit
+    depends_on:
+    - mpas_initial_prepare
+    argv:
+    - monan-jedi-workflow
+    - mpas-submit
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    outputs:
+      required:
+      - '{experiment_dir}/work/initialization/mpas/20250831T180000Z/.monan-jedi-workflow/mpas-submission.json'
+  - name: mpas_initial_wait
+    depends_on:
+    - mpas_initial_submit
+    argv:
+    - monan-jedi-workflow
+    - mpas-wait
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    - --poll-seconds
+    - '30'
+    outputs:
+      required:
+      - '{experiment_dir}/work/initialization/mpas/20250831T180000Z/.monan-jedi-workflow/mpas-submission.json'
+  - name: mpas_initial_validate
+    depends_on:
+    - mpas_initial_wait
+    argv:
+    - monan-jedi-workflow
+    - mpas-validate
+    - '{experiment_dir}/initialization'
+    - --cycle
+    - '2025-08-31T18:00:00Z'
+    outputs:
+      required:
+      - '{experiment_dir}/work/initialization/mpas/20250831T180000Z/.monan-jedi-workflow/mpas-validation.json'
+  - name: mpas_initial_gate
+    depends_on:
+    - mpas_initial_validate
+    argv:
+    - monan-jedi-workflow
+    - validation-gate
+    - '{experiment_dir}/work/initialization/mpas/20250831T180000Z/.monan-jedi-workflow/mpas-validation.json'
+    input_fingerprint: sha256
+    inputs:
+      required:
+      - '{experiment_dir}/work/initialization/mpas/20250831T180000Z/.monan-jedi-workflow/mpas-validation.json'
+  - name: initial_background
+    depends_on:
+    - mpas_initial_gate
+    argv:
+    - monan-jedi-workflow
+    - background-publish
+    - '{experiment_dir}'
+    - --mpas-config-dir
+    - '{experiment_dir}/initialization'
+    - --source-cycle
+    - '2025-08-31T18:00:00Z'
+    - --target-cycle
+    - '2025-09-01T00:00:00Z'
+    inputs:
+      required:
+      - '{experiment_dir}/work/initialization/mpas/20250831T180000Z/.monan-jedi-workflow/mpas-validation.json'
+    outputs:
+      required:
+      - '{experiment_dir}/work/background/20250901T000000Z/trajectory.nc'
+      - '{experiment_dir}/work/background/20250901T000000Z/state.nc'
+      - '{experiment_dir}/work/background/20250901T000000Z/background.json'
+cycle:
+  start: '2025-09-01T00:00:00Z'
+  end: '2025-09-08T00:00:00Z'
+  step: PT6H
+tasks:
+- name: background_check
+  argv:
+  - monan-jedi-workflow
+  - background-check
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  inputs:
+    required:
+    - '{experiment_dir}/work/background/{cycle_id}/trajectory.nc'
+    - '{experiment_dir}/work/background/{cycle_id}/state.nc'
+  outputs:
+    required:
+    - '{experiment_dir}/work/background/{cycle_id}/background-validation.json'
+- name: observations_doctor
+  cycle_scope: all
+  argv:
+  - monan-jedi-workflow
+  - obs2ioda-doctor
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  inputs:
+    required:
+    - '{experiment_dir}/obs2ioda.yaml'
+  outputs:
+    required:
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/.monan-jedi-workflow/obs2ioda-doctor.json'
+- name: observations_prepare
+  cycle_scope: all
+  depends_on:
+  - observations_doctor
+  argv:
+  - monan-jedi-workflow
+  - obs2ioda-prepare
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  outputs:
+    required:
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/.monan-jedi-workflow/obs2ioda.json'
+- name: observations_run
+  cycle_scope: all
+  depends_on:
+  - observations_prepare
+  argv:
+  - monan-jedi-workflow
+  - obs2ioda-run
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  outputs:
+    required:
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sondes_obs_{cycle_yyyymmddhh}.h5'
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sfc_obs_{cycle_yyyymmddhh}.h5'
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/gnssro_obs_{cycle_yyyymmddhh}.h5'
+- name: observations_validate
+  cycle_scope: all
+  depends_on:
+  - observations_run
+  argv:
+  - monan-jedi-workflow
+  - obs2ioda-validate
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  outputs:
+    required:
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/.monan-jedi-workflow/obs2ioda-validation.json'
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sondes_obs_{cycle_yyyymmddhh}.h5'
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sfc_obs_{cycle_yyyymmddhh}.h5'
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/gnssro_obs_{cycle_yyyymmddhh}.h5'
+- name: observations_gate
+  depends_on:
+  - observations_validate
+  argv:
+  - monan-jedi-workflow
+  - validation-gate
+  - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/.monan-jedi-workflow/obs2ioda-validation.json'
+  input_fingerprint: sha256
+  inputs:
+    required:
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/.monan-jedi-workflow/obs2ioda-validation.json'
+  cycle_scope: all
+- name: jedi_prepare
+  depends_on:
+  - background_check
+  - observations_gate
+  argv:
+  - monan-jedi-workflow
+  - jedi-prepare
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  inputs:
+    required:
+    - '{experiment_dir}/jedi.yaml'
+    - '{experiment_dir}/work/background/{cycle_id}/trajectory.nc'
+    - '{experiment_dir}/work/background/{cycle_id}/state.nc'
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sondes_obs_{cycle_yyyymmddhh}.h5'
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/sfc_obs_{cycle_yyyymmddhh}.h5'
+    - '{experiment_dir}/work/obs/{cycle_yyyymmddhh}/gnssro_obs_{cycle_yyyymmddhh}.h5'
+  outputs:
+    required:
+    - '{experiment_dir}/work/jedi/{cycle_id}/run_jedi.pbs'
+    - '{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-submission.json'
+- name: jedi_submit
+  depends_on:
+  - jedi_prepare
+  argv:
+  - monan-jedi-workflow
+  - jedi-submit
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  outputs:
+    required:
+    - '{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-submission.json'
+- name: jedi_wait
+  depends_on:
+  - jedi_submit
+  argv:
+  - monan-jedi-workflow
+  - jedi-wait
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  - --poll-seconds
+  - '30'
+  outputs:
+    required:
+    - '{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-submission.json'
+- name: jedi_validate
+  depends_on:
+  - jedi_wait
+  argv:
+  - monan-jedi-workflow
+  - jedi-validate
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  outputs:
+    required:
+    - '{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-validation.json'
+    - '{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-artifacts.json'
+    - '{experiment_dir}/work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}.00.00.nc'
+- name: jedi_gate
+  depends_on:
+  - jedi_validate
+  argv:
+  - monan-jedi-workflow
+  - validation-gate
+  - '{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-validation.json'
+  input_fingerprint: sha256
+  inputs:
+    required:
+    - '{experiment_dir}/work/jedi/{cycle_id}/.monan-jedi-workflow/jedi-validation.json'
+- name: mpas_prepare
+  cycle_scope: not_last
+  depends_on:
+  - jedi_gate
+  argv:
+  - monan-jedi-workflow
+  - mpas-prepare
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  inputs:
+    required:
+    - '{experiment_dir}/mpas.yaml'
+    - '{experiment_dir}/work/jedi/{cycle_id}/Data/states/mpas.3dfgat.{cycle_year}-{cycle_month}-{cycle_day}_{cycle_hour}.00.00.nc'
+  outputs:
+    required:
+    - '{experiment_dir}/work/mpas/{cycle_id}/run_mpas.pbs'
+    - '{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-submission.json'
+- name: mpas_submit
+  cycle_scope: not_last
+  depends_on:
+  - mpas_prepare
+  argv:
+  - monan-jedi-workflow
+  - mpas-submit
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  outputs:
+    required:
+    - '{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-submission.json'
+- name: mpas_wait
+  cycle_scope: not_last
+  depends_on:
+  - mpas_submit
+  argv:
+  - monan-jedi-workflow
+  - mpas-wait
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  - --poll-seconds
+  - '30'
+  outputs:
+    required:
+    - '{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-submission.json'
+- name: mpas_validate
+  cycle_scope: not_last
+  depends_on:
+  - mpas_wait
+  argv:
+  - monan-jedi-workflow
+  - mpas-validate
+  - '{experiment_dir}'
+  - --cycle
+  - '{cycle_time}'
+  outputs:
+    required:
+    - '{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-validation.json'
+- name: mpas_gate
+  depends_on:
+  - mpas_validate
+  argv:
+  - monan-jedi-workflow
+  - validation-gate
+  - '{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-validation.json'
+  input_fingerprint: sha256
+  inputs:
+    required:
+    - '{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-validation.json'
+  cycle_scope: not_last
+- name: next_background
+  cycle_scope: not_last
+  depends_on:
+  - mpas_gate
+  argv:
+  - monan-jedi-workflow
+  - background-publish
+  - '{experiment_dir}'
+  - --source-cycle
+  - '{cycle_time}'
+  - --target-cycle
+  - '{next_cycle_time}'
+  inputs:
+    required:
+    - '{experiment_dir}/work/mpas/{cycle_id}/.monan-jedi-workflow/mpas-validation.json'
+  outputs:
+    required:
+    - '{experiment_dir}/work/background/{next_cycle_id}/trajectory.nc'
+    - '{experiment_dir}/work/background/{next_cycle_id}/state.nc'
+    - '{experiment_dir}/work/background/{next_cycle_id}/background.json'

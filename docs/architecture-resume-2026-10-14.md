@@ -1,5 +1,83 @@
 # Retomada da arquitetura científica — 14/10/2026
 
+## Captura JACI recebida em 14/10 — checkpoint mais recente
+
+O pacote `reconciliation-20261014.HFRacu.tar.gz` foi conferido: 2.419/2.419
+arquivos com checksums corretos. HEAD na coleta: `f9b3701`, sem patch em
+arquivos rastreados; Python 3.11.16, simpleWorkflow 0.6.2 editável.
+Os 29 PBS JEDI confirmam 128 processos. Os manifests registram 29 análises,
+28 forecasts cíclicos, 29 conversões, inicialização validada e 59 jobs PBS
+distintos. Os 502 metadados de tentativas registram sucesso e retorno zero.
+
+O workflow materializado coincide integralmente com o gerador auditado;
+tempos e hashes do handoff de background coincidem nos 29 ciclos.
+Primeiro/último job JEDI: `674264.pbs-ha` / `674397.pbs-ha`.
+Não foi identificado motivo para regenerar ou reiniciar a campanha concluída.
+
+Receita confirmada: um outer loop, dez inner iterations, DRPCG;
+outer PT20M/1200 s, forecast 1200 s; inner 1800 s, preservado separadamente.
+A diferença do HEAD JACI para `dc0ac5d` corresponde à padronização visual.
+
+Ver [resultado da reconciliação](developer/2025-reference-reconciliation-result.md)
+e suas tabelas. A captura é atual; identidade histórica de builds, commit do
+simpleWorkflow, logs/produtos originais e SQLite ainda precisam ser completados
+para reprodução plena. Configuração e topologia já permitem preparar os testes
+locais da descrição comum/exportador após revisão da especificação.
+
+## Estado reconciliado em 14/10/2026 — leitura prioritária
+
+A campanha `monan-jedi-20250901-7d` foi concluída segundo o operador em
+12/10/2026 e teve suas evidências publicadas em 13/10/2026:
+**01/09/2025 00Z → 08/09/2025 00Z; 29 análises JEDI, 28 previsões entre
+ciclos, 29 conversões Obs2IODA e 502/502 estados de tarefas em sucesso**.
+A integração inicial é adicional às 28 previsões entre análises.
+
+Fontes:
+- [Relatório dos sete dias de 2025](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/M3_7dias_2025-09.md).
+- [Resumo extraído da campanha](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/experiments/M3/2025-09-01-7dias/diagnostics/diagnostic_summary.json).
+- [Proveniência e limites da captura](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/experiments/M3/2025-09-01-7dias/provenance.json).
+
+As tabelas registram dez iterações internas por ciclo, redução média de J de
+28,03% e redução de 8,75% na média dos RMSEs de temperatura de radiossondas.
+Isso sustenta continuidade e ajuste às observações assimiladas; não constitui
+verificação independente da previsão nem critério para mudar o minimizador.
+
+A reconstrução do runtime em `09a5ecba00a534e10cc347c2bbf853f93dbe5c3d`
+preserva **128 processos JEDI**, endian GNU e namelists outer/inner distintos.
+O valor JEDI=64 abaixo pertence ao estado histórico de 11/10.
+128 é a configuração publicada da referência reconstruída; os PBS efetivos
+de cada ciclo devem confirmar o que foi executado na JACI.
+
+Histórico publicado inspecionado:
+- `09a5ecb` (12/10): runtime reconstruído a partir da captura M3;
+- `ede2ae1` e `7ff45bf` (12/10): caminhos de análise corrigidos na retomada;
+- `f9b3701` (12/10): extração de diagnósticos das campanhas concluídas;
+- `dc0ac5d5a2343ddab646bb2c82f3ad133c31eb34` (13/10): padrão visual M3,
+  sem alteração das tabelas ou cálculos.
+
+O último commit é a base desta inspeção de código, **não uma prova de que
+a instalação científica executou exatamente esse commit**. O pacote publicado
+não contém o estado Git completo da JACI, o SQLite, todos os logs nem as
+configurações resolvidas. IDs dos jobs da rodada concluída e versões instaladas
+ainda precisam ser coletados. Os jobs com falha registrados em 11/10 não podem
+ser atribuídos automaticamente ao case reconstruído e concluído.
+
+Diretório de referência:
+```text
+/p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow/experiments/2025-reference/cases/monan-jedi-20250901-7d
+```
+
+**Próxima ação:** seguir o [procedimento de reconciliação](developer/2025-reference-reconciliation.md),
+preservar produtos e estado operacional, e revisar a
+[especificação da separação científica](superpowers/specs/2026-10-14-scientific-stage-separation-design.md).
+A captura efetiva da JACI foi recebida e conferida no checkpoint acima.
+A migração arquitetural não foi implementada.
+
+Os checkpoints abaixo são históricos. Seus comandos de correção, download
+ou reset não são instruções atuais para a campanha concluída.
+
+## Registro histórico de 11–12/10/2026
+
 Registro de decisão em 11/10/2026. Apresentação em terça-feira, 13/10; retomada em quarta-feira, 14/10. Este documento registra decisões e pendências, não uma migração concluída.
 
 ## Objetivo imediato e estado conhecido
@@ -102,3 +180,4 @@ Próximo passo: pull, executar configure_jaci_pals.py, reset do estado operacion
 
 PALS permitiu MPAS init validar. Previsão inicial job 669358.pbs-ha falhou com signal 11 durante integração (~18:40Z), mensagem Stream diagnostics does not exist e extremos de velocidade anormais no primeiro passo. Referência M3/native-cycle/initial-mpas no commit 5aeed608 foi comparada: template novo omitia diagnostics/restart nos streams, seis coeficientes de difusão explícitos zero, printout/soundings e GFORTRAN_CONVERT_UNIT=big_endian:101-200. DT=1200 e mesoscale_reference são iguais e foram mantidos. Templates cíclicos coincidem com os da revisão científica 60cf1ea.
 Correção publicada até b1522f10: namelist inicial restaurado literalmente, streams restaurados preservando nome de entrada mpas.init, endian adicionado e relatório de validação MPAS mostra caminhos resolvidos (o código já verificava caminhos resolvidos; não era erro de cálculo da data). Script restore_initial_mpas_reference.py atualiza fontes e configuração materializada com backups. 157 testes locais passaram. Não há prova de correção da queda científica até novo log real. Solicitar início de stderr para identificar exceção anterior ao backtrace, preservar produtos de WPS/init e não executar novo reset global.
+
