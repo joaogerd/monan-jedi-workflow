@@ -37,24 +37,24 @@ Remote cli_frontend currently acquires campaign observations for campaign create
 ### Task 1: Shared domain request grammar
 **Interfaces:** DomainRequest(app: str, operation: str, action: str, config: Path, cycle: str | None, json_output: bool, source: str | None, engine: str | None). parse_request(app: str, argv: list[str]) -> DomainRequest.
 
-- [ ] Write parameterized tests for jedi/mpas/diagnostics common verbs, obs acquire/convert common verbs, mpas init common verbs and campaign inspect/check/export.
-- [ ] Assert invalid combinations exit with parser code 2: missing cycle, obs run, campaign run, scientific --start/--end.
-- [ ] Run python -m pytest tests/test_domain_cli.py -q and confirm failure from missing module.
-- [ ] Implement immutable DomainRequest and parse_request in domain_cli.py using argparse; map root MPAS to forecast and root JEDI to assimilation. Accept --json for all requests, --source only OBS and --engine only campaign export; default export engine simpleworkflow.
-- [ ] Test --source and --engine misuse and explicit UTC timestamp validation; keep date parsing independent of backend modules.
-- [ ] Run focused tests and verify all cases pass.
-- [ ] Commit this independently testable parser contract.
+- [x] Write parameterized tests for jedi/mpas/diagnostics common verbs, obs acquire/convert common verbs, mpas init common verbs and campaign inspect/check/export.
+- [x] Assert invalid combinations exit with parser code 2: missing cycle, obs run, campaign run, scientific --start/--end.
+- [x] Run python -m pytest tests/test_domain_cli.py -q and confirm failure from missing module.
+- [x] Implement immutable DomainRequest and parse_request in domain_cli.py using argparse; map root MPAS to forecast and root JEDI to assimilation. Accept --json for all requests, --source only OBS and --engine only campaign export; default export engine simpleworkflow.
+- [x] Test --source and --engine misuse and explicit UTC timestamp validation; keep date parsing independent of backend modules.
+- [x] Run focused tests and verify all cases pass.
+- [x] Commit this independently testable parser contract.
 
 ### Task 2: Side-effect boundary and documentation
 **Consumes:** parse_request and DomainRequest from Task 1.
 **Produces:** a documented, tested interface suitable for backend binding in the next plan.
 
-- [ ] Add tests that parse all allowed verbs with nonexistent config paths without reading files or loading backend modules. Existence and dependencies are the handler's responsibility, not the parser's.
-- [ ] Run focused tests and confirm behavior.
-- [ ] Document shared meanings and distinctions: check inputs, prepare runtime, run prepared operation, validate products, inspect/status read only.
-- [ ] Document that entry points remain legacy and the new app handlers are not delivered by this slice.
-- [ ] Run python -m pytest -q on the current remote snapshot after dependencies are available; report missing dependencies separately from test failures.
-- [ ] Commit documentation and tests.
+- [x] Add tests that parse all allowed verbs with nonexistent config paths without reading files or loading backend modules. Existence and dependencies are the handler's responsibility, not the parser's.
+- [x] Run focused tests and confirm behavior.
+- [x] Document shared meanings and distinctions: check inputs, prepare runtime, run prepared operation, validate products, inspect/status read only.
+- [x] Document that entry points remain legacy and the new app handlers are not delivered by this slice.
+- [x] Run python -m pytest -q on the current remote snapshot after dependencies are available; report missing dependencies separately from test failures.
+- [x] Commit documentation and tests.
 
 ## Follow-on slices
 1. Resolve principal plus domain YAMLs without unrelated dependencies; distribute catalog and prove installed-wheel access.
@@ -65,3 +65,13 @@ Remote cli_frontend currently acquires campaign observations for campaign create
 6. Exercise reference configuration equivalence, recovery and a real isolated JACI cycle through the orchestrator.
 
 Each follow-on slice needs exact signatures grounded in the current backend source before implementation. This plan deliberately does not promise the whole beta in its first parser task.
+
+## Execution result — 2026-10-16
+
+Completed parser slice: 58 focused tests passed; full suite 191 passed with 7 pre-existing warnings (baseline 133 passed). Independent reviewer found no important bugs; manual grammar matrix passed.
+
+Rulings: remote snapshot reconstructed through connector because shell DNS unavailable, preserving user checkout. Corrected selector test to include required run verb. Included MPAS init in root help after failing regression test.
+
+Deferred minor test improvements: parameterize missing-cycle/start/end rejection across every operation; extend side-effect testing to import-time reads and every backend import. Reviewer manually checked operation paths.
+
+New entry points and scientific backend bindings remain follow-on work.
