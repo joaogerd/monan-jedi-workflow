@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monan-jedi-workflow"
-version = "0.2.0"
+version = "0.3.0b1"
 description = "Python-first workflow for reproducible MONAN MPAS-JEDI experiments."
 requires-python = ">=3.10"
 dependencies = [
@@ -14,11 +14,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+plots = ["matplotlib>=3.7"]
+orchestration = ["simpleworkflow>=0.6.2"]
 dev = [
   "pytest>=8.0",
 ]
 
 [project.scripts]
+obs = "monan_jedi_workflow.platform_cli:obs"
+jedi = "monan_jedi_workflow.platform_cli:jedi"
+mpas = "monan_jedi_workflow.platform_cli:mpas"
+diagnostics = "monan_jedi_workflow.platform_cli:diagnostics"
+campaign = "monan_jedi_workflow.platform_cli:campaign"
 monan-jedi-workflow = "monan_jedi_workflow.cli_frontend:main"
 monan-jedi-mpas = "monan_jedi_workflow.cli_mpas:main"
 
@@ -28,3 +35,7 @@ exclude = ["configs*", "tests*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+
+[tool.setuptools.package-data]
+monan_jedi_workflow = ["catalog/**/*.yaml", "catalog/**/*.py", "catalog/**/*.md"]

@@ -1,0 +1,11 @@
+schema_version: 1
+name: beta-installation-test
+experiment: ./experiment.yaml
+calendar:
+  start: '2025-09-01T00:00:00Z'
+  end: '2025-09-01T06:00:00Z'
+  interval: PT6H
+operations: [obs.acquire, obs.convert, jedi, mpas, diagnostics]
+last_cycle:
+  forecast: false
+output: ./workflow.yaml
