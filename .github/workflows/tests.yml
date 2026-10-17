@@ -47,6 +47,11 @@ jobs:
 
       - name: Check public CLI
         run: |
+          obs --help
+          jedi --help
+          mpas --help
+          diagnostics --help
+          campaign --help
           monan-jedi-workflow --help
           monan-jedi-workflow campaign --help
 
