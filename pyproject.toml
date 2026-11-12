@@ -38,4 +38,4 @@ testpaths = ["tests"]
 
 
 [tool.setuptools.package-data]
-monan_jedi_workflow = ["catalog/**/*.yaml", "catalog/**/*.py", "catalog/**/*.md"]
+monan_jedi_workflow = ["catalog/**/*"]

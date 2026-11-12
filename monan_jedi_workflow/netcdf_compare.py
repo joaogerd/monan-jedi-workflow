@@ -121,6 +121,113 @@ def _compare_variable_data(
     return f"{name}: data differ; neq={total_neq}"
 
 
+
+def _compare_group(ref: Any, new: Any, report: CompareReport, *, ignored: set[str],
+                   rtol: float, atol: float, chunk_bytes: int) -> None:
+    """Compare each group, including inherited-dimension variables, recursively."""
+    ref.set_auto_mask(False)
+    ref.set_auto_scale(False)
+    new.set_auto_mask(False)
+    new.set_auto_scale(False)
+    first_difference = len(report.differences)
+    ref_dims = set(ref.dimensions)
+    new_dims = set(new.dimensions)
+    if ref_dims != new_dims:
+        report.differences.append(
+            f"dimension inventory differs: only reference={sorted(ref_dims-new_dims)}, "
+            f"only candidate={sorted(new_dims-ref_dims)}"
+        )
+    for name in sorted(ref_dims & new_dims):
+        left = len(ref.dimensions[name])
+        right = len(new.dimensions[name])
+        if left != right:
+            report.differences.append(f"dimension {name}: {left} != {right}")
+
+    attrs = (set(ref.ncattrs()) | set(new.ncattrs())) - ignored
+    for name in sorted(attrs):
+        if name not in ref.ncattrs():
+            report.differences.append(f"global attribute {name}: missing from reference")
+            continue
+        if name not in new.ncattrs():
+            report.differences.append(f"global attribute {name}: missing from candidate")
+            continue
+        if not _attribute_equal(ref.getncattr(name), new.getncattr(name)):
+            report.differences.append(
+                f"global attribute {name}: {ref.getncattr(name)!r} != {new.getncattr(name)!r}"
+            )
+
+    ref_vars = set(ref.variables)
+    new_vars = set(new.variables)
+    if ref_vars != new_vars:
+        report.differences.append(
+            f"variable inventory differs: only reference={sorted(ref_vars-new_vars)}, "
+            f"only candidate={sorted(new_vars-ref_vars)}"
+        )
+
+    for name in sorted(ref_vars & new_vars):
+        report.variables_compared += 1
+        left = ref.variables[name]
+        right = new.variables[name]
+        name = f"{ref.path.rstrip('/')}/{name}" if ref.path != "/" else name
+        variable_ok = True
+
+        if left.shape != right.shape:
+            report.differences.append(f"{name}: shape {left.shape} != {right.shape}")
+            continue
+
+        if left.dimensions != right.dimensions:
+            report.differences.append(
+                f"{name}: dimensions {left.dimensions} != {right.dimensions}"
+            )
+            continue
+        if np.dtype(left.dtype) != np.dtype(right.dtype):
+            report.differences.append(f"{name}: dtype {left.dtype} != {right.dtype}")
+            continue
+
+        var_attrs = set(left.ncattrs()) | set(right.ncattrs())
+        for attr in sorted(var_attrs):
+            if attr not in left.ncattrs():
+                report.differences.append(f"{name}: attribute {attr} missing from reference")
+                variable_ok = False
+                continue
+            if attr not in right.ncattrs():
+                report.differences.append(f"{name}: attribute {attr} missing from candidate")
+                variable_ok = False
+                continue
+            if not _attribute_equal(left.getncattr(attr), right.getncattr(attr)):
+                report.differences.append(
+                    f"{name}: attribute {attr}: {left.getncattr(attr)!r} != {right.getncattr(attr)!r}"
+                )
+                variable_ok = False
+
+        data_difference = _compare_variable_data(
+            name,
+            left,
+            right,
+            rtol=rtol,
+            atol=atol,
+            chunk_bytes=chunk_bytes,
+        )
+        if data_difference is not None:
+            report.data_differences.append(data_difference)
+            variable_ok = False
+
+        if variable_ok:
+            report.variables_identical += 1
+    if ref.path != "/":
+        for index in range(first_difference, len(report.differences)):
+            report.differences[index] = f"{ref.path}: {report.differences[index]}"
+    ref_groups, new_groups = set(ref.groups), set(new.groups)
+    if ref_groups != new_groups:
+        report.differences.append(
+            f"{ref.path}: group inventory differs: only reference={sorted(ref_groups-new_groups)}, "
+            f"only candidate={sorted(new_groups-ref_groups)}"
+        )
+    for name in sorted(ref_groups & new_groups):
+        _compare_group(ref.groups[name], new.groups[name], report, ignored=set(),
+                       rtol=rtol, atol=atol, chunk_bytes=chunk_bytes)
+
+
 def compare_netcdf(
     reference: str | Path,
     candidate: str | Path,
@@ -156,85 +263,8 @@ def compare_netcdf(
             ds.set_auto_mask(False)
             ds.set_auto_scale(False)
 
-        ref_dims = set(ref.dimensions)
-        new_dims = set(new.dimensions)
-        if ref_dims != new_dims:
-            report.differences.append(
-                f"dimension inventory differs: only reference={sorted(ref_dims-new_dims)}, "
-                f"only candidate={sorted(new_dims-ref_dims)}"
-            )
-        for name in sorted(ref_dims & new_dims):
-            left = len(ref.dimensions[name])
-            right = len(new.dimensions[name])
-            if left != right:
-                report.differences.append(f"dimension {name}: {left} != {right}")
-
-        attrs = (set(ref.ncattrs()) | set(new.ncattrs())) - ignored
-        for name in sorted(attrs):
-            if name not in ref.ncattrs():
-                report.differences.append(f"global attribute {name}: missing from reference")
-                continue
-            if name not in new.ncattrs():
-                report.differences.append(f"global attribute {name}: missing from candidate")
-                continue
-            if not _attribute_equal(ref.getncattr(name), new.getncattr(name)):
-                report.differences.append(
-                    f"global attribute {name}: {ref.getncattr(name)!r} != {new.getncattr(name)!r}"
-                )
-
-        ref_vars = set(ref.variables)
-        new_vars = set(new.variables)
-        if ref_vars != new_vars:
-            report.differences.append(
-                f"variable inventory differs: only reference={sorted(ref_vars-new_vars)}, "
-                f"only candidate={sorted(new_vars-ref_vars)}"
-            )
-
-        for name in sorted(ref_vars & new_vars):
-            report.variables_compared += 1
-            left = ref.variables[name]
-            right = new.variables[name]
-            variable_ok = True
-
-            if left.dimensions != right.dimensions:
-                report.differences.append(
-                    f"{name}: dimensions {left.dimensions} != {right.dimensions}"
-                )
-                continue
-            if np.dtype(left.dtype) != np.dtype(right.dtype):
-                report.differences.append(f"{name}: dtype {left.dtype} != {right.dtype}")
-                continue
-
-            var_attrs = set(left.ncattrs()) | set(right.ncattrs())
-            for attr in sorted(var_attrs):
-                if attr not in left.ncattrs():
-                    report.differences.append(f"{name}: attribute {attr} missing from reference")
-                    variable_ok = False
-                    continue
-                if attr not in right.ncattrs():
-                    report.differences.append(f"{name}: attribute {attr} missing from candidate")
-                    variable_ok = False
-                    continue
-                if not _attribute_equal(left.getncattr(attr), right.getncattr(attr)):
-                    report.differences.append(
-                        f"{name}: attribute {attr}: {left.getncattr(attr)!r} != {right.getncattr(attr)!r}"
-                    )
-                    variable_ok = False
-
-            data_difference = _compare_variable_data(
-                name,
-                left,
-                right,
-                rtol=rtol,
-                atol=atol,
-                chunk_bytes=chunk_bytes,
-            )
-            if data_difference is not None:
-                report.data_differences.append(data_difference)
-                variable_ok = False
-
-            if variable_ok:
-                report.variables_identical += 1
+        _compare_group(ref, new, report, ignored=ignored, rtol=rtol,
+                       atol=atol, chunk_bytes=chunk_bytes)
 
     return report
 
