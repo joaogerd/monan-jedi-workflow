@@ -1,0 +1,19 @@
+# Artificial fixture, no real observation processing.
+acquisition:
+  sources:
+    - name: background
+      source: '{configuration_root}/README.md'
+      destination: raw/{cycle_id}/background.nc
+obs2ioda:
+  variables:
+    python: python3
+  work_dir: obs/{cycle_id}
+  inspection:
+    argv: ['{python}', '{configuration_root}/simulate.py', inspect]
+  converters:
+    - name: fixture
+      inputs: ['{experiment_root}/raw/{cycle_id}/background.nc']
+      outputs: ['{work_dir}/obs.h5']
+      argv: ['{python}', '{configuration_root}/simulate.py', convert]
+      validation:
+        required_header_markers: ['ARTIFICIAL IODA']

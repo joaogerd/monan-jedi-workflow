@@ -1,0 +1,17 @@
+# Artificial installation fixture. Do not use this as a scientific recipe.
+jedi:
+  variables:
+    python: python3
+  run_dir: jedi/{cycle_id}
+  background:
+    source: '{experiment_root}/raw/{cycle_id}/background.nc'
+    target: background.nc
+  pbs:
+    queue: test
+    walltime: '00:01:00'
+    mpiprocs: 1
+    command: ['{python}', '{configuration_root}/simulate.py', analysis]
+  validation:
+    log: jedi.stdout.log
+    required_log_markers: ['OOPS Ending']
+    required_outputs: [analysis.nc]

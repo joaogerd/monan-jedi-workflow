@@ -540,7 +540,9 @@ def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
     """Validate the MPAS log and products declared for one submitted cycle."""
     run = load_mpas_run(config_dir, cycle_time)
     manifest = _load_manifest(run)
-    if not isinstance(manifest.get("job_id"), str) or not manifest["job_id"]:
+    if manifest.get("worker_completed") is not True and (
+        not isinstance(manifest.get("job_id"), str) or not manifest["job_id"]
+    ):
         raise MPASValidationError("MPAS validation requires a submitted job manifest.")
 
     validation = _require_mapping(run.config.get("validation"), "mpas.validation")
@@ -579,7 +581,7 @@ def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
         "validated_at": _timestamp(),
         "cycle_time": run.cycle.cycle_time,
         "cycle_id": run.cycle.cycle_id,
-        "job_id": manifest["job_id"],
+        "job_id": manifest.get("job_id"),
         "valid": not missing_markers and not missing_outputs and not netcdf_issues,
         "log": str(log_path),
         "missing_log_markers": missing_markers,

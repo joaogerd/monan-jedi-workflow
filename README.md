@@ -107,3 +107,8 @@ Detalhes internos do motor não fazem parte do caminho normal do usuário. O
 código e os testes preservam os contratos dos stages e da integração com
 simpleWorkflow. O estado anterior à simplificação foi preservado na branch
 `archive/pre-cleanup-2026-10-01`.
+
+## Beta 0.3.0b1 — apps independentes
+
+A branch `feat/platform-domain-apps` disponibiliza `obs`, `jedi`, `mpas`,
+`diagnostics` e `campaign`. Veja [instalação, exemplos e limites da beta](docs/beta-testing.md).
