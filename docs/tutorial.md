@@ -297,7 +297,36 @@ cat run-case.pbs
 
 Os dois `check` precisam terminar sem erro. `inspect` mostra a configuração e os caminhos, inclusive produtos que só existirão após as etapas produtoras; não confunda inspeção com aprovação científica. Confira especialmente o `#PBS -q`, `select`, `mpiprocs`, `walltime` e a visibilidade dos executáveis no compute node.
 
-### 3.5 Submeta o primeiro teste científico
+### 3.5 Confira fila PBS e walltime da JACI
+
+O arquivo `run-case.pbs` reúne diversas operações em **um único job PBS**. A primeira versão do gerador selecionava a fila `pesqmidi` com `06:00:00` de walltime, combinação **inválida** segundo os limites documentados da JACI: `pesqmidi` aceita até **02:00:00**; `pesqhigh`, até **06:00:00**. O gerador agora usa `pesqhigh` + `06:00:00` por padrão, mas isso é apenas uma combinação compatível com os **limites documentados**, não uma garantia de acesso à fila, disponibilidade ou duração suficiente.
+
+**Antes de submeter, consulte os limites reais da sua conta e as filas do PBS:**
+
+```bash
+qstat -Qf pesqmidi
+qstat -Qf pesqhigh
+grep '^#PBS' run-case.pbs
+```
+
+O gerador também aceita opções para novos casos, por exemplo:
+
+```bash
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE" \
+  --pbs-queue pesqhigh --pbs-walltime 06:00:00
+```
+
+Ele recusa uma combinação cujo walltime ultrapasse os limites conhecidos da documentação do site. **Se o caso já tiver sido gerado**, o `git pull` não altera o `run-case.pbs` existente: revise somente suas diretivas PBS, sem recriar nem modificar os dados científicos. Para o caso anterior, após conferir a política real da fila e sua permissão:
+
+```bash
+cd "$NEW_CASE"
+sed -i 's/^#PBS -q pesqmidi$/#PBS -q pesqhigh/' run-case.pbs
+grep '^#PBS' run-case.pbs
+```
+
+Essa correção de fila não garante que a execução científica caiba em seis horas. O modelo operacional definitivo deverá submeter etapas científicas separadamente pelo simpleWorkflow, com recursos PBS adequados a cada etapa. Fonte dos limites documentados: [guia operacional JACI do MPAS-BMatrix](https://github.com/joaogerd/mpas-bmatrix-global/blob/main/docs/jaci-operational-guide.md).
+
+### 3.6 Submeta o primeiro teste científico
 
 ```bash
 qsub run-case.pbs
@@ -305,7 +334,7 @@ qsub run-case.pbs
 
 A receita gera **um shell PBS sequencial**, não um `workflow.yaml` do simpleWorkflow. O shell executa WPS, `mpas init`, a previsão inicial, as observações e JEDI 00Z, MPAS 00Z e JEDI 06Z. WPS ainda usa a interface legada. **Não execute esse shell no login** e não rode simultaneamente o simpleWorkflow sobre o mesmo caso.
 
-### 3.6 Verifique o resultado
+### 3.7 Verifique o resultado
 
 Após o job concluir:
 
