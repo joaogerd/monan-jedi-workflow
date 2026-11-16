@@ -15,8 +15,12 @@ def test_installed_recipe_creates_independent_case(tmp_path):
     assert (root / 'science/templates/variational.yaml').is_file()
     first = root / 'work/background/20250901T000000Z/trajectory.nc'
     assert first.readlink() == root / 'work/initialization/mpas/20250831T180000Z/mpasout.2025-08-31_21.00.00.nc'
-    assert 'scientific_pilot' not in (root / 'run-case.pbs').read_text()
-    assert 'wps-run' in (root / 'run-case.pbs').read_text()
+    assert not (root / 'run-case.pbs').exists()
+    assert (root / 'run-worker.sh').is_file()
+    campaign = yaml.safe_load((root / 'campaign.yaml').read_text())
+    assert [x['operation'] for x in campaign['initialization']] == ['wps', 'mpas.init', 'mpas']
+    assert campaign['operations'] == ['obs.convert', 'jedi', 'mpas']
+    assert campaign['last_cycle']['forecast'] is False
     with pytest.raises(FileExistsError):
         create_experiment(root)
 
@@ -57,9 +61,9 @@ def test_cli_existing_destination_is_friendly_and_non_destructive(tmp_path):
 def test_generator_pbs_defaults_match_documented_jaci_queue(tmp_path):
     root = tmp_path / "pbs-default"
     create_experiment(root)
-    script = (root / "run-case.pbs").read_text()
-    assert "#PBS -q pesqmidi" in script
-    assert "#PBS -l walltime=01:00:00" in script
+    campaign = yaml.safe_load((root / "campaign.yaml").read_text())
+    assert campaign["calendar"]["interval"] == "PT6H"
+    assert (root / "run-worker.sh").is_file()
 
 
 @pytest.mark.parametrize("queue,walltime", [
@@ -77,17 +81,44 @@ def test_generator_rejects_documented_queue_limits_without_creating_case(tmp_pat
 def test_generator_accepts_configured_valid_walltime(tmp_path):
     root = tmp_path / "short-pbs"
     create_experiment(root, pbs_queue="pesqmidi", pbs_walltime="01:45:00")
-    script = (root / "run-case.pbs").read_text()
-    assert "#PBS -q pesqmidi" in script
-    assert "#PBS -l walltime=01:45:00" in script
+    assert (root / "campaign.yaml").is_file()
+    assert not (root / "run-case.pbs").exists()
 
 
 def test_generator_binds_runtime_commands_for_pbs(tmp_path):
     root = tmp_path / "runtime-case"
     create_experiment(root, runtime_bin=tmp_path / "conda-env/bin")
-    script = (root / "run-case.pbs").read_text()
+    script = (root / "run-worker.sh").read_text()
     assert "MONAN_RUNTIME_BIN=" in script
     assert str(tmp_path / "conda-env/bin") in script
     assert 'export PATH="$MONAN_RUNTIME_BIN:$PATH"' in script
     assert "monan-jedi-workflow obs jedi mpas" in script
-    assert "Pacote monan_jedi_workflow nao importavel" in script
+    assert "Pacote monan_jedi_workflow indisponivel" in script
+
+
+def test_reference_campaign_exports_independent_pbs_jobs(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from monan_jedi_workflow.domain_cli import parse_request
+    from monan_jedi_workflow.platform_campaign import campaign_action
+    # All external scientific inputs are paths, not needed for graph construction.
+    for name in ('MONAN_JEDI_INSTALL', 'STACK', 'MONAN_INPUT', 'MONAN_MESH',
+                 'MONAN_PHYSICS', 'MONAN_BMATRIX', 'MONAN_LIBFABRIC', 'MONAN_GFS'):
+        monkeypatch.setenv(name + '_ROOT', str(tmp_path / name))
+    root = tmp_path / 'case'
+    create_experiment(root, runtime_bin=tmp_path / 'env/bin')
+    request = parse_request('campaign', ['export', str(root / 'campaign.yaml')])
+    report = campaign_action(request)
+    assert report['cycles'] == 2
+    workflow = yaml.safe_load((root / 'workflow.yaml').read_text())
+    initial = workflow['initialization']['tasks']
+    tasks = workflow['tasks']
+    assert len(initial) == 9  # 3 WPS + 3 MPAS init + 3 MPAS initial
+    assert len(tasks) == 15  # OBS 00Z, JEDI 00Z, MPAS 00Z, OBS 06Z, JEDI 06Z
+    assert tasks[0]['depends_on'] == [initial[-1]['name']]
+    for task in [*initial, *tasks]:
+        if task['executor'] == 'pbs':
+            assert task['argv'][:2] == ['bash', str(root / 'run-worker.sh')]
+            assert 'pbs' in task
+        assert task['name'] != 'run-case'
+    assert next(t for t in initial if t['name'] == 'init000_wps_run')['executor'] == 'pbs'
+    assert next(t for t in tasks if t['name'] == 'c00000_obs_convert_run')['executor'] == 'pbs'
