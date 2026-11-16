@@ -30,15 +30,26 @@ def _workspace(root: Path) -> Path | None:
     return None
 
 
+def _discover_stack(workspace: Path) -> Path | None:
+    """Select one real local installation, never a hard-coded person's stack."""
+    work = workspace / "work"
+    if not work.is_dir():
+        return None
+    candidates = sorted(
+        candidate
+        for candidate in work.glob("spack-stack*/spack-stack")
+        if (candidate / "configs/sites/tier2/jaci/setup.sh").is_file()
+    )
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def _defaults(root: Path) -> dict[str, Path]:
     workspace = _workspace(root)
     if not workspace:
         return {}
     shared = workspace.parent / "share" / "MONAN-JEDI-Data"
-    return {
+    defaults = {
         "MONAN_JEDI_INSTALL_ROOT": workspace / "build/monan-jedi",
-        "STACK_ROOT": Path("/p/projetos/monan_das/joao.gerd/work/"
-                           "spack-stack-inpe-overlay-20260515T181917Z/spack-stack"),
         "MONAN_MESH_ROOT": shared / "meshes/quasi_uniform/x1.10242_240km",
         "MONAN_PHYSICS_ROOT": shared / "physics/mpas/files",
         "MONAN_BMATRIX_ROOT": shared / "covariance/x1.10242_240km/55levels",
@@ -46,6 +57,10 @@ def _defaults(root: Path) -> dict[str, Path]:
         "MONAN_GFS_ROOT": workspace / "data/gfs",
         "MONAN_LIBFABRIC_ROOT": Path("/opt/cray/libfabric/1.22.0/lib64"),
     }
+    stack = _discover_stack(workspace)
+    if stack:
+        defaults["STACK_ROOT"] = stack
+    return defaults
 
 
 def render_environment(root: Path, *, environ: dict[str, str] | None = None) -> str:
