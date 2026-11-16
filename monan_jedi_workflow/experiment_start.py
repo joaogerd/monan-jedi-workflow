@@ -126,7 +126,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         '}',
         'exec "$@"',
     ]
-    (root / 'run-worker.sh').write_text('\\n'.join(worker)+'\\n')
+    (root / 'run-worker.sh').write_text('\n'.join(worker)+'\n')
     # Each stage is an individual simpleWorkflow task; PBS is requested only
     # by each declared scientific run task, never by the full experiment.
     initialization_cycle = '2025-08-31T18:00:00Z'
