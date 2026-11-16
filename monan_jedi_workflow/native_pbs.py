@@ -6,6 +6,7 @@ The simpleWorkflow task itself remains executor=local.
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import re
 import shlex
 import subprocess
@@ -26,6 +27,8 @@ def native_pbs_run(
 
     Never resubmit automatically when the scheduler result is unknown.
     """
+    if os.environ.get("PBS_JOBID"):
+        raise RuntimeError("Native PBS jobs must be submitted from login, not from another PBS job")
     if not commands or any(not argv or not all(isinstance(x, str) and x for x in argv) for argv in commands):
         raise ValueError("native PBS commands must be nonempty argv lists")
     queue = str(resources.get("queue", ""))
