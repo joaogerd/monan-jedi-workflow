@@ -521,15 +521,39 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
         stdout_path = logs_dir / f"{name}.attempt-{attempt}.stdout.log"
         stderr_path = logs_dir / f"{name}.attempt-{attempt}.stderr.log"
         started_at = _timestamp()
-        try:
-            process = subprocess.run(converter["argv"], cwd=run.work_dir, env=child_environment, text=True, capture_output=True, check=False, timeout=_timeout(converter.get("timeout_seconds"), f"{name}.timeout_seconds", 900))
-        except subprocess.TimeoutExpired as error:
-            stdout_path.write_text(error.stdout or "", encoding="utf-8")
-            stderr_path.write_text(error.stderr or "", encoding="utf-8")
-            manifest.update({"state": "failed", "failed_converter": name})
-            manifest.setdefault("runs", []).append({"name": name, "attempt": attempt, "started_at": started_at, "finished_at": _timestamp(), "timeout": True})
-            _write_manifest(run, manifest)
-            raise RuntimeError(f"Obs2IODA converter '{name}' timed out.") from error
+        if run.config.get("pbs"):
+            from .native_pbs import native_pbs_run
+            # Serialize converter-specific commands into a native PBS shell.
+            # Python remains on login and records its stage manifest afterwards.
+            try:
+                job_id, return_code = native_pbs_run(
+                    name=f"obs_{run.cycle.cycle_id}_{name}_attempt{attempt}",
+                    commands=[converter["argv"]], cwd=run.work_dir,
+                    stdout=stdout_path, stderr=stderr_path,
+                    resources=run.config["pbs"],
+                    environment={"LD_LIBRARY_PATH": child_environment.get("LD_LIBRARY_PATH", "")},
+                )
+            except Exception:
+                manifest["state"] = "failed"
+                manifest["failed_converter"] = name
+                _write_manifest(run, manifest)
+                raise
+            process = subprocess.CompletedProcess(
+                args=converter["argv"], returncode=return_code,
+                stdout=stdout_path.read_text(errors="replace") if stdout_path.is_file() else "",
+                stderr=stderr_path.read_text(errors="replace") if stderr_path.is_file() else "",
+            )
+            manifest.setdefault("pbs_jobs", []).append({"converter": name, "job_id": job_id})
+        else:
+            try:
+                process = subprocess.run(converter["argv"], cwd=run.work_dir, env=child_environment, text=True, capture_output=True, check=False, timeout=_timeout(converter.get("timeout_seconds"), f"{name}.timeout_seconds", 900))
+            except subprocess.TimeoutExpired as error:
+                stdout_path.write_text(error.stdout or "", encoding="utf-8")
+                stderr_path.write_text(error.stderr or "", encoding="utf-8")
+                manifest.update({"state": "failed", "failed_converter": name})
+                manifest.setdefault("runs", []).append({"name": name, "attempt": attempt, "started_at": started_at, "finished_at": _timestamp(), "timeout": True})
+                _write_manifest(run, manifest)
+                raise RuntimeError(f"Obs2IODA converter '{name}' timed out.") from error
         stdout_path.write_text(process.stdout, encoding="utf-8")
         stderr_path.write_text(process.stderr, encoding="utf-8")
         records = [_file_record(Path(path), include_sha256=include_sha256) for path in outputs]
