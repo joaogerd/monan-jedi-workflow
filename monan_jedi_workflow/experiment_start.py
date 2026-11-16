@@ -176,7 +176,7 @@ def configure_existing_environment(destination):
         lines.insert(index + 1, worker_source)
     # Validate script structure before changing any existing user file.
     env_file.write_text(render_environment(root))
-    worker.write_text('\\n'.join(lines) + '\\n')
+    worker.write_text('\n'.join(lines) + '\n')
     return env_file
 
 
@@ -195,7 +195,9 @@ def main():
             print('Proximo passo: cd '+str(args.destination.resolve())+'; source ./environment.sh')
             return
         create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime, runtime_bin=args.runtime_bin)
-    except FileExistsError:
+    except FileExistsError as error:
+        if args.configure_existing:
+            parser.exit(2, f'[AVISO] {error}\\nNenhum arquivo foi modificado.\\n')
         root = args.destination.expanduser().resolve()
         parser.exit(
             2,
