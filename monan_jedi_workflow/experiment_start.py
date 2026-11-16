@@ -224,15 +224,60 @@ def configure_existing_environment(destination):
     return env_file
 
 
+def upgrade_existing_login_execution(destination):
+    """Create a new orchestration entrypoint without overwriting old workflow.
+
+    For reference cases made before the login-only architecture:
+    add WPS native PBS configuration (saving its previous YAML), and export
+    a separate campaign filename, leaving old campaign/workflow untouched.
+    """
+    root = Path(destination).resolve()
+    original_campaign = root / 'campaign.yaml'
+    original_wps = root / 'science/initialization/wps.yaml'
+    if not original_campaign.is_file() or not original_wps.is_file():
+        raise ValueError('Expected an existing generated first experiment, not a directory without the reference recipe')
+    output = root / 'campaign-login.yaml'
+    if output.exists():
+        raise FileExistsError(f'Login campaign already exists: {output}')
+    doc = yaml.safe_load(original_wps.read_text())
+    if not isinstance(doc, dict) or not isinstance(doc.get('wps'), dict):
+        raise ValueError('Invalid existing WPS configuration')
+    if doc['wps'].get('pbs'):
+        # No modification to a user-configured PBS resource block.
+        pass
+    else:
+        backup = original_wps.with_suffix('.yaml.before-login')
+        if backup.exists():
+            raise FileExistsError(f'WPS backup already exists: {backup}')
+        shutil.copy2(original_wps, backup)
+        doc['wps']['pbs'] = {
+            'queue': 'pesqmini', 'select': 1, 'ncpus': 1,
+            'mpiprocs': 1, 'walltime': '00:30:00',
+        }
+        write(original_wps, doc)
+    campaign = yaml.safe_load(original_campaign.read_text())
+    if not isinstance(campaign, dict):
+        raise ValueError('Invalid campaign YAML')
+    campaign['output'] = './workflow-login.yaml'
+    write(output, campaign)
+    return output
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination',type=Path)
     parser.add_argument('--pbs-queue', default='pesqmidi', help='PBS queue for the entire initial case (default: pesqmidi)')
     parser.add_argument('--pbs-walltime', default='01:00:00', help='Walltime HH:MM:SS (default: 01:00:00)')
+    parser.add_argument('--upgrade-existing', action='store_true', help='Create a new login-side campaign for existing experiments without overwriting old exported workflow')
     parser.add_argument('--configure-existing', action='store_true', help='Safely add missing environment.sh to an existing generated campaign, without recreating scientific files')
     parser.add_argument('--runtime-bin', type=Path, help='Python CLI directory for optional legacy worker wrapper; not used by login-side simpleWorkflow tasks')
     args=parser.parse_args()
     try:
+        if args.upgrade_existing:
+            output = upgrade_existing_login_execution(args.destination)
+            print(f'[OK] Login-side orchestration campaign: {output}')
+            print('Proximo passo: source ./environment.sh; campaign check campaign-login.yaml; campaign export campaign-login.yaml --engine simpleworkflow; swf validate workflow-login.yaml; swf plan workflow-login.yaml.')
+            return
         if args.configure_existing:
             env_path = configure_existing_environment(args.destination)
             print(f'[OK] Ambiente gerado: {env_path}')
