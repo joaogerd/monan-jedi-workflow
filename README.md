@@ -36,37 +36,34 @@ Python >=3.10. A instalação do pacote **não** compila MPAS/MONAN, MPAS-JEDI o
 
 ## Execução pelo caminho novo
 
-Para o **primeiro ensaio científico da receita instalada**, em ambiente
-Python compartilhado com os nós de computação da JACI (preferencialmente em
-`/p`), defina um destino novo:
+O **simpleWorkflow roda somente os aplicativos Python no login**. Cada app
+prepara sua operação, submete o script PBS nativo pelo `qsub` quando necessário,
+aguarda o job e valida os resultados. **Nenhuma CLI Python é executada no
+compute node.** O Conda pode permanecer em `$HOME`.
+
+Para criar o primeiro caso científico de referência:
 
 ```bash
-export NEW_CASE=/p/projetos/monan_das/$USER/work/first-experiment-20250901-swf
+export NEW_CASE=/p/projetos/monan_das/$USER/work/first-experiment-20250901-login
 python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
 cd "$NEW_CASE"
 source ./environment.sh
-```
-
-O gerador cria `experiment.yaml`, `campaign.yaml`, a árvore `science/`,
-`environment.sh` (exportações científicas verificadas) e `run-worker.sh`; **não** cria um PBS monolítico. Consulte
-[Primeiro experimento científico](docs/first-experiment.md) para variáveis
-obrigatórias, dados históricos, limites do runtime e preflight na JACI.
-Cada `run` científico que requer recursos computacionais é submetido
-individualmente pelo simpleWorkflow. **Não execute `qsub run-case.pbs`**.
-O gerador de referência ainda usa datas fixas de 2025.
-
-Com `experiment.yaml` e `campaign.yaml` científicos devidamente configurados:
-
-```bash
-campaign inspect campaign.yaml
 campaign check campaign.yaml
 campaign export campaign.yaml --engine simpleworkflow
 swf validate workflow.yaml
 swf plan workflow.yaml
-swf run workflow.yaml --ui plain
 ```
 
-`workflow.yaml` acima é **um exemplo**: o caminho efetivo vem da chave `output` do `campaign.yaml`. O diretório e o output da campanha precisam ser novos quando uma configuração é alterada.
+Para um caso **já exportado na arquitetura antiga**, siga
+[Atualização segura do primeiro experimento](docs/first-experiment.md) e use
+`--upgrade-existing` para criar `campaign-login.yaml` e
+`workflow-login.yaml` sem substituir os arquivos anteriores.
+
+Só execute `swf run` após verificar entradas científicas, ambiente de módulos,
+programas, recursos, tempos e scripts PBS. O `simpleWorkflow` tem executor
+PBS próprio para outros usos, mas **não é empregado nesta integração**:
+seus tasks ficam todos como `executor: local`; a submissão científica
+pertence aos aplicativos MONAN-JEDI.
 
 ## Critérios para release estável
 
