@@ -36,6 +36,24 @@ Python >=3.10. A instalação do pacote **não** compila MPAS/MONAN, MPAS-JEDI o
 
 ## Execução pelo caminho novo
 
+Para o **primeiro ensaio científico da receita instalada**, em ambiente
+Python compartilhado com os nós de computação da JACI (preferencialmente em
+`/p`), defina um destino novo:
+
+```bash
+export NEW_CASE=/p/projetos/monan_das/$USER/work/first-experiment-20250901-swf
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
+cd "$NEW_CASE"
+```
+
+O gerador cria `experiment.yaml`, `campaign.yaml`, a árvore `science/` e
+`run-worker.sh`; **não** cria um PBS monolítico. Consulte
+[Primeiro experimento científico](docs/first-experiment.md) para variáveis
+obrigatórias, dados históricos, limites do runtime e preflight na JACI.
+Cada `run` científico que requer recursos computacionais é submetido
+individualmente pelo simpleWorkflow. **Não execute `qsub run-case.pbs`**.
+O gerador de referência ainda usa datas fixas de 2025.
+
 Com `experiment.yaml` e `campaign.yaml` científicos devidamente configurados:
 
 ```bash
