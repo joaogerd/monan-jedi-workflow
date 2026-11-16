@@ -81,7 +81,31 @@ python -m monan_jedi_workflow.experiment_start --help
 python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
 ```
 
-O comando recusa sobrescrever um destino existente, copia o catálogo e materializa `experiment.yaml`, `initialization.yaml`, `init.yaml`, `science/` e `run-case.pbs`. **Ele cria configurações; não baixa os dados científicos nem executa o modelo.**
+### O que faz o pré-configurador `experiment_start`?
+
+O comando `python -m monan_jedi_workflow.experiment_start "$NEW_CASE"` é o **ponto de partida para preparar um caso sem editar manualmente toda a estrutura de arquivos**. Internamente, ele:
+
+1. **Cria** um destino novo e recusa sobrescrever diretórios existentes.
+2. **Copia** do catálogo instalado a receita de referência `reference-20250901`, incluindo JEDI, MPAS, Obs2IODA, inicialização, templates, wrappers e arquivos fixos.
+3. **Reescreve** os caminhos internos para o destino escolhido e cria `experiment.yaml`, `initialization.yaml` e `init.yaml`.
+4. **Prepara** os links para os dois backgrounds do teste de referência (os NetCDF só existirão depois que o MPAS os produzir).
+5. **Gera** `run-case.pbs`, com a sequência WPS → MPAS inicial → observações/JEDI 00Z → MPAS → observações/JEDI 06Z, já configurada com recursos PBS da referência.
+
+O programa **não** baixa observações, dados GFS, matriz B ou malha; **não** compila os executáveis; **não** submete o PBS; **não** executa assimilação; e **não** comprova que os arquivos de entrada e a instalação estejam corretos. Essas verificações permanecem obrigatórias.
+
+**Importante: limite da versão atual.** Embora seja um excelente pré-configurador, hoje o código foi implementado para **uma receita fixa**: 31/08–01/09/2025, malha x1.10242, 55 níveis, 128 ranks e duas análises. **Alterar apenas a data nos YAMLs gerados não torna o caso válido para outro período**, pois horários dos backgrounds, ligações simbólicas, GFS inicial, observações e script PBS também são específicos da referência.
+
+**Direção para a versão oficial:** generalizar o pré-configurador para receber receita, data de início, destino e período, gerando as configurações para qualquer campanha sem gravar datas, malhas ou caminhos científicos no código do gerador. Os parâmetros devem vir de um template científico selecionado; a inicialização e as dependências entre ciclos devem ser materializadas e executadas pelo `campaign` e pelo `simpleWorkflow`. A configuração produzida deve ser editável e validada antes da execução. **Essas opções genéricas ainda não estão implementadas; não são comandos disponíveis nesta beta.**
+
+Exemplo da interface **desejada**, apenas ilustrativa:
+
+```text
+campaign init --template reference-20250901 --start <DATA_UTC> --duration P3D --destination <NOVO_DIRETORIO>
+campaign check <NOVO_DIRETORIO>/campaign.yaml
+campaign export <NOVO_DIRETORIO>/campaign.yaml --engine simpleworkflow
+```
+
+**Para executar hoje**, siga o procedimento de referência abaixo e use `experiment_start "$NEW_CASE"` sem opções adicionais. A receita científica e os arquivos do caso são gerados, mas o usuário ainda precisa verificar os dados e as configurações do seu ambiente.
 
 ### 3.1 Confirme o pacote instalado e as dependências
 
