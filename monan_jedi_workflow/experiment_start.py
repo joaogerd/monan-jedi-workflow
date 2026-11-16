@@ -34,8 +34,15 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         raise ValueError(f'PBS queue {pbs_queue} has a documented walltime limit of '
                          f'{queue_limits[pbs_queue]} minutes on JACI; requested {pbs_walltime}')
     runtime_bin = Path(runtime_bin or sysconfig.get_path('scripts')).expanduser().resolve()
-    if runtime_bin.parts[:2] in {('/', 'home'), ('/', 'home2')}:
-        raise ValueError(f'Python runtime is in HOME and may not be visible on JACI compute nodes: {runtime_bin}. Use --runtime-bin with a shared environment in /p.')
+    # JACI login nodes may mount HOME under /h2mnt/home as well.
+    # A runtime in HOME cannot be used by PBS workers on the compute nodes.
+    if (runtime_bin.parts[:2] in {('/', 'home'), ('/', 'home2')}
+            or runtime_bin.parts[:3] == ('/', 'h2mnt', 'home')):
+        raise ValueError(
+            f'Python runtime is in HOME and not available on JACI compute nodes: {runtime_bin}. '
+            'Create/install the Python environment on a shared filesystem (e.g. /p), '
+            'then pass --runtime-bin /p/.../bin.'
+        )
     root = Path(destination).resolve()
     if root.exists():
         raise FileExistsError(f'Choose a new experiment directory: {root}')
