@@ -179,7 +179,9 @@ def campaign_action(request):
         initialization_tasks.extend(tasks)
         previous = tasks[-1]["name"]
     tasks = []
-    previous = initialization_tasks[-1]["name"] if initialization_tasks else None
+    # simpleWorkflow runs initialization in a separate engine before the cycles.
+    # Cross-phase depends_on would be unresolved in the cycle engine.
+    previous = None
     for index, cycle in enumerate(cycles):
         for operation in selected:
             if operation == "mpas" and index == len(cycles) - 1 and not forecast_last:
