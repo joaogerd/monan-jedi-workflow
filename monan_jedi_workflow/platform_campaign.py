@@ -19,6 +19,8 @@ OPERATIONS = {
 
 def operation_tasks(request, principal, operation, cycle, prefix, previous):
     """Translate a single domain lifecycle to motor tasks, without executing it."""
+    if operation == "wps":
+        return wps_tasks(request, principal, cycle, prefix, previous)
     if operation not in OPERATIONS:
         raise ValueError(f"unsupported campaign operation: {operation}")
     app, domain = OPERATIONS[operation]
@@ -49,7 +51,8 @@ def operation_tasks(request, principal, operation, cycle, prefix, previous):
         if (
             action == "run"
             and op.site.get("execution", {}).get("mode", "pbs") == "pbs"
-            and app in {"jedi", "mpas"}
+            and app in {"jedi", "mpas", "obs"}
+            and op.section.get("pbs")
         ):
             pbs = op.section.get("pbs", {})
             task["executor"] = "pbs"
@@ -59,6 +62,40 @@ def operation_tasks(request, principal, operation, cycle, prefix, previous):
                 if k in pbs
             }
             task["pbs"]["inherit_environment"] = True
+            worker = principal.parent / "run-worker.sh"
+            if worker.is_file():
+                task["argv"] = ["bash", str(worker), *task["argv"]]
+        tasks.append(task)
+        previous = name
+    return tasks
+
+
+def wps_tasks(request, principal, cycle, prefix, previous):
+    """Export WPS as separate prepare/run/validate tasks, never an enclosing PBS job."""
+    root = principal.parent
+    config_dir = root / "science" / "initialization"
+    if not (config_dir / "wps.yaml").is_file():
+        raise FileNotFoundError(f"WPS configuration missing: {config_dir / 'wps.yaml'}")
+    worker = root / "run-worker.sh"
+    if not worker.is_file():
+        raise FileNotFoundError(f"PBS worker wrapper missing: {worker}")
+    tasks = []
+    for action in ("prepare", "run", "validate"):
+        name = f"{prefix}_wps_{action}"
+        argv = ["monan-jedi-workflow", f"wps-{action}", str(config_dir),
+                "--cycle", cycle]
+        task = {"name": name, "argv": argv, "executor": "local"}
+        if previous:
+            task["depends_on"] = [previous]
+        if action == "run":
+            task["executor"] = "pbs"
+            task["argv"] = ["bash", str(worker), *argv]
+            task["pbs"] = {
+                "queue": "pesqmini",
+                "walltime": "00:30:00",
+                "select": 1, "ncpus": 1, "mpiprocs": 1,
+                "inherit_environment": True,
+            }
         tasks.append(task)
         previous = name
     return tasks
@@ -100,9 +137,9 @@ def campaign_action(request):
         or len(set(selected)) != len(selected)
     ):
         raise ValueError("operations must be a nonempty list without duplicates")
-    if "mpas.init" in selected:
+    if "mpas.init" in selected or "wps" in selected:
         raise ValueError(
-            "put mpas.init in initialization, not in the repeating cycle operations"
+            "put mpas.init and wps in initialization, not in repeating cycle operations"
         )
     if any(value not in OPERATIONS for value in selected):
         raise ValueError("unsupported campaign operation")
@@ -142,7 +179,7 @@ def campaign_action(request):
         initialization_tasks.extend(tasks)
         previous = tasks[-1]["name"]
     tasks = []
-    previous = None
+    previous = initialization_tasks[-1]["name"] if initialization_tasks else None
     for index, cycle in enumerate(cycles):
         for operation in selected:
             if operation == "mpas" and index == len(cycles) - 1 and not forecast_last:
