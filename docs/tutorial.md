@@ -68,29 +68,6 @@ Ciclo: 2025-09-01T00:00:00Z
 
 Substitua o caminho pelo destino autorizado do usuário. O log completo fica em `manual-test.log` no diretório do teste. Use uma cópia nova de `examples/beta` para evitar misturar resultados antigos. Os produtos deste fixture são **artificiais**, mesmo quando o comando termina com sucesso. Não reaproveite esse diretório para teste científico.
 
-### 2.1 Atualizar o script do teste em uma cópia já criada
-
-Se você já copiou `examples/beta` para seu diretório de testes, um `git pull` no repositório **não atualiza automaticamente a cópia**. Para utilizar a versão corrigida do `manual.sh`, atualize o branch, verifique a sintaxe e copie **somente o script**, preservando os dados existentes:
-
-```bash
-cd /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow
-git switch feat/platform-domain-apps
-git pull --ff-only
-bash -n examples/beta/manual.sh
-
-cp examples/beta/manual.sh \
-  /p/projetos/monan_das/joao.gerd/testes/beta-ciclo-v2/manual.sh
-
-cd /p/projetos/monan_das/joao.gerd/testes/beta-ciclo-v2
-bash -n manual.sh
-bash manual.sh experiment.yaml 2025-09-01T00:00:00Z
-```
-
-Os caminhos acima são específicos do ambiente de teste do GDAD na JACI; outros usuários devem substituí-los por seus diretórios. O `bash -n` verifica apenas a **sintaxe** do script, sem executar etapas científicas. Se já existir uma execução anterior com produtos ou estados no destino, **prefira criar uma nova cópia limpa** de `examples/beta` com outro nome antes de repetir o teste. Não apague nem sobrescreva resultados de uma execução anterior.
-
-A correção publicada no commit `87b7e19` remove uma aspas indevida na chamada de `status --json`. Se o shell mostrar `unexpected EOF while looking for matching '"'`, atualize o script conforme as instruções acima antes de investigar problemas da instalação.
-
-
 ## 3. Primeiro experimento **real** — um ciclo
 
 Crie uma pasta própria, nova, para cada tentativa. Parta da **receita científica de referência validada**: `experiment.yaml`, `site.yaml` (se usado), `science/jedi.yaml`, `science/mpas.yaml`, observações, templates, backgrounds, executáveis e arquivos de malha/partição. `examples/case` contém referências e marcadores `EDITAR` e **não** é um experimento pronto para rodar.
