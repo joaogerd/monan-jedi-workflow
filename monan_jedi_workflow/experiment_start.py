@@ -10,6 +10,7 @@ import shutil
 import re
 import sysconfig
 import yaml
+from .experiment_environment import render_environment
 
 
 def write(path, data):
@@ -102,11 +103,13 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         (folder/'trajectory.nc').symlink_to(root/parent/f'mpasout.{stamp}.nc')
         valid='2025-09-01_00.00.00' if cid.endswith('000000Z') else '2025-09-01_06.00.00'
         (folder/'state.nc').symlink_to(root/parent/f'mpasout.{valid}.nc')
+    (root / 'environment.sh').write_text(render_environment(root))
     # One site runtime wrapper is invoked by each independently submitted PBS task.
     # This does not create an enclosing PBS job or initiate scheduler submissions.
     worker = [
         '#!/usr/bin/env bash',
         'set -euo pipefail',
+        'source '+shlex.quote(str(root / 'environment.sh')),
         'MONAN_RUNTIME_BIN='+shlex.quote(str(runtime_bin)),
         'if [[ ! -d "$MONAN_RUNTIME_BIN" ]]; then',
         '  echo "[FALHA] Ambiente Python nao visivel no compute node: $MONAN_RUNTIME_BIN" >&2',
@@ -153,14 +156,44 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     write(root / 'campaign.yaml', campaign)
 
 
+def configure_existing_environment(destination):
+    """Add only a missing environment to an existing generated campaign."""
+    root = Path(destination).resolve()
+    worker = root / 'run-worker.sh'
+    campaign = root / 'campaign.yaml'
+    if not campaign.is_file() or not worker.is_file():
+        raise ValueError('Existing destination is not a generated simpleWorkflow experiment')
+    env_file = root / 'environment.sh'
+    if env_file.exists():
+        raise FileExistsError(f'Environment configuration already exists: {env_file}')
+    worker_source = 'source ' + shlex.quote(str(env_file))
+    lines = worker.read_text().splitlines()
+    if worker_source not in lines:
+        try:
+            index = lines.index('set -euo pipefail')
+        except ValueError as error:
+            raise ValueError('Worker header has changed; no file was modified') from error
+        lines.insert(index + 1, worker_source)
+    # Validate script structure before changing any existing user file.
+    env_file.write_text(render_environment(root))
+    worker.write_text('\\n'.join(lines) + '\\n')
+    return env_file
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination',type=Path)
     parser.add_argument('--pbs-queue', default='pesqmidi', help='PBS queue for the entire initial case (default: pesqmidi)')
     parser.add_argument('--pbs-walltime', default='01:00:00', help='Walltime HH:MM:SS (default: 01:00:00)')
+    parser.add_argument('--configure-existing', action='store_true', help='Safely add missing environment.sh to an existing generated campaign, without recreating scientific files')
     parser.add_argument('--runtime-bin', type=Path, help='Directory with Python and installed CLI entry points, visible on compute nodes (default: current Python scripts directory)')
     args=parser.parse_args()
     try:
+        if args.configure_existing:
+            env_path = configure_existing_environment(args.destination)
+            print(f'[OK] Ambiente gerado: {env_path}')
+            print('Proximo passo: cd '+str(args.destination.resolve())+'; source ./environment.sh')
+            return
         create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime, runtime_bin=args.runtime_bin)
     except FileExistsError:
         root = args.destination.expanduser().resolve()
@@ -181,7 +214,7 @@ def main():
     except ValueError as error:
         parser.exit(2, f'[ERRO DE CONFIGURACAO] {error}\nVerifique o ambiente Python compartilhado em /p, as opcoes do comando e, para recursos PBS, qstat -Qf na JACI.\n')
     print(f'[OK] Experimento configurado em: {args.destination.resolve()}')
-    print('Proximo passo: campaign check campaign.yaml; campaign export campaign.yaml --engine simpleworkflow; swf validate workflow.yaml; swf run workflow.yaml --ui plain.')
+    print('Proximo passo: cd '+str(args.destination.resolve())+'; source ./environment.sh; campaign check campaign.yaml; campaign export campaign.yaml --engine simpleworkflow; swf validate workflow.yaml; swf plan workflow.yaml.')
 
 
 if __name__=='__main__':
