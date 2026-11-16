@@ -78,6 +78,14 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
             for name, runner in [('prepbufr_runner','run_prepbufr.sh'),('gpsro_runner','run_gpsro.sh')]:
                 cfg['variables'][name] = str(science / 'runners' / runner)
         write(path, doc)
+    # Obs2IODA is also an HPC operation; execute conversion in its own PBS job.
+    obs_file = science / 'obs2ioda.yaml'
+    obs_doc = yaml.safe_load(obs_file.read_text())
+    obs_doc['obs2ioda']['pbs'] = {
+        'queue': 'pesqmidi', 'select': 1, 'ncpus': 1,
+        'mpiprocs': 1, 'walltime': '01:00:00',
+    }
+    write(obs_file, obs_doc)
     site = {'execution': {'mode': 'pbs'}}
     principal = {'schema_version': 1, 'experiment': {'name': 'first-20250901', 'destination': str(root)},
                  'site': site, 'jedi': './science/jedi.yaml', 'mpas': './science/mpas.yaml',
