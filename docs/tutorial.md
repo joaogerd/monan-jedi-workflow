@@ -299,32 +299,33 @@ Os dois `check` precisam terminar sem erro. `inspect` mostra a configuração e 
 
 ### 3.5 Confira fila PBS e walltime da JACI
 
-O arquivo `run-case.pbs` reúne diversas operações em **um único job PBS**. A primeira versão do gerador selecionava a fila `pesqmidi` com `06:00:00` de walltime, combinação **inválida** segundo os limites documentados da JACI: `pesqmidi` aceita até **02:00:00**; `pesqhigh`, até **06:00:00**. O gerador agora usa `pesqhigh` + `06:00:00` por padrão, mas isso é apenas uma combinação compatível com os **limites documentados**, não uma garantia de acesso à fila, disponibilidade ou duração suficiente.
+O arquivo `run-case.pbs` executa várias etapas num **único job PBS**. A configuração original `pesqmidi` + `06:00:00` era incompatível com o limite documentado dessa fila (2 horas). Uma alteração intermediária passou a utilizar `pesqhigh` + 6 horas, mas essa reserva é conservadora demais como ponto de partida para o teste de duas análises em **240 km, 55 níveis e 128 ranks**.
 
-**Antes de submeter, consulte os limites reais da sua conta e as filas do PBS:**
+**Novo padrão do gerador:** `pesqmidi`, `01:00:00`, `select=1:ncpus=128:mpiprocs=128`. Uma hora é um **limite experimental inicial**, não um tempo medido. Confirme a política atual da fila com:
 
 ```bash
 qstat -Qf pesqmidi
-qstat -Qf pesqhigh
 grep '^#PBS' run-case.pbs
 ```
 
-O gerador também aceita opções para novos casos, por exemplo:
+Ao criar um caso novo, a fila e o walltime podem ser declarados explicitamente:
 
 ```bash
 python -m monan_jedi_workflow.experiment_start "$NEW_CASE" \
-  --pbs-queue pesqhigh --pbs-walltime 06:00:00
+  --pbs-queue pesqmidi --pbs-walltime 01:00:00
 ```
 
-Ele recusa uma combinação cujo walltime ultrapasse os limites conhecidos da documentação do site. **Se o caso já tiver sido gerado**, o `git pull` não altera o `run-case.pbs` existente: revise somente suas diretivas PBS, sem recriar nem modificar os dados científicos. Para o caso anterior, após conferir a política real da fila e sua permissão:
+**Caso já criado:** atualizar o repositório não modifica o `run-case.pbs` daquele experimento. Para o caso ainda não submetido, após conferir o PBS, ajuste somente as diretivas:
 
 ```bash
 cd "$NEW_CASE"
-sed -i 's/^#PBS -q pesqmidi$/#PBS -q pesqhigh/' run-case.pbs
+sed -i -E 's/^#PBS -q .*/#PBS -q pesqmidi/; s/^#PBS -l walltime=.*/#PBS -l walltime=01:00:00/' run-case.pbs
 grep '^#PBS' run-case.pbs
 ```
 
-Essa correção de fila não garante que a execução científica caiba em seis horas. O modelo operacional definitivo deverá submeter etapas científicas separadamente pelo simpleWorkflow, com recursos PBS adequados a cada etapa. Fonte dos limites documentados: [guia operacional JACI do MPAS-BMatrix](https://github.com/joaogerd/mpas-bmatrix-global/blob/main/docs/jaci-operational-guide.md).
+Esse procedimento **não** altera a ciência do caso. Se o job for interrompido por tempo insuficiente, registre o tempo realmente gasto, revise os logs e escolha um limite maior dentro da política da fila. Não estime tempos de execução a partir das seis horas de integração simuladas. Para a versão oficial, o simpleWorkflow deverá gerenciar operações em jobs independentes e registrar o tempo de parede de cada operação.
+
+Referência dos limites de fila: [Guia operacional da JACI](https://github.com/joaogerd/mpas-bmatrix-global/blob/main/docs/jaci-operational-guide.md).
 
 ### 3.6 Submeta o primeiro teste científico
 
