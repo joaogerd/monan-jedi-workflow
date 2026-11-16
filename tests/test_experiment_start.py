@@ -114,7 +114,10 @@ def test_reference_campaign_exports_independent_pbs_jobs(tmp_path, monkeypatch):
     tasks = workflow['tasks']
     assert len(initial) == 9  # 3 WPS + 3 MPAS init + 3 MPAS initial
     assert len(tasks) == 15  # OBS 00Z, JEDI 00Z, MPAS 00Z, OBS 06Z, JEDI 06Z
-    assert tasks[0]['depends_on'] == [initial[-1]['name']]
+    # simpleWorkflow runs the whole initialization phase before cycle tasks.
+    # A cross-phase task-name dependency would be invalid in its separate engines.
+    assert 'depends_on' not in tasks[0]
+    assert initial[3]['depends_on'] == [initial[2]['name']]
     for task in [*initial, *tasks]:
         if task['executor'] == 'pbs':
             assert task['argv'][:2] == ['bash', str(root / 'run-worker.sh')]
