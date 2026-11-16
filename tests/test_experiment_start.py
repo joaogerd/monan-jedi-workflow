@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import sys
 import pytest
 import yaml
 from monan_jedi_workflow.experiment_start import create_experiment
@@ -32,3 +34,21 @@ def test_native_variable_dependencies_resolve_in_order(tmp_path, monkeypatch):
         cfg=yaml.safe_load((root/file).read_text())[key]
         resolved=render_declared_variables(cfg,parse_cycle_time('2025-09-01T00:00:00Z').render_context(),label=key)
         assert resolved['experiment_root']==str(root)
+
+
+def test_cli_existing_destination_is_friendly_and_non_destructive(tmp_path):
+    destination = tmp_path / "existing"
+    destination.mkdir()
+    marker = destination / "keep.txt"
+    marker.write_text("do not modify")
+    result = subprocess.run(
+        [sys.executable, "-m", "monan_jedi_workflow.experiment_start", str(destination)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 2
+    assert "Traceback" not in result.stderr
+    assert "[AVISO]" in result.stderr
+    assert "ja existe" in result.stderr
+    assert "Nenhum arquivo foi alterado" in result.stderr
+    assert str(destination) in result.stderr
+    assert marker.read_text() == "do not modify"
