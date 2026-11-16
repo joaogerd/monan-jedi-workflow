@@ -7,6 +7,7 @@ from importlib.resources import files
 from pathlib import Path
 import shlex
 import shutil
+import re
 import yaml
 
 
@@ -14,7 +15,22 @@ def write(path, data):
     path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 
-def create_experiment(destination):
+def create_experiment(destination, *, pbs_queue='pesqhigh', pbs_walltime='06:00:00'):
+    # Site policy documented in mpas-bmatrix-global/docs/jaci-operational-guide.md.
+    # User should recheck the scheduler's live limits before submitting.
+    queue_limits = {'pesqmini': 30, 'pesqmidi': 120, 'pesqhigh': 360,
+                    'pesqextra': 480, 'oper': 480, 'preoper': 480}
+    if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]*', pbs_queue):
+        raise ValueError('PBS queue must be a simple queue name')
+    match = re.fullmatch(r'(\d{1,3}):([0-5]\d):([0-5]\d)', pbs_walltime)
+    if not match:
+        raise ValueError('PBS walltime must use HH:MM:SS')
+    minutes = int(match[1]) * 60 + int(match[2]) + int(match[3]) / 60
+    if minutes <= 0:
+        raise ValueError('PBS walltime must be positive')
+    if pbs_queue in queue_limits and minutes > queue_limits[pbs_queue]:
+        raise ValueError(f'PBS queue {pbs_queue} has a documented walltime limit of '
+                         f'{queue_limits[pbs_queue]} minutes on JACI; requested {pbs_walltime}')
     root = Path(destination).resolve()
     if root.exists():
         raise FileExistsError(f'Choose a new experiment directory: {root}')
@@ -72,8 +88,8 @@ def create_experiment(destination):
         (folder/'trajectory.nc').symlink_to(root/parent/f'mpasout.{stamp}.nc')
         valid='2025-09-01_00.00.00' if cid.endswith('000000Z') else '2025-09-01_06.00.00'
         (folder/'state.nc').symlink_to(root/parent/f'mpasout.{valid}.nc')
-    lines=['#!/bin/bash','#PBS -N monan-first-case','#PBS -q pesqmidi',
-           '#PBS -l select=1:ncpus=128:mpiprocs=128','#PBS -l walltime=06:00:00','#PBS -V',
+    lines=['#!/bin/bash','#PBS -N monan-first-case',f'#PBS -q {pbs_queue}',
+           '#PBS -l select=1:ncpus=128:mpiprocs=128',f'#PBS -l walltime={pbs_walltime}','#PBS -V',
            'set -euo pipefail', ': "${PBS_JOBID:?Submit with qsub}"',
            'cd '+shlex.quote(str(root)), 'exec >case.stdout.log 2>case.stderr.log']
     time='2025-08-31T18:00:00Z'
@@ -92,9 +108,11 @@ def create_experiment(destination):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination',type=Path)
+    parser.add_argument('--pbs-queue', default='pesqhigh', help='PBS queue for the entire initial case (default: pesqhigh)')
+    parser.add_argument('--pbs-walltime', default='06:00:00', help='Walltime HH:MM:SS (default: 06:00:00)')
     args=parser.parse_args()
     try:
-        create_experiment(args.destination)
+        create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime)
     except FileExistsError:
         root = args.destination.expanduser().resolve()
         parser.exit(
@@ -111,6 +129,8 @@ def main():
             "\"\n"
             "     Depois: python -m monan_jedi_workflow.experiment_start \"$NEW_CASE\"\n\n",
         )
+    except ValueError as error:
+        parser.exit(2, f'[ERRO DE CONFIGURACAO] {error}\nVerifique os limites atuais das filas com qstat -Qf no JACI.\n')
     print(f'[OK] Experimento configurado em: {args.destination.resolve()}')
     print('Proximo passo: confira os insumos e a configuracao antes de submeter run-case.pbs.')
 
