@@ -180,3 +180,15 @@ def test_configure_existing_environment_preserves_scientific_case(tmp_path):
     assert (root / 'science/jedi.yaml').read_bytes() == previous
     with pytest.raises(FileExistsError):
         configure_existing_environment(root)
+
+
+@pytest.mark.parametrize('home_runtime', [
+    '/home/user/.conda/envs/monan-jedi/bin',
+    '/home2/user/.conda/envs/monan-jedi/bin',
+    '/h2mnt/home/user/.conda/envs/monan-jedi/bin',
+])
+def test_generator_rejects_non_shared_home_python_runtime(tmp_path, home_runtime):
+    root = tmp_path / 'case'
+    with pytest.raises(ValueError, match='Python runtime is in HOME'):
+        create_experiment(root, runtime_bin=home_runtime)
+    assert not root.exists()
