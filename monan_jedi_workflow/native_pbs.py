@@ -58,6 +58,7 @@ def native_pbs_run(
         "#PBS -N " + re.sub(r"[^A-Za-z0-9_.-]", "_", name)[:60],
         "#PBS -q " + queue,
         f'#PBS -l select={counts["select"]}:ncpus={counts["ncpus"]}:mpiprocs={counts["mpiprocs"]}',
+        *(["#PBS -l place=excl"] if queue.casefold() != "aux" else []),
         "#PBS -l walltime=" + walltime,
         "#PBS -V",
         "#PBS -o " + str(stdout),
