@@ -15,7 +15,7 @@ def write(path, data):
     path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 
-def create_experiment(destination, *, pbs_queue='pesqhigh', pbs_walltime='06:00:00'):
+def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00'):
     # Site policy documented in mpas-bmatrix-global/docs/jaci-operational-guide.md.
     # User should recheck the scheduler's live limits before submitting.
     queue_limits = {'pesqmini': 30, 'pesqmidi': 120, 'pesqhigh': 360,
@@ -108,8 +108,8 @@ def create_experiment(destination, *, pbs_queue='pesqhigh', pbs_walltime='06:00:
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination',type=Path)
-    parser.add_argument('--pbs-queue', default='pesqhigh', help='PBS queue for the entire initial case (default: pesqhigh)')
-    parser.add_argument('--pbs-walltime', default='06:00:00', help='Walltime HH:MM:SS (default: 06:00:00)')
+    parser.add_argument('--pbs-queue', default='pesqmidi', help='PBS queue for the entire initial case (default: pesqmidi)')
+    parser.add_argument('--pbs-walltime', default='01:00:00', help='Walltime HH:MM:SS (default: 01:00:00)')
     args=parser.parse_args()
     try:
         create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime)
