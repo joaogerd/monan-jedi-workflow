@@ -43,7 +43,30 @@ cd /p/projetos/SEU_GRUPO/SEU_USUARIO/testes/beta-ciclo
 bash manual.sh experiment.yaml 2025-09-01T00:00:00Z
 ```
 
-Substitua o caminho pelo destino autorizado do usuário. Os produtos deste fixture são artificiais, mesmo quando o comando termina com sucesso. Não reaproveite esse diretório para teste científico.
+O script mostra uma linha `[OK]` para cada uma das cinco verificações (aquisição, conversão IODA, JEDI, MPAS e diagnósticos). Em cada etapa, exige que `prepare`, `run` e `validate` terminem sem erro e que `status --json` confirme `state: validated`. Somente quando **todas** passam imprime `TODOS OS 5 TESTES PASSARAM`. Se alguma falhar, encerra imediatamente com código diferente de zero, indica a operação e mostra as últimas linhas do log.
+
+Exemplo de saída **esperada, não resultado de execução na JACI**:
+
+```text
+MONAN-JEDI | teste de instalacao (dados artificiais)
+Ciclo: 2025-09-01T00:00:00Z
+
+[OK] OBS — aquisicao — prepare / run / validate / status
+[OK] OBS — conversao IODA — prepare / run / validate / status
+[OK] JEDI — assimilacao — prepare / run / validate / status
+[OK] MPAS — previsao — prepare / run / validate / status
+[OK] DIAGNOSTICS — diagnosticos — prepare / run / validate / status
+
+===========================================
+ TODOS OS 5 TESTES PASSARAM
+ Instalacao e contratos basicos: OK
+ ATENCAO: produtos artificiais; NAO
+          valida execucao cientifica real.
+ Log completo: .../manual-test.log
+===========================================
+```
+
+Substitua o caminho pelo destino autorizado do usuário. O log completo fica em `manual-test.log` no diretório do teste. Use uma cópia nova de `examples/beta` para evitar misturar resultados antigos. Os produtos deste fixture são **artificiais**, mesmo quando o comando termina com sucesso. Não reaproveite esse diretório para teste científico.
 
 ## 3. Primeiro experimento **real** — um ciclo
 
