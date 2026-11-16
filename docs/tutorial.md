@@ -327,7 +327,34 @@ Esse procedimento **não** altera a ciência do caso. Se o job for interrompido 
 
 Referência dos limites de fila: [Guia operacional da JACI](https://github.com/joaogerd/mpas-bmatrix-global/blob/main/docs/jaci-operational-guide.md).
 
-### 3.6 Submeta o primeiro teste científico
+### 3.6 Verifique o ambiente Python dentro do PBS
+
+Na JACI, o job pode iniciar sem encontrar `monan-jedi-workflow`, mesmo com `#PBS -V` e Conda ativo no login. Isso produz `command not found` **antes de executar a ciência**. O pré-configurador passou a gravar no `run-case.pbs` o diretório `bin` do ambiente Python que gerou o caso, a adicioná-lo ao `PATH` no compute node e a exigir os executáveis `python`, `monan-jedi-workflow`, `obs`, `jedi` e `mpas`, além do import do pacote. Se o ambiente estiver inacessível, o job encerra imediatamente com uma orientação legível.
+
+**Antes de criar um caso**, confirme em qual filesystem o Python e a CLI estão instalados:
+
+```bash
+command -v python
+command -v monan-jedi-workflow
+python -c 'import sysconfig; print(sysconfig.get_path("scripts"))'
+```
+
+Se a instalação estiver em `/home2` ou em outro caminho não visível nos compute nodes, instale ou use um ambiente em `/p` antes de gerar um novo experimento. Para indicar explicitamente o diretório de executáveis, use `--runtime-bin /caminho/visivel/nos/compute-nodes/bin`. O gerador **não copia o ambiente Python**; apenas registra onde ele deve ser encontrado.
+
+**Caso já gerado e parado na primeira linha com `command not found`:** obtenha no login o diretório real da CLI e adicione-o no início do script PBS, preservando as demais configurações:
+
+```bash
+cd "$NEW_CASE"
+CLI_BIN="$(dirname "$(command -v monan-jedi-workflow)")"
+printf 'CLI_BIN=%s\\n' "$CLI_BIN"
+# Confirme que CLI_BIN aponta para um ambiente acessivel nos compute nodes.
+sed -i "/^exec >case.stdout.log/a export PATH=\\\"$CLI_BIN:\\\$PATH\\\"" run-case.pbs
+grep -A 2 '^exec >case.stdout.log' run-case.pbs
+```
+
+Se `CLI_BIN` não estiver em `/p` ou em outro filesystem compartilhado, **não use essa correção provisória**: disponibilize primeiro um ambiente Python acessível aos compute nodes. Um caminho existente no login não prova que exista no nó. O `qsub` deve ser repetido apenas depois dessa verificação.
+
+### 3.7 Submeta o primeiro teste científico
 
 ```bash
 qsub run-case.pbs
@@ -335,7 +362,7 @@ qsub run-case.pbs
 
 A receita gera **um shell PBS sequencial**, não um `workflow.yaml` do simpleWorkflow. O shell executa WPS, `mpas init`, a previsão inicial, as observações e JEDI 00Z, MPAS 00Z e JEDI 06Z. WPS ainda usa a interface legada. **Não execute esse shell no login** e não rode simultaneamente o simpleWorkflow sobre o mesmo caso.
 
-### 3.7 Verifique o resultado
+### 3.8 Verifique o resultado
 
 Após o job concluir:
 
