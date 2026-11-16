@@ -48,23 +48,9 @@ def operation_tasks(request, principal, operation, cycle, prefix, previous):
         ]
         task["inputs"] = {"required": required}
         task["input_fingerprint"] = "sha256"
-        if (
-            action == "run"
-            and op.site.get("execution", {}).get("mode", "pbs") == "pbs"
-            and app in {"jedi", "mpas", "obs"}
-            and op.section.get("pbs")
-        ):
-            pbs = op.section.get("pbs", {})
-            task["executor"] = "pbs"
-            task["pbs"] = {
-                k: pbs[k]
-                for k in ("queue", "walltime", "select", "ncpus", "mpiprocs")
-                if k in pbs
-            }
-            task["pbs"]["inherit_environment"] = True
-            worker = principal.parent / "run-worker.sh"
-            if worker.is_file():
-                task["argv"] = ["bash", str(worker), *task["argv"]]
+        # The app runs on the login node. Its native stage submits the
+        # prepared scientific PBS script and monitors it synchronously.
+        # Never send Python/Conda commands to a compute node.
         tasks.append(task)
         previous = name
     return tasks
@@ -87,15 +73,8 @@ def wps_tasks(request, principal, cycle, prefix, previous):
         task = {"name": name, "argv": argv, "executor": "local"}
         if previous:
             task["depends_on"] = [previous]
-        if action == "run":
-            task["executor"] = "pbs"
-            task["argv"] = ["bash", str(worker), *argv]
-            task["pbs"] = {
-                "queue": "pesqmini",
-                "walltime": "00:30:00",
-                "select": 1, "ncpus": 1, "mpiprocs": 1,
-                "inherit_environment": True,
-            }
+        # WPS runs via its native stage CLI on login for this beta recipe.
+        # TODO: stage-owned PBS for UNGRIB where site policy requires it.
         tasks.append(task)
         previous = name
     return tasks
