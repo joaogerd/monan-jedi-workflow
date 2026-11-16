@@ -68,128 +68,73 @@ Ciclo: 2025-09-01T00:00:00Z
 
 Substitua o caminho pelo destino autorizado do usuário. O log completo fica em `manual-test.log` no diretório do teste. Use uma cópia nova de `examples/beta` para evitar misturar resultados antigos. Os produtos deste fixture são **artificiais**, mesmo quando o comando termina com sucesso. Não reaproveite esse diretório para teste científico.
 
-## 3. Primeiro experimento científico **real** — usando o simpleWorkflow
+## 3. Primeiro experimento científico na JACI: Python apenas no login
 
-O pré-configurador `python -m monan_jedi_workflow.experiment_start` copia a
-**receita científica instalada** `catalog/reference-20250901` (MPAS 240 km,
-55 níveis, 128 ranks, matriz B correspondente, 3D-FGAT), cria `experiment.yaml`,
-`initialization.yaml`, `init.yaml`, `science/`, os links dos backgrounds,
-`campaign.yaml`, `environment.sh` e `run-worker.sh`. **Não executa o modelo, não instala o
-ambiente, não baixa os dados e não submete PBS.**
+O **simpleWorkflow não envia Python ao PBS**. Ele executa as 24 tarefas
+`executor: local` no nó de login e invoca os aplicativos científicos. Cada
+aplicativo prepara, submete com `qsub` (quando necessário), aguarda seu job
+nativo e valida os produtos. O Conda pode ficar em `$HOME`; somente binários,
+bibliotecas, scripts shell e dados científicos precisam estar disponíveis nos
+compute nodes, normalmente via `/p`.
 
-A receita gerada corresponde a duas análises, em 01/09/2025 **00Z e 06Z**,
-com a inicialização e a previsão intermediária necessárias. A consistência
-estática de configurações históricas foi auditada, mas a equivalência numérica
-científica na JACI ainda está **pendente**.
+A receita de referência instalada em `catalog/reference-20250901` prepara
+WPS e MPAS iniciais em 31/08/2025 18Z; Obs2IODA/JEDI/MPAS em 01/09 00Z; e
+Obs2IODA/JEDI em 01/09 06Z. O pré-configurador cria as configurações,
+`campaign.yaml` e `environment.sh`, mas não executa ciência ou qsub.
 
-### 3.1 Ambiente Python e arquivos em /p
-
-Na JACI, os compute nodes **não acessam o `$HOME`**. O `simpleWorkflow` é
-executado no login e submete cada `run` científico como **job PBS independente**.
-O `run-worker.sh`, chamado dentro de cada job, configura o `PATH` para um
-ambiente Python compartilhado e verifica a instalação antes do processamento.
+### Para um experimento novo
 
 ```bash
-command -v python
-command -v swf
-command -v monan-jedi-workflow
-python -c 'import sysconfig; print(sysconfig.get_path("scripts"))'
-```
-
-Confirme que o diretório `bin` indicado está visível nos compute nodes,
-preferencialmente em `/p`. Se estiver em `/home` ou `/home2`, prepare um
-ambiente acessível em `/p` antes de gerar o caso. Se necessário, indique
-`--runtime-bin /p/caminho/do/ambiente/bin` ao gerar o experimento.
-`#PBS -V` por si só não garante que os executáveis estarão acessíveis.
-
-### 3.2 Defina NEW_CASE e gere um experimento **novo**
-
-`NEW_CASE` é uma variável do shell que **você define**: contém o caminho absoluto
-do diretório onde o pré-configurador criará os arquivos. O destino ainda não
-pode existir e não é removido ou sobrescrito.
-
-```bash
-export NEW_CASE=/p/projetos/monan_das/joao.gerd/work/first-experiment-20250901-swf
-echo "$NEW_CASE"
+export NEW_CASE=/p/projetos/monan_das/joao.gerd/work/first-experiment-20250901-login
 python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
 cd "$NEW_CASE"
-ls experiment.yaml initialization.yaml init.yaml campaign.yaml environment.sh run-worker.sh
-```
-
-Os caminhos científicos de GFS, PREPBUFR, GNSS-RO, malha, partição, tabelas de
-física, matriz B e executáveis devem ser configurados por variáveis de
-ambiente conforme **[receita operacional completa](first-experiment.md)**.
-O pré-configurador não baixa esses dados. Não substitua arquivos históricos
-por produtos artificiais.
-
-### 3.3 Valide o plano e deixe o orquestrador submeter os jobs
-
-Antes de chamar `campaign`, carregue a **receita de ambiente gerada**:
-
-```bash
 source ./environment.sh
-```
-
-O arquivo exporta `MONAN_JEDI_INSTALL_ROOT`, `STACK_ROOT`, `MONAN_MESH_ROOT`,
-`MONAN_PHYSICS_ROOT`, `MONAN_BMATRIX_ROOT`, `MONAN_INPUT_ROOT`,
-`MONAN_GFS_ROOT` e `MONAN_LIBFABRIC_ROOT`. O gerador reutiliza valores
-existentes e caminhos conhecidos quando presentes. **Não inventa os que
-faltam**: uma variável indefinida ou um diretório ausente gera
-`[CONFIGURACAO]` com o nome a corrigir. Ajuste com `export VAR=/p/...` e
-repita `source ./environment.sh` antes de continuar.
-
-Se o seu experimento **já existe e foi gerado na versão anterior**, pode
-acrescentar somente a configuração de ambiente, sem alterar os YAMLs ou
-recriar resultados:
-
-```bash
-python -m monan_jedi_workflow.experiment_start "$NEW_CASE" --configure-existing
-cd "$NEW_CASE"
-source ./environment.sh
-```
-
-Esse procedimento recusa sobrescrever um `environment.sh` preexistente.
-Somente após obter `[OK]` no carregamento, execute:
-
-```bash
-campaign inspect campaign.yaml
 campaign check campaign.yaml
 campaign export campaign.yaml --engine simpleworkflow
 swf validate workflow.yaml
 swf plan workflow.yaml
 ```
 
-A sequência declarada é WPS → MPAS Init → MPAS inicial → Obs2IODA 00Z →
-JEDI 00Z → MPAS 00Z → Obs2IODA 06Z → JEDI 06Z. Para cada etapa,
-`prepare`, `run` e `validate` são tarefas distintas e dependentes.
-Somente as tarefas `run` que precisam de computação recebem alocação PBS.
+Verifique os arquivos científicos reais além dos diretórios: GFS, PREPBUFR,
+GNSS-RO, mesh, física, matriz B e executáveis. Nenhum arquivo científico é
+baixado pelo gerador.
 
-Após conferir os insumos científicos, execute **no login**:
+### Para o experimento existente criado antes dessa correção
 
-```bash
-swf run workflow.yaml --ui plain
-```
-
-**Não use `qsub run-case.pbs`**. O novo pré-configurador não gera esse script
-monolítico. O `simpleWorkflow` controla a submissão por etapa, os logs,
-o status e a retomada conforme suas garantias de execução.
-
-### 3.4 Resultados esperados
+**Não execute o `workflow.yaml` antigo:** ele contém tarefas Python do
+simpleWorkflow com `executor: pbs`. Crie uma campanha nova sem sobrescrever
+nenhum arquivo antigo:
 
 ```bash
-swf status workflow.yaml
-jedi status experiment.yaml --cycle 2025-09-01T00:00:00Z
-jedi status experiment.yaml --cycle 2025-09-01T06:00:00Z
+cd /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow
+git pull --ff-only
+cd "$NEW_CASE"
+source ./environment.sh
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE" --upgrade-existing
+campaign check campaign-login.yaml
+campaign export campaign-login.yaml --engine simpleworkflow
+swf validate workflow-login.yaml
+swf plan workflow-login.yaml
 ```
 
-Verifique o background consumido em cada análise, os NetCDF e IODA, os logs
-PBS e a proveniência em `.simpleworkflow/runs/`. A validação científica exige
-a comparação dos produtos com a referência histórica, documentada em
-**[Validação científica de setembro de 2025](validation/2025-reference-scientific-validation.md)**.
+O upgrade conserva `workflow.yaml` e `campaign.yaml`, configura WPS para
+submeter UNGRIB nativo via PBS e gera `campaign-login.yaml`.
+Confirme que todas as tarefas são **locais no controlador**:
 
-**Status atual:** integração do pré-configurador ao exportador implementada;
-a execução do novo DAG na JACI ainda não foi confirmada. Não confunda
-`campaign check` ou `swf validate` com aprovação científica.
+```bash
+python - <<'PY'
+import yaml
+wf = yaml.safe_load(open('workflow-login.yaml'))
+tasks = wf['initialization']['tasks'] + wf['tasks']
+wrong = [t['name'] for t in tasks if t.get('executor') != 'local' or 'pbs' in t]
+assert not wrong, f"Encontrei tarefas indevidas no PBS: {wrong}"
+print(f"[OK] {len(tasks)} tarefas de aplicativos Python no login; PBS nativo controlado pelos apps")
+PY
+```
+
+O `swf run` só deve ser iniciado depois de conferir entradas, horários e
+recursos. Veja a **[receita operacional e instruções completas](first-experiment.md)**.
+A validação científica de equivalência ainda está pendente.
 
 ## 4. Campanha de **um dia** no simpleWorkflow
 
