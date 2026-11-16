@@ -44,10 +44,11 @@ Python compartilhado com os nós de computação da JACI (preferencialmente em
 export NEW_CASE=/p/projetos/monan_das/$USER/work/first-experiment-20250901-swf
 python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
 cd "$NEW_CASE"
+source ./environment.sh
 ```
 
-O gerador cria `experiment.yaml`, `campaign.yaml`, a árvore `science/` e
-`run-worker.sh`; **não** cria um PBS monolítico. Consulte
+O gerador cria `experiment.yaml`, `campaign.yaml`, a árvore `science/`,
+`environment.sh` (exportações científicas verificadas) e `run-worker.sh`; **não** cria um PBS monolítico. Consulte
 [Primeiro experimento científico](docs/first-experiment.md) para variáveis
 obrigatórias, dados históricos, limites do runtime e preflight na JACI.
 Cada `run` científico que requer recursos computacionais é submetido
