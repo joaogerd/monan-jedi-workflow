@@ -93,8 +93,26 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination',type=Path)
     args=parser.parse_args()
-    create_experiment(args.destination)
-    print(f'Created {args.destination}. Configure input roots, then inspect/check before submitting run-case.pbs.')
+    try:
+        create_experiment(args.destination)
+    except FileExistsError:
+        root = args.destination.expanduser().resolve()
+        parser.exit(
+            2,
+            f"\n[AVISO] O diretorio de destino ja existe:\n"
+            f"  {root}\n\n"
+            "Nenhum arquivo foi alterado. Para preservar experimentos anteriores,\n"
+            "o pre-configurador nao sobrescreve diretorios existentes.\n\n"
+            "O que fazer:\n"
+            "  1. Para continuar um experimento ja criado, entre no diretorio existente.\n"
+            "  2. Para criar outro experimento, informe um NOVO caminho que ainda nao exista.\n"
+            "     Exemplo: export NEW_CASE=\""
+            f"{root}-v2"
+            "\"\n"
+            "     Depois: python -m monan_jedi_workflow.experiment_start \"$NEW_CASE\"\n\n",
+        )
+    print(f'[OK] Experimento configurado em: {args.destination.resolve()}')
+    print('Proximo passo: confira os insumos e a configuracao antes de submeter run-case.pbs.')
 
 
 if __name__=='__main__':
