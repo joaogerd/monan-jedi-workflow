@@ -172,7 +172,7 @@ def test_configure_existing_environment_preserves_scientific_case(tmp_path):
     env_file.unlink()
     worker = root / 'run-worker.sh'
     original = worker.read_text()
-    worker.write_text(original.replace('source ' + str(env_file) + '\\n', ''))
+    worker.write_text(original.replace('source ' + str(env_file) + '\n', ''))
     previous = (root / 'science/jedi.yaml').read_bytes()
     configure_existing_environment(root)
     assert env_file.is_file()
