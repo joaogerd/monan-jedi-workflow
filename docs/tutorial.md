@@ -194,6 +194,15 @@ python -m monan_jedi_workflow.experiment_start \
 
 O nome `first-experiment-20250901` identifica o exemplo científico fixo de setembro de 2025; não altera a data científica da receita. Para uma tentativa nova, escolha um novo nome e não reutilize um diretório já criado.
 
+**Se o diretório já existir:** o pré-configurador informa `[AVISO] O diretorio de destino ja existe`, preserva os arquivos e encerra com código 2, **sem traceback**. Isso é uma proteção de dados, não um erro interno. Para continuar com o caso já gerado, entre nele e examine os arquivos. Para criar uma nova tentativa, defina um caminho diferente:
+
+```bash
+export NEW_CASE=/p/projetos/monan_das/joao.gerd/work/first-experiment-20250901-v2
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
+```
+
+Não remova o diretório antigo automaticamente: ele pode conter configurações, logs ou resultados importantes.
+
 ### O que faz o pré-configurador `experiment_start`?
 
 O comando `python -m monan_jedi_workflow.experiment_start "$NEW_CASE"` é o **ponto de partida para preparar um caso sem editar manualmente toda a estrutura de arquivos**. Internamente, ele:
