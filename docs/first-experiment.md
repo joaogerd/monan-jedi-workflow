@@ -69,7 +69,24 @@ backgrounds e o `run-worker.sh`, que prepara o `PATH` dentro de cada job PBS.
 configurados antes da criação por `--pbs-queue` e `--pbs-walltime` (padrão:
 `pesqmidi` e `01:00:00` neste ensaio; confirme a política PBS atual).
 
-## 4. Inspecione e exporte a campanha
+## 4. Carregue o ambiente, confira os caminhos e exporte a campanha
+
+```bash
+source ./environment.sh
+```
+
+Se aparecer `[CONFIGURACAO]`, a mensagem indicará a variável ausente ou o
+diretório inexistente. Corrija o caminho com `export NOME=/p/...` **antes de
+carregar novamente** `environment.sh`. Nunca substitua por um caminho fictício
+para contornar a verificação. Para consultar os valores resolvidos:
+
+```bash
+for var in MONAN_JEDI_INSTALL_ROOT STACK_ROOT MONAN_MESH_ROOT MONAN_PHYSICS_ROOT MONAN_BMATRIX_ROOT MONAN_INPUT_ROOT MONAN_GFS_ROOT MONAN_LIBFABRIC_ROOT; do
+  printf '%s=%s\n' "$var" "${!var:-NAO_CONFIGURADO}"
+done
+```
+
+Apenas depois que o ambiente carregar sem erros, prossiga.
 
 ```bash
 campaign inspect campaign.yaml
@@ -96,6 +113,22 @@ confere a acessibilidade do Python e das CLIs no compute node antes de executar.
 
 `campaign check` verifica a estrutura do plano; não substitui a conferência dos
 dados reais, o `swf validate` ou a aceitação científica dos resultados.
+
+### Para um experimento já criado antes da geração do ambiente
+
+**Não apague nem recrie o experimento atual.** Depois de atualizar o checkout
+do repositório com `git pull --ff-only`, execute no login:
+
+```bash
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE" --configure-existing
+cd "$NEW_CASE"
+source ./environment.sh
+```
+
+Esse modo cria somente `environment.sh` e adiciona sua importação ao
+`run-worker.sh` existente. Ele não modifica `science/`, `experiment.yaml`,
+`campaign.yaml` ou os backgrounds. Se `environment.sh` já existir, a operação
+é recusada para proteger ajustes feitos pelo usuário.
 
 ## 5. Execute SOMENTE pelo orquestrador
 
