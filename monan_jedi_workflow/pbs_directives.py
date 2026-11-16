@@ -27,6 +27,7 @@ def pbs_header_lines(
         f"#PBS -N {job_name}",
         f"#PBS -q {normalized_queue}",
         f"#PBS -l select={select}:ncpus={ncpus}:mpiprocs={mpiprocs}",
+        "#PBS -V",  # Forward the configured login-node scientific runtime.
     ]
     if normalized_queue.casefold() != "aux":
         lines.append("#PBS -l place=excl")
