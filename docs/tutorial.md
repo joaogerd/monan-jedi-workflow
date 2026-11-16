@@ -81,6 +81,119 @@ python -m monan_jedi_workflow.experiment_start --help
 python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
 ```
 
+### Defina o diretório do novo experimento (`NEW_CASE`)
+
+`NEW_CASE` **não é uma variável automática do MONAN-JEDI**. É uma **variável de ambiente do shell**, definida pelo usuário, contendo o caminho absoluto onde o novo experimento será criado. O símbolo `# Tutorial oficial candidato — MONAN-JEDI por aplicativos (branch feat/platform-domain-apps)
+
+> **Status:** roteiro operacional da beta 0.3.0b1. O teste de instalação usa dados artificiais. Uma campanha científica real na JACI só estará homologada após executar e validar os produtos do baseline, incluindo o acoplamento entre ciclos. Não confundir a interface atual com a interface legada `monan-jedi-workflow campaign create/run`.
+
+## 0. Como a plataforma funciona
+
+O usuário configura **um experimento científico** (`experiment.yaml`, arquivos JEDI/MPAS/observações e site) e **uma campanha** (`campaign.yaml`, datas, operações e output). Cada aplicativo processa um domínio para um único horário:
+
+- `obs acquire`: aquisição dos dados;
+- `obs convert`: conversão para IODA;
+- `jedi`: análise;
+- `mpas init`: inicialização, quando configurada, feita **uma vez**, fora do ciclo;
+- `mpas`: previsão para alimentar o próximo horário;
+- `diagnostics`: diagnósticos da execução;
+- `campaign`: inspeciona, verifica e **exporta** a sequência para o **simpleWorkflow**, que executa e retoma tarefas.
+
+Não é necessário escrever manualmente o grafo nem scripts de repetição. A versão beta ainda exporta uma tarefa por estágio e timestamp; não foi homologada para gerar/gerenciar um ano de tarefas na JACI.
+
+## 1. Instalação em ambiente novo
+
+```bash
+git clone --branch feat/platform-domain-apps https://github.com/joaogerd/monan-jedi-workflow.git
+cd monan-jedi-workflow
+python -m pip install -e '.[dev,orchestration]'
+obs --help
+jedi --help
+mpas --help
+diagnostics --help
+campaign --help
+swf --help
+```
+
+Python >=3.10. Essa instalação **não** compila MONAN/MPAS, MPAS-JEDI, WPS ou Obs2IODA. Para execução científica, confirme previamente as instalações, bibliotecas, ambiente de site e dados. No JACI, os caminhos, o ambiente MPI/PBS e os recursos do caso não podem ser inferidos do exemplo artificial.
+
+## 2. Teste rápido: um único ciclo **artificial**
+
+Use este teste exclusivamente para confirmar a instalação e os contratos dos cinco aplicativos. Ele não prova que MONAN, JEDI ou Obs2IODA reais funcionaram.
+
+```bash
+mkdir -p /p/projetos/SEU_GRUPO/SEU_USUARIO/testes
+cp -r examples/beta /p/projetos/SEU_GRUPO/SEU_USUARIO/testes/beta-ciclo
+cd /p/projetos/SEU_GRUPO/SEU_USUARIO/testes/beta-ciclo
+bash manual.sh experiment.yaml 2025-09-01T00:00:00Z
+```
+
+O script mostra uma linha `[OK]` para cada uma das cinco verificações (aquisição, conversão IODA, JEDI, MPAS e diagnósticos). Em cada etapa, exige que `prepare`, `run` e `validate` terminem sem erro e que `status --json` confirme `state: validated`. Somente quando **todas** passam imprime `TODOS OS 5 TESTES PASSARAM`. Se alguma falhar, encerra imediatamente com código diferente de zero, indica a operação e mostra as últimas linhas do log.
+
+Exemplo de saída **esperada, não resultado de execução na JACI**:
+
+```text
+MONAN-JEDI | teste de instalacao (dados artificiais)
+Ciclo: 2025-09-01T00:00:00Z
+
+[OK] OBS — aquisicao — prepare / run / validate / status
+[OK] OBS — conversao IODA — prepare / run / validate / status
+[OK] JEDI — assimilacao — prepare / run / validate / status
+[OK] MPAS — previsao — prepare / run / validate / status
+[OK] DIAGNOSTICS — diagnosticos — prepare / run / validate / status
+
+===========================================
+ TODOS OS 5 TESTES PASSARAM
+ Instalacao e contratos basicos: OK
+ ATENCAO: produtos artificiais; NAO
+          valida execucao cientifica real.
+ Log completo: .../manual-test.log
+===========================================
+```
+
+Substitua o caminho pelo destino autorizado do usuário. O log completo fica em `manual-test.log` no diretório do teste. Use uma cópia nova de `examples/beta` para evitar misturar resultados antigos. Os produtos deste fixture são **artificiais**, mesmo quando o comando termina com sucesso. Não reaproveite esse diretório para teste científico.
+
+## 3. Primeiro experimento **real** — receita científica instalada (duas análises)
+
+**Qual é a receita?** Ela vem instalada no pacote, no catálogo `monan_jedi_workflow/catalog/reference-20250901/`. É a configuração de referência de **1º de setembro de 2025**, com malha x1.10242 (~240 km), 55 níveis, matriz B correspondente, 128 ranks MPI, 3D-FGAT e intervalo de 6 horas. O primeiro teste executa análises em **00Z e 06Z**, com uma previsão entre elas, para verificar a passagem de estados. A consistência estática dos templates foi auditada, mas **a execução e a equivalência numérica na JACI ainda não foram homologadas**.
+
+**Não copie `examples/case` para o primeiro teste real**: ele contém `EDITAR` e não é uma receita pronta. **Não use `examples/beta`**: é exclusivamente artificial. Não é necessário encontrar um antigo `jedi.yaml`, nem criar manualmente os YAMLs.
+
+A receita é criada pelo comando:
+
+```bash
+python -m monan_jedi_workflow.experiment_start --help
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
+```
+
+ no comando `"$NEW_CASE"` significa: substitua pelo valor dessa variável. **O diretório ainda não deve existir**, pois o gerador recusa sobrescrevê-lo.
+
+Na JACI, por exemplo:
+
+```bash
+# Escolha onde os arquivos do experimento serão criados.
+# Use um caminho em /p, acessível aos nós de computação.
+export NEW_CASE=/p/projetos/monan_das/joao.gerd/work/first-experiment-20250901
+
+# Confira o caminho escolhido antes de gerar.
+echo "$NEW_CASE"
+
+# Crie o experimento (somente configurações; não executa o modelo).
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
+
+# Entre no diretório gerado.
+cd "$NEW_CASE"
+```
+
+Se preferir, é equivalente informar o caminho diretamente, **sem variável**:
+
+```bash
+python -m monan_jedi_workflow.experiment_start \
+  /p/projetos/monan_das/joao.gerd/work/first-experiment-20250901
+```
+
+O nome `first-experiment-20250901` identifica o exemplo científico fixo de setembro de 2025; não altera a data científica da receita. Para uma tentativa nova, escolha um novo nome e não reutilize um diretório já criado.
+
 ### O que faz o pré-configurador `experiment_start`?
 
 O comando `python -m monan_jedi_workflow.experiment_start "$NEW_CASE"` é o **ponto de partida para preparar um caso sem editar manualmente toda a estrutura de arquivos**. Internamente, ele:
