@@ -98,7 +98,7 @@ def test_generator_binds_runtime_commands_for_pbs(tmp_path):
     assert "Pacote monan_jedi_workflow indisponivel" in script
 
 
-def test_reference_campaign_exports_independent_pbs_jobs(tmp_path, monkeypatch):
+def test_reference_campaign_exports_login_apps_which_submit_native_pbs(tmp_path, monkeypatch):
     from dataclasses import replace
     from monan_jedi_workflow.domain_cli import parse_request
     from monan_jedi_workflow.platform_campaign import campaign_action
@@ -121,12 +121,12 @@ def test_reference_campaign_exports_independent_pbs_jobs(tmp_path, monkeypatch):
     assert 'depends_on' not in tasks[0]
     assert initial[3]['depends_on'] == [initial[2]['name']]
     for task in [*initial, *tasks]:
-        if task['executor'] == 'pbs':
-            assert task['argv'][:2] == ['bash', str(root / 'run-worker.sh')]
-            assert 'pbs' in task
+        assert task['executor'] == 'local'
+        assert 'pbs' not in task
+        assert task['argv'][0] != 'bash' or task['name'].endswith('_run') is False
         assert task['name'] != 'run-case'
-    assert next(t for t in initial if t['name'] == 'init000_wps_run')['executor'] == 'pbs'
-    assert next(t for t in tasks if t['name'] == 'c00000_obs_convert_run')['executor'] == 'pbs'
+    assert next(t for t in initial if t['name'] == 'init000_wps_run')['argv'][0] == 'monan-jedi-workflow'
+    assert next(t for t in tasks if t['name'] == 'c00000_obs_convert_run')['argv'][:3] == ['obs', 'convert', 'run']
 
 
 def test_environment_script_exports_and_checks_required_paths(tmp_path):
@@ -187,8 +187,8 @@ def test_configure_existing_environment_preserves_scientific_case(tmp_path):
     '/home2/user/.conda/envs/monan-jedi/bin',
     '/h2mnt/home/user/.conda/envs/monan-jedi/bin',
 ])
-def test_generator_rejects_non_shared_home_python_runtime(tmp_path, home_runtime):
+def test_generator_allows_login_home_python_runtime(tmp_path, home_runtime):
     root = tmp_path / 'case'
-    with pytest.raises(ValueError, match='Python runtime is in HOME'):
-        create_experiment(root, runtime_bin=home_runtime)
-    assert not root.exists()
+    create_experiment(root, runtime_bin=home_runtime)
+    assert (root / 'campaign.yaml').is_file()
+    assert not (root / 'run-case.pbs').exists()
