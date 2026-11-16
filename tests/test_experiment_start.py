@@ -52,3 +52,31 @@ def test_cli_existing_destination_is_friendly_and_non_destructive(tmp_path):
     assert "Nenhum arquivo foi alterado" in result.stderr
     assert str(destination) in result.stderr
     assert marker.read_text() == "do not modify"
+
+
+def test_generator_pbs_defaults_match_documented_jaci_queue(tmp_path):
+    root = tmp_path / "pbs-default"
+    create_experiment(root)
+    script = (root / "run-case.pbs").read_text()
+    assert "#PBS -q pesqhigh" in script
+    assert "#PBS -l walltime=06:00:00" in script
+
+
+@pytest.mark.parametrize("queue,walltime", [
+    ("pesqmini", "00:31:00"),
+    ("pesqmidi", "06:00:00"),
+    ("pesqhigh", "06:01:00"),
+])
+def test_generator_rejects_documented_queue_limits_without_creating_case(tmp_path, queue, walltime):
+    root = tmp_path / "invalid-pbs"
+    with pytest.raises(ValueError, match="documented walltime limit"):
+        create_experiment(root, pbs_queue=queue, pbs_walltime=walltime)
+    assert not root.exists()
+
+
+def test_generator_accepts_configured_valid_walltime(tmp_path):
+    root = tmp_path / "short-pbs"
+    create_experiment(root, pbs_queue="pesqmidi", pbs_walltime="01:45:00")
+    script = (root / "run-case.pbs").read_text()
+    assert "#PBS -q pesqmidi" in script
+    assert "#PBS -l walltime=01:45:00" in script
