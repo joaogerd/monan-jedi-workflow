@@ -83,8 +83,7 @@ mpas inspect initialization.yaml --cycle 2025-08-31T18:00:00Z
 Cada comando precisa terminar com status zero. `test` não imprime mensagem em
 sucesso. `inspect` mostra caminhos sem exigir estados futuros já produzidos.
 O manifesto de instalação deve ser verdadeiro e compatível com o contrato v2.
-O shell também chama check/prepare/validate em cada etapa. Confira fila, tempo e
-recursos de `run-case.pbs`; os valores fornecidos são PBS/JACI, um nó e 128 ranks.
+O shell também chama check/prepare/validate em cada etapa. Confira fila, tempo e recursos de `run-case.pbs`; são recursos PBS/JACI de um nó e 128 ranks. O gerador agora usa `pesqhigh` e `06:00:00` por padrão; `pesqmidi` aceita no máximo `02:00:00` segundo o [guia operacional JACI](https://github.com/joaogerd/mpas-bmatrix-global/blob/main/docs/jaci-operational-guide.md). Para escolher outra combinação em **um novo diretório**, use `--pbs-queue` e `--pbs-walltime` ao criar o caso. Confirme os limites atuais e sua permissão na fila usando `qstat -Qf pesqhigh` antes de submeter; a duração total é estimada e pode ser insuficiente. Os jobs futuros devem ser desmembrados por operação no simpleWorkflow.
 
 ## 5. Executar o shell explícito
 
