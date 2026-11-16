@@ -81,6 +81,15 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
             for name, runner in [('prepbufr_runner','run_prepbufr.sh'),('gpsro_runner','run_gpsro.sh')]:
                 cfg['variables'][name] = str(science / 'runners' / runner)
         write(path, doc)
+    # Scientific WPS work is run by the WPS Python app on login, which submits
+    # a native-only PBS job containing link_grib/ungrib.
+    wps_file = science / 'initialization/wps.yaml'
+    wps_doc = yaml.safe_load(wps_file.read_text())
+    wps_doc['wps']['pbs'] = {
+        'queue': 'pesqmini', 'select': 1, 'ncpus': 1,
+        'mpiprocs': 1, 'walltime': '00:30:00',
+    }
+    write(wps_file, wps_doc)
     # Obs2IODA is also an HPC operation; execute conversion in its own PBS job.
     obs_file = science / 'obs2ioda.yaml'
     obs_doc = yaml.safe_load(obs_file.read_text())
