@@ -346,9 +346,20 @@ Se a instalação estiver em `/home2` ou em outro caminho não visível nos comp
 ```bash
 cd "$NEW_CASE"
 CLI_BIN="$(dirname "$(command -v monan-jedi-workflow)")"
-printf 'CLI_BIN=%s\\n' "$CLI_BIN"
+printf 'CLI_BIN=%s\n' "$CLI_BIN"
 # Confirme que CLI_BIN aponta para um ambiente acessivel nos compute nodes.
-sed -i "/^exec >case.stdout.log/a export PATH=\\\"$CLI_BIN:\\\$PATH\\\"" run-case.pbs
+python - "$CLI_BIN" <<'PY'
+from pathlib import Path
+import sys
+path = Path("run-case.pbs")
+text = path.read_text()
+anchor = "exec >case.stdout.log 2>case.stderr.log\n"
+if anchor not in text:
+    raise SystemExit("Nao foi encontrada a linha de redirecionamento de logs.")
+line = 'export PATH="' + sys.argv[1] + ':$PATH"\n'
+if line not in text:
+    path.write_text(text.replace(anchor, anchor + line, 1))
+PY
 grep -A 2 '^exec >case.stdout.log' run-case.pbs
 ```
 
