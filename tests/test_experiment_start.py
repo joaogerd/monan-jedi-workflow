@@ -80,3 +80,14 @@ def test_generator_accepts_configured_valid_walltime(tmp_path):
     script = (root / "run-case.pbs").read_text()
     assert "#PBS -q pesqmidi" in script
     assert "#PBS -l walltime=01:45:00" in script
+
+
+def test_generator_binds_runtime_commands_for_pbs(tmp_path):
+    root = tmp_path / "runtime-case"
+    create_experiment(root, runtime_bin=tmp_path / "conda-env/bin")
+    script = (root / "run-case.pbs").read_text()
+    assert "MONAN_RUNTIME_BIN=" in script
+    assert str(tmp_path / "conda-env/bin") in script
+    assert 'export PATH="$MONAN_RUNTIME_BIN:$PATH"' in script
+    assert "monan-jedi-workflow obs jedi mpas" in script
+    assert "Pacote monan_jedi_workflow nao importavel" in script
