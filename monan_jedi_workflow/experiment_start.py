@@ -57,6 +57,8 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
                 if link['source'].startswith('work/obs/'):
                     link['source'] = str(root / link['source'])
         elif key == 'mpas':
+            cfg['pbs']['queue'] = pbs_queue
+            cfg['pbs']['walltime'] = pbs_walltime
             cfg['run_dir'] = str(root / ('work/initialization/mpas/{cycle_id}' if initial else 'work/mpas/{cycle_id}'))
             if initial:
                 for link in cfg['links']:
