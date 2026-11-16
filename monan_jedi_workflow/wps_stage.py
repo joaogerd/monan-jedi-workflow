@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import shlex
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -234,6 +235,25 @@ def run_wps(config_dir: Path, cycle_time: str, *, force: bool = False) -> Path:
 
     logs = run.work_dir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
+    if run.config.get("pbs"):
+        from .native_pbs import native_pbs_run
+        script_commands = []
+        for name, argv in (("link_grib", manifest["link_grib_argv"]),
+                           ("ungrib", manifest["ungrib_argv"])):
+            command = (shlex.join(argv) + " > " +
+                       shlex.quote(str(logs / f"{name}.stdout.log")) +
+                       " 2> " + shlex.quote(str(logs / f"{name}.stderr.log")))
+            script_commands.append(["bash", "-c", "set -euo pipefail; " + command])
+        job_id, _ = native_pbs_run(
+            name=f"wps_{run.cycle.cycle_id}", commands=script_commands,
+            cwd=run.work_dir, stdout=logs / "pbs.stdout.log",
+            stderr=logs / "pbs.stderr.log", resources=run.config["pbs"],
+        )
+        manifest.update({"state": "completed", "completed_at": _timestamp(),
+                         "job_id": job_id})
+        _write_manifest(run, manifest)
+        print(f"[OK] completed WPS PBS cycle: {run.cycle.cycle_time}")
+        return run.manifest_path
     for name, argv in (("link_grib", manifest["link_grib_argv"]), ("ungrib", manifest["ungrib_argv"])):
         result = subprocess.run(argv, cwd=run.work_dir, text=True, capture_output=True, check=False)
         (logs / f"{name}.stdout.log").write_text(result.stdout, encoding="utf-8")
