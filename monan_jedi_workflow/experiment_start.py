@@ -179,7 +179,7 @@ def main():
             "     Depois: python -m monan_jedi_workflow.experiment_start \"$NEW_CASE\"\n\n",
         )
     except ValueError as error:
-        parser.exit(2, f'[ERRO DE CONFIGURACAO] {error}\nVerifique os limites atuais das filas com qstat -Qf no JACI.\n')
+        parser.exit(2, f'[ERRO DE CONFIGURACAO] {error}\nVerifique o ambiente Python compartilhado em /p, as opcoes do comando e, para recursos PBS, qstat -Qf na JACI.\n')
     print(f'[OK] Experimento configurado em: {args.destination.resolve()}')
     print('Proximo passo: campaign check campaign.yaml; campaign export campaign.yaml --engine simpleworkflow; swf validate workflow.yaml; swf run workflow.yaml --ui plain.')
 
