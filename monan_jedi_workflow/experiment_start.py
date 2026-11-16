@@ -181,6 +181,17 @@ def configure_existing_environment(destination):
         except ValueError as error:
             raise ValueError('Worker header has changed; no file was modified') from error
         lines.insert(index + 1, worker_source)
+    if '  source "$MONAN_JACI_LOADER"' not in lines:
+        index = lines.index(worker_source)
+        lines[index + 1:index + 1] = [
+            'if [[ -n "${MONAN_JACI_LOADER:-}" ]]; then',
+            '  if [[ ! -f "$MONAN_JACI_LOADER" ]]; then',
+            '    echo "[FALHA] Carregador JACI nao existe: $MONAN_JACI_LOADER" >&2',
+            '    exit 127',
+            '  fi',
+            '  source "$MONAN_JACI_LOADER"',
+            'fi',
+        ]
     # Validate script structure before changing any existing user file.
     env_file.write_text(render_environment(root))
     worker.write_text('\n'.join(lines) + '\n')
