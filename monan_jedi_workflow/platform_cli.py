@@ -157,7 +157,7 @@ def check_native(op, request, directory):
         if not Path(path).exists():
             raise FileNotFoundError(f"missing input: {path}")
     pbs = op.section.get("pbs", {})
-    if pbs:
+    if pbs and op.key != "obs2ioda":
         command = pbs.get("command")
         if not isinstance(command, list) or not command:
             raise ValueError("pbs.command must be a nonempty argument list")
