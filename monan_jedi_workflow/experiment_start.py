@@ -8,6 +8,7 @@ from pathlib import Path
 import shlex
 import shutil
 import re
+import sysconfig
 import yaml
 
 
@@ -15,7 +16,7 @@ def write(path, data):
     path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 
-def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00'):
+def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None):
     # Site policy documented in mpas-bmatrix-global/docs/jaci-operational-guide.md.
     # User should recheck the scheduler's live limits before submitting.
     queue_limits = {'pesqmini': 30, 'pesqmidi': 120, 'pesqhigh': 360,
@@ -31,6 +32,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     if pbs_queue in queue_limits and minutes > queue_limits[pbs_queue]:
         raise ValueError(f'PBS queue {pbs_queue} has a documented walltime limit of '
                          f'{queue_limits[pbs_queue]} minutes on JACI; requested {pbs_walltime}')
+    runtime_bin = Path(runtime_bin or sysconfig.get_path('scripts')).expanduser().resolve()
     root = Path(destination).resolve()
     if root.exists():
         raise FileExistsError(f'Choose a new experiment directory: {root}')
@@ -91,7 +93,28 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     lines=['#!/bin/bash','#PBS -N monan-first-case',f'#PBS -q {pbs_queue}',
            '#PBS -l select=1:ncpus=128:mpiprocs=128',f'#PBS -l walltime={pbs_walltime}','#PBS -V',
            'set -euo pipefail', ': "${PBS_JOBID:?Submit with qsub}"',
-           'cd '+shlex.quote(str(root)), 'exec >case.stdout.log 2>case.stderr.log']
+           'cd '+shlex.quote(str(root)), 'exec >case.stdout.log 2>case.stderr.log',
+           '# Bootstrap the Python environment used when the case was generated.',
+           '# PBS -V does not guarantee console scripts are on PATH on compute nodes.',
+           'MONAN_RUNTIME_BIN='+shlex.quote(str(runtime_bin)),
+           'if [[ ! -d "$MONAN_RUNTIME_BIN" ]]; then',
+           '  echo "[FALHA] Diretorio bin do ambiente Python nao existe no compute node: $MONAN_RUNTIME_BIN" >&2',
+           '  echo "Use um ambiente visivel em /p e gere um novo caso com --runtime-bin." >&2',
+           '  exit 127',
+           'fi',
+           'export PATH="$MONAN_RUNTIME_BIN:$PATH"',
+           'for app in python monan-jedi-workflow obs jedi mpas; do',
+           '  if [[ ! -x "$MONAN_RUNTIME_BIN/$app" ]]; then',
+           '    echo "[FALHA] Executavel $app ausente de $MONAN_RUNTIME_BIN no compute node." >&2',
+           '    echo "Instale o workflow nesse ambiente em /p e gere um novo caso com --runtime-bin." >&2',
+           '    exit 127',
+           '  fi',
+           'done',
+           '"$MONAN_RUNTIME_BIN/python" -c "import monan_jedi_workflow" || {',
+           '  echo "[FALHA] Pacote monan_jedi_workflow nao importavel no Python do job." >&2',
+           '  exit 127',
+           '}',
+           'echo "[OK] Ambiente Python do job: $MONAN_RUNTIME_BIN"']
     time='2025-08-31T18:00:00Z'
     for verb in ('prepare','run','validate'):
         lines.append(f'monan-jedi-workflow wps-{verb} science/initialization --cycle {time}')
@@ -110,9 +133,10 @@ def main():
     parser.add_argument('destination',type=Path)
     parser.add_argument('--pbs-queue', default='pesqmidi', help='PBS queue for the entire initial case (default: pesqmidi)')
     parser.add_argument('--pbs-walltime', default='01:00:00', help='Walltime HH:MM:SS (default: 01:00:00)')
+    parser.add_argument('--runtime-bin', type=Path, help='Directory with Python and installed CLI entry points, visible on compute nodes (default: current Python scripts directory)')
     args=parser.parse_args()
     try:
-        create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime)
+        create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime, runtime_bin=args.runtime_bin)
     except FileExistsError:
         root = args.destination.expanduser().resolve()
         parser.exit(
