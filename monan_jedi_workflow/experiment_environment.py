@@ -63,27 +63,32 @@ def render_environment(root: Path, *, environ: dict[str, str] | None = None) -> 
     for key in REQUIRED:
         candidate = defaults.get(key)
         selected = env.get(key, "").strip()
-        if not selected and candidate and candidate.exists():
+        origin = "existing export" if selected else "existing site path"
+        if not selected and candidate and candidate.is_dir():
             selected = str(candidate)
-        lines.append(f'export {key}="${{{key}:-{selected}}}"'
-                     if selected and '"' not in selected and '$' not in selected and '`' not in selected
-                     else f'export {key}="${{{key}:-}}"')
-        # Unsafe shell metacharacters are never injected into the generated script.
-        if not selected:
-            lines.append(f'# {key}: not discovered; set explicitly with export before sourcing')
+        if selected:
+            # Use shell quoting; do not interpolate arbitrary paths into shell code.
+            lines.append(f'# {key}: {origin}')
+            lines.append(f'if [[ -z "${{{key}:-}}" ]]; then export {key}='
+                         + shlex.quote(selected) + '; fi')
+        else:
+            lines.append(f'# {key}: not discovered; export an existing path first')
     lines += [
         "_monan_env_missing=0",
         "for _monan_env_name in " + " ".join(REQUIRED) + "; do",
         '  if [[ -z "${!_monan_env_name:-}" ]]; then',
-        '    printf "[CONFIGURACAO] %s nao definido. Exporte um caminho real em /p.\\n" "$_monan_env_name" >&2',
+        '    printf "[CONFIGURACAO] %s nao definido. Configure um caminho real.\\n" "$_monan_env_name" >&2',
+        "    _monan_env_missing=1",
+        '  elif [[ ! -d "${!_monan_env_name}" ]]; then',
+        '    printf "[CONFIGURACAO] %s aponta para diretorio inexistente: %s\\n" "$_monan_env_name" "${!_monan_env_name}" >&2',
         "    _monan_env_missing=1",
         "  fi",
         "done",
         'if [[ "$_monan_env_missing" -ne 0 ]]; then',
-        '  echo "[CONFIGURACAO] Ambiente incompleto: consulte environment.sh e docs/first-experiment.md." >&2',
+        '  echo "[CONFIGURACAO] Ambiente incompleto: corrija as variaveis acima antes de campaign check." >&2',
         '  return 2 2>/dev/null || exit 2',
         'fi',
         "unset _monan_env_missing _monan_env_name",
-        'echo "[OK] Variaveis cientificas carregadas para o experimento."',
+        'echo "[OK] Variaveis cientificas carregadas e diretorios presentes."',
     ]
     return "\n".join(lines) + "\n"
