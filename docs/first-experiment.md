@@ -60,11 +60,16 @@ um parâmetro automático da plataforma. O destino **não pode existir**.
 export NEW_CASE=/p/projetos/monan_das/joao.gerd/work/first-experiment-20250901-swf
 python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
 cd "$NEW_CASE"
-ls experiment.yaml initialization.yaml init.yaml campaign.yaml run-worker.sh
+ls experiment.yaml initialization.yaml init.yaml campaign.yaml environment.sh run-worker.sh
 ```
 
 O gerador copia as configurações científicas para `science/`, cria os links dos
-backgrounds e o `run-worker.sh`, que prepara o `PATH` dentro de cada job PBS.
+backgrounds, `environment.sh` com as exportações científicas, e `run-worker.sh`,
+que prepara o `PATH` dentro de cada job PBS. O gerador verifica caminhos
+candidatos conhecidos antes de utilizá-los; caminhos não encontrados exigem
+configuração explícita. Se houver um carregador JACI institucional existente,
+ele poderá ser usado pelos workers PBS. Um carregador que alterar `STACK_ROOT`
+para um stack diferente da receita será rejeitado pelo worker.
 **Não gera nem submete `run-case.pbs`.** A fila e o walltime do MPAS podem ser
 configurados antes da criação por `--pbs-queue` e `--pbs-walltime` (padrão:
 `pesqmidi` e `01:00:00` neste ensaio; confirme a política PBS atual).
