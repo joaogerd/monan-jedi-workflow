@@ -85,6 +85,12 @@ sucesso. `inspect` mostra caminhos sem exigir estados futuros já produzidos.
 O manifesto de instalação deve ser verdadeiro e compatível com o contrato v2.
 O shell também chama check/prepare/validate em cada etapa. Confira fila, tempo e recursos de `run-case.pbs`; são recursos PBS/JACI de um nó e 128 ranks. O gerador agora usa `pesqmidi` e `01:00:00` por padrão para o caso de 240 km. Uma hora é um limite inicial de teste, não uma medição. `pesqmidi` aceita no máximo `02:00:00` segundo o [guia operacional JACI](https://github.com/joaogerd/mpas-bmatrix-global/blob/main/docs/jaci-operational-guide.md). Para escolher outra combinação em **um novo diretório**, use `--pbs-queue` e `--pbs-walltime` ao criar o caso. Confirme os limites atuais e sua permissão na fila usando `qstat -Qf pesqmidi` antes de submeter; o walltime estimado pode ser insuficiente. Os jobs futuros devem ser desmembrados por operação no simpleWorkflow.
 
+### Ambiente Python do job PBS
+
+Na JACI, `#PBS -V` pode não tornar as CLIs instaladas no Conda visíveis no compute node. O gerador agora adiciona explicitamente ao `PATH` o diretório de executáveis do Python em que o caso foi criado, verifica `python`, `monan-jedi-workflow`, `obs`, `jedi` e `mpas` e testa a importação do pacote **antes** de qualquer processamento científico. Se o ambiente não estiver disponível no compute node, o job para com mensagem explícita nos logs.
+
+Antes de gerar o caso, consulte `command -v monan-jedi-workflow` e `python -c 'import sysconfig; print(sysconfig.get_path("scripts"))'`. O caminho precisa ser acessível nos compute nodes (preferencialmente em `/p`); o pré-configurador também aceita `--runtime-bin /p/.../bin`. A instalação e as dependências não são copiadas automaticamente. Um caso criado antes dessa correção não recebe a alteração com `git pull`: consulte o [tutorial principal](tutorial.md) para atualizar o script existente ou crie um caso novo.
+
 ## 5. Executar o shell explícito
 
 ```bash
