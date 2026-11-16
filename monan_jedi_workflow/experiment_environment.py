@@ -73,6 +73,19 @@ def render_environment(root: Path, *, environ: dict[str, str] | None = None) -> 
                          + shlex.quote(selected) + '; fi')
         else:
             lines.append(f'# {key}: not discovered; export an existing path first')
+    # Optional existing JACI module loader. Do not require external repositories
+    # when the user operates on another HPC site.
+    workspace = _workspace(root)
+    loader = (workspace / "projects/mpas-bmatrix-global/scripts/load_jaci_env.sh"
+              if workspace is not None else None)
+    loader_value = env.get("MONAN_JACI_LOADER", "").strip()
+    if not loader_value and loader is not None and loader.is_file():
+        loader_value = str(loader)
+    if loader_value:
+        lines.append('if [[ -z "${MONAN_JACI_LOADER:-}" ]]; then export MONAN_JACI_LOADER='
+                     + shlex.quote(loader_value) + '; fi')
+    else:
+        lines.append("# MONAN_JACI_LOADER optional: set to an existing site module loader in /p")
     lines += [
         "_monan_env_missing=0",
         "for _monan_env_name in " + " ".join(REQUIRED) + "; do",
