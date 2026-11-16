@@ -35,7 +35,7 @@ check_status() {
   shift
   local output
   printf '%s\n' "\$ $* status $config --cycle $cycle --json" >> "$log"
-  if ! output=$("$@" status "$config" --cycle "$cycle" --json" 2>> "$log"); then
+  if ! output=$("$@" status "$config" --cycle "$cycle" --json 2>> "$log"); then
     fail "$label: status"
   fi
   printf '%s\n' "$output" >> "$log"
