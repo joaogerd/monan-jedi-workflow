@@ -33,6 +33,8 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         raise ValueError(f'PBS queue {pbs_queue} has a documented walltime limit of '
                          f'{queue_limits[pbs_queue]} minutes on JACI; requested {pbs_walltime}')
     runtime_bin = Path(runtime_bin or sysconfig.get_path('scripts')).expanduser().resolve()
+    if runtime_bin.parts[:2] in {('/', 'home'), ('/', 'home2')}:
+        raise ValueError(f'Python runtime is in HOME and may not be visible on JACI compute nodes: {runtime_bin}. Use --runtime-bin with a shared environment in /p.')
     root = Path(destination).resolve()
     if root.exists():
         raise FileExistsError(f'Choose a new experiment directory: {root}')
@@ -90,42 +92,55 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         (folder/'trajectory.nc').symlink_to(root/parent/f'mpasout.{stamp}.nc')
         valid='2025-09-01_00.00.00' if cid.endswith('000000Z') else '2025-09-01_06.00.00'
         (folder/'state.nc').symlink_to(root/parent/f'mpasout.{valid}.nc')
-    lines=['#!/bin/bash','#PBS -N monan-first-case',f'#PBS -q {pbs_queue}',
-           '#PBS -l select=1:ncpus=128:mpiprocs=128',f'#PBS -l walltime={pbs_walltime}','#PBS -V',
-           'set -euo pipefail', ': "${PBS_JOBID:?Submit with qsub}"',
-           'cd '+shlex.quote(str(root)), 'exec >case.stdout.log 2>case.stderr.log',
-           '# Bootstrap the Python environment used when the case was generated.',
-           '# PBS -V does not guarantee console scripts are on PATH on compute nodes.',
-           'MONAN_RUNTIME_BIN='+shlex.quote(str(runtime_bin)),
-           'if [[ ! -d "$MONAN_RUNTIME_BIN" ]]; then',
-           '  echo "[FALHA] Diretorio bin do ambiente Python nao existe no compute node: $MONAN_RUNTIME_BIN" >&2',
-           '  echo "Use um ambiente visivel em /p e gere um novo caso com --runtime-bin." >&2',
-           '  exit 127',
-           'fi',
-           'export PATH="$MONAN_RUNTIME_BIN:$PATH"',
-           'for app in python monan-jedi-workflow obs jedi mpas; do',
-           '  if [[ ! -x "$MONAN_RUNTIME_BIN/$app" ]]; then',
-           '    echo "[FALHA] Executavel $app ausente de $MONAN_RUNTIME_BIN no compute node." >&2',
-           '    echo "Instale o workflow nesse ambiente em /p e gere um novo caso com --runtime-bin." >&2',
-           '    exit 127',
-           '  fi',
-           'done',
-           '"$MONAN_RUNTIME_BIN/python" -c "import monan_jedi_workflow" || {',
-           '  echo "[FALHA] Pacote monan_jedi_workflow nao importavel no Python do job." >&2',
-           '  exit 127',
-           '}',
-           'echo "[OK] Ambiente Python do job: $MONAN_RUNTIME_BIN"']
-    time='2025-08-31T18:00:00Z'
-    for verb in ('prepare','run','validate'):
-        lines.append(f'monan-jedi-workflow wps-{verb} science/initialization --cycle {time}')
-    steps=[('mpas init','init.yaml',time),('mpas','initialization.yaml',time)]
-    for time in ['2025-09-01T00:00:00Z','2025-09-01T06:00:00Z']:
-        steps.extend([('obs convert','experiment.yaml',time),('jedi','experiment.yaml',time)])
-        if 'T00:' in time:steps.append(('mpas','experiment.yaml',time))
-    for app,config,time in steps:
-        for verb in ('check','prepare','run','validate'):
-            lines.append(f'{app} {verb} {config} --cycle {time}')
-    (root/'run-case.pbs').write_text('\n'.join(lines)+'\n')
+    # One site runtime wrapper is invoked by each independently submitted PBS task.
+    # This does not create an enclosing PBS job or initiate scheduler submissions.
+    worker = [
+        '#!/usr/bin/env bash',
+        'set -euo pipefail',
+        'MONAN_RUNTIME_BIN='+shlex.quote(str(runtime_bin)),
+        'if [[ ! -d "$MONAN_RUNTIME_BIN" ]]; then',
+        '  echo "[FALHA] Ambiente Python nao visivel no compute node: $MONAN_RUNTIME_BIN" >&2',
+        '  echo "O ambiente deve estar em /p (JACI); nao use HOME." >&2',
+        '  exit 127',
+        'fi',
+        'export PATH="$MONAN_RUNTIME_BIN:$PATH"',
+        'for app in python monan-jedi-workflow obs jedi mpas; do',
+        '  if [[ ! -x "$MONAN_RUNTIME_BIN/$app" ]]; then',
+        '    echo "[FALHA] Executavel $app ausente em $MONAN_RUNTIME_BIN" >&2',
+        '    exit 127',
+        '  fi',
+        'done',
+        '"$MONAN_RUNTIME_BIN/python" -c "import monan_jedi_workflow" || {',
+        '  echo "[FALHA] Pacote monan_jedi_workflow indisponivel no Python do worker" >&2',
+        '  exit 127',
+        '}',
+        'exec "$@"',
+    ]
+    (root / 'run-worker.sh').write_text('\\n'.join(worker)+'\\n')
+    # Each stage is an individual simpleWorkflow task; PBS is requested only
+    # by each declared scientific run task, never by the full experiment.
+    initialization_cycle = '2025-08-31T18:00:00Z'
+    first_cycle = '2025-09-01T00:00:00Z'
+    last_cycle = '2025-09-01T06:00:00Z'
+    campaign = {
+        'schema_version': 1,
+        'name': 'reference-20250901-two-analyses',
+        'experiment': './experiment.yaml',
+        'calendar': {
+            'start': first_cycle, 'end': last_cycle,
+            'interval': 'PT6H', 'end_inclusive': True,
+        },
+        'initialization': [
+            {'operation': 'wps', 'cycle': initialization_cycle, 'experiment': './init.yaml'},
+            {'operation': 'mpas.init', 'cycle': initialization_cycle, 'experiment': './init.yaml'},
+            {'operation': 'mpas', 'cycle': initialization_cycle,
+             'experiment': './initialization.yaml'},
+        ],
+        'operations': ['obs.convert', 'jedi', 'mpas'],
+        'last_cycle': {'forecast': False},
+        'output': './workflow.yaml',
+    }
+    write(root / 'campaign.yaml', campaign)
 
 
 def main():
@@ -156,7 +171,7 @@ def main():
     except ValueError as error:
         parser.exit(2, f'[ERRO DE CONFIGURACAO] {error}\nVerifique os limites atuais das filas com qstat -Qf no JACI.\n')
     print(f'[OK] Experimento configurado em: {args.destination.resolve()}')
-    print('Proximo passo: confira os insumos e a configuracao antes de submeter run-case.pbs.')
+    print('Proximo passo: campaign check campaign.yaml; campaign export campaign.yaml --engine simpleworkflow; swf validate workflow.yaml; swf run workflow.yaml --ui plain.')
 
 
 if __name__=='__main__':
