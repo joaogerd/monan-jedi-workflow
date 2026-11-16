@@ -58,8 +58,8 @@ def test_generator_pbs_defaults_match_documented_jaci_queue(tmp_path):
     root = tmp_path / "pbs-default"
     create_experiment(root)
     script = (root / "run-case.pbs").read_text()
-    assert "#PBS -q pesqhigh" in script
-    assert "#PBS -l walltime=06:00:00" in script
+    assert "#PBS -q pesqmidi" in script
+    assert "#PBS -l walltime=01:00:00" in script
 
 
 @pytest.mark.parametrize("queue,walltime", [
