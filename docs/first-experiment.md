@@ -86,7 +86,10 @@ A campanha gerada declara:
 - 01/09 06Z: Obs2IODA → JEDI, sem previsão após a segunda análise.
 
 O `simpleWorkflow` recebe tarefas `prepare/run/validate` com dependências
-explícitas; a primeira tarefa de 00Z depende da **validação da previsão inicial**.
+explícitas **dentro de cada fase**. A inicialização inteira é executada primeiro
+em seu próprio motor; só depois de concluída com sucesso o motor dos ciclos
+começa 00Z. Não é necessário nem válido referenciar o nome de uma tarefa de
+inicialização em `depends_on` de uma tarefa de ciclo.
 WPS, MPAS, Obs2IODA e JEDI têm jobs PBS individuais para a etapa `run`,
 e as demais operações são tarefas locais de controle. O wrapper do worker
 confere a acessibilidade do Python e das CLIs no compute node antes de executar.
