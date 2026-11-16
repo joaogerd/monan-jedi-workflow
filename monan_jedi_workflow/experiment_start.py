@@ -34,15 +34,8 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         raise ValueError(f'PBS queue {pbs_queue} has a documented walltime limit of '
                          f'{queue_limits[pbs_queue]} minutes on JACI; requested {pbs_walltime}')
     runtime_bin = Path(runtime_bin or sysconfig.get_path('scripts')).expanduser().resolve()
-    # JACI login nodes may mount HOME under /h2mnt/home as well.
-    # A runtime in HOME cannot be used by PBS workers on the compute nodes.
-    if (runtime_bin.parts[:2] in {('/', 'home'), ('/', 'home2')}
-            or runtime_bin.parts[:3] == ('/', 'h2mnt', 'home')):
-        raise ValueError(
-            f'Python runtime is in HOME and not available on JACI compute nodes: {runtime_bin}. '
-            'Create/install the Python environment on a shared filesystem (e.g. /p), '
-            'then pass --runtime-bin /p/.../bin.'
-        )
+    # Python runs on the login node. A HOME Conda runtime is valid for the
+    # controller; compute nodes receive only native scientific PBS scripts.
     root = Path(destination).resolve()
     if root.exists():
         raise FileExistsError(f'Choose a new experiment directory: {root}')
@@ -111,8 +104,9 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         valid='2025-09-01_00.00.00' if cid.endswith('000000Z') else '2025-09-01_06.00.00'
         (folder/'state.nc').symlink_to(root/parent/f'mpasout.{valid}.nc')
     (root / 'environment.sh').write_text(render_environment(root))
-    # One site runtime wrapper is invoked by each independently submitted PBS task.
-    # This does not create an enclosing PBS job or initiate scheduler submissions.
+    # Legacy optional worker wrapper kept for compatibility. The exported
+    # simpleWorkflow DAG now runs native stage apps on the login node and does
+    # not invoke this wrapper from PBS.
     worker = [
         '#!/usr/bin/env bash',
         'set -euo pipefail',
@@ -227,7 +221,7 @@ def main():
     parser.add_argument('--pbs-queue', default='pesqmidi', help='PBS queue for the entire initial case (default: pesqmidi)')
     parser.add_argument('--pbs-walltime', default='01:00:00', help='Walltime HH:MM:SS (default: 01:00:00)')
     parser.add_argument('--configure-existing', action='store_true', help='Safely add missing environment.sh to an existing generated campaign, without recreating scientific files')
-    parser.add_argument('--runtime-bin', type=Path, help='Directory with Python and installed CLI entry points, visible on compute nodes (default: current Python scripts directory)')
+    parser.add_argument('--runtime-bin', type=Path, help='Python CLI directory for optional legacy worker wrapper; not used by login-side simpleWorkflow tasks')
     args=parser.parse_args()
     try:
         if args.configure_existing:
