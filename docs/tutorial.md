@@ -74,7 +74,7 @@ O pré-configurador `python -m monan_jedi_workflow.experiment_start` copia a
 **receita científica instalada** `catalog/reference-20250901` (MPAS 240 km,
 55 níveis, 128 ranks, matriz B correspondente, 3D-FGAT), cria `experiment.yaml`,
 `initialization.yaml`, `init.yaml`, `science/`, os links dos backgrounds,
-`campaign.yaml` e `run-worker.sh`. **Não executa o modelo, não instala o
+`campaign.yaml`, `environment.sh` e `run-worker.sh`. **Não executa o modelo, não instala o
 ambiente, não baixa os dados e não submete PBS.**
 
 A receita gerada corresponde a duas análises, em 01/09/2025 **00Z e 06Z**,
@@ -113,7 +113,7 @@ export NEW_CASE=/p/projetos/monan_das/joao.gerd/work/first-experiment-20250901-s
 echo "$NEW_CASE"
 python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
 cd "$NEW_CASE"
-ls experiment.yaml initialization.yaml init.yaml campaign.yaml run-worker.sh
+ls experiment.yaml initialization.yaml init.yaml campaign.yaml environment.sh run-worker.sh
 ```
 
 Os caminhos científicos de GFS, PREPBUFR, GNSS-RO, malha, partição, tabelas de
@@ -123,6 +123,33 @@ O pré-configurador não baixa esses dados. Não substitua arquivos históricos
 por produtos artificiais.
 
 ### 3.3 Valide o plano e deixe o orquestrador submeter os jobs
+
+Antes de chamar `campaign`, carregue a **receita de ambiente gerada**:
+
+```bash
+source ./environment.sh
+```
+
+O arquivo exporta `MONAN_JEDI_INSTALL_ROOT`, `STACK_ROOT`, `MONAN_MESH_ROOT`,
+`MONAN_PHYSICS_ROOT`, `MONAN_BMATRIX_ROOT`, `MONAN_INPUT_ROOT`,
+`MONAN_GFS_ROOT` e `MONAN_LIBFABRIC_ROOT`. O gerador reutiliza valores
+existentes e caminhos conhecidos quando presentes. **Não inventa os que
+faltam**: uma variável indefinida ou um diretório ausente gera
+`[CONFIGURACAO]` com o nome a corrigir. Ajuste com `export VAR=/p/...` e
+repita `source ./environment.sh` antes de continuar.
+
+Se o seu experimento **já existe e foi gerado na versão anterior**, pode
+acrescentar somente a configuração de ambiente, sem alterar os YAMLs ou
+recriar resultados:
+
+```bash
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE" --configure-existing
+cd "$NEW_CASE"
+source ./environment.sh
+```
+
+Esse procedimento recusa sobrescrever um `environment.sh` preexistente.
+Somente após obter `[OK]` no carregamento, execute:
 
 ```bash
 campaign inspect campaign.yaml
