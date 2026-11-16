@@ -62,9 +62,6 @@ def wps_tasks(request, principal, cycle, prefix, previous):
     config_dir = root / "science" / "initialization"
     if not (config_dir / "wps.yaml").is_file():
         raise FileNotFoundError(f"WPS configuration missing: {config_dir / 'wps.yaml'}")
-    worker = root / "run-worker.sh"
-    if not worker.is_file():
-        raise FileNotFoundError(f"PBS worker wrapper missing: {worker}")
     tasks = []
     for action in ("prepare", "run", "validate"):
         name = f"{prefix}_wps_{action}"
@@ -73,8 +70,8 @@ def wps_tasks(request, principal, cycle, prefix, previous):
         task = {"name": name, "argv": argv, "executor": "local"}
         if previous:
             task["depends_on"] = [previous]
-        # WPS runs via its native stage CLI on login for this beta recipe.
-        # TODO: stage-owned PBS for UNGRIB where site policy requires it.
+        # WPS Python runs on login; when pbs is configured, the stage submits
+        # native link_grib/ungrib commands from this login-side task.
         tasks.append(task)
         previous = name
     return tasks
