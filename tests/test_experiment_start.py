@@ -17,6 +17,8 @@ def test_installed_recipe_creates_independent_case(tmp_path):
     assert first.readlink() == root / 'work/initialization/mpas/20250831T180000Z/mpasout.2025-08-31_21.00.00.nc'
     assert not (root / 'run-case.pbs').exists()
     assert (root / 'run-worker.sh').is_file()
+    assert (root / 'environment.sh').is_file()
+    assert 'source ' + str(root / 'environment.sh') in (root / 'run-worker.sh').read_text()
     campaign = yaml.safe_load((root / 'campaign.yaml').read_text())
     assert [x['operation'] for x in campaign['initialization']] == ['wps', 'mpas.init', 'mpas']
     assert campaign['operations'] == ['obs.convert', 'jedi', 'mpas']
@@ -125,3 +127,56 @@ def test_reference_campaign_exports_independent_pbs_jobs(tmp_path, monkeypatch):
         assert task['name'] != 'run-case'
     assert next(t for t in initial if t['name'] == 'init000_wps_run')['executor'] == 'pbs'
     assert next(t for t in tasks if t['name'] == 'c00000_obs_convert_run')['executor'] == 'pbs'
+
+
+def test_environment_script_exports_and_checks_required_paths(tmp_path):
+    from monan_jedi_workflow.experiment_environment import REQUIRED, render_environment
+    import os
+    env = {}
+    for key in REQUIRED:
+        folder = tmp_path / key
+        folder.mkdir()
+        env[key] = str(folder)
+    script = tmp_path / 'environment.sh'
+    script.write_text(render_environment(tmp_path / 'case', environ=env))
+    result = subprocess.run(
+        ['bash', '-c', 'set -e; source "$1"; '
+         'test "$MONAN_JEDI_INSTALL_ROOT" = "$2"; '
+         'test "$STACK_ROOT" = "$3"',
+         'bash', str(script), env['MONAN_JEDI_INSTALL_ROOT'], env['STACK_ROOT']],
+        capture_output=True, text=True, env={'PATH': os.environ['PATH']},
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_environment_script_reports_missing_paths_before_campaign(tmp_path):
+    from monan_jedi_workflow.experiment_environment import REQUIRED, render_environment
+    import os
+    env = {key: str(tmp_path / key) for key in REQUIRED}
+    script = tmp_path / 'environment.sh'
+    script.write_text(render_environment(tmp_path / 'case', environ=env))
+    result = subprocess.run(
+        ['bash', '-c', 'source "$1"', 'bash', str(script)],
+        capture_output=True, text=True, env={'PATH': os.environ['PATH']},
+    )
+    assert result.returncode == 2
+    assert 'diretorio inexistente' in result.stderr
+    assert 'MONAN_JEDI_INSTALL_ROOT' in result.stderr
+
+
+def test_configure_existing_environment_preserves_scientific_case(tmp_path):
+    from monan_jedi_workflow.experiment_start import configure_existing_environment
+    root = tmp_path / 'case'
+    create_experiment(root, runtime_bin=tmp_path / 'env/bin')
+    env_file = root / 'environment.sh'
+    env_file.unlink()
+    worker = root / 'run-worker.sh'
+    original = worker.read_text()
+    worker.write_text(original.replace('source ' + str(env_file) + '\\n', ''))
+    previous = (root / 'science/jedi.yaml').read_bytes()
+    configure_existing_environment(root)
+    assert env_file.is_file()
+    assert 'source ' + str(env_file) in worker.read_text()
+    assert (root / 'science/jedi.yaml').read_bytes() == previous
+    with pytest.raises(FileExistsError):
+        configure_existing_environment(root)
