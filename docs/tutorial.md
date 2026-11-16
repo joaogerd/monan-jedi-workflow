@@ -68,38 +68,115 @@ Ciclo: 2025-09-01T00:00:00Z
 
 Substitua o caminho pelo destino autorizado do usuário. O log completo fica em `manual-test.log` no diretório do teste. Use uma cópia nova de `examples/beta` para evitar misturar resultados antigos. Os produtos deste fixture são **artificiais**, mesmo quando o comando termina com sucesso. Não reaproveite esse diretório para teste científico.
 
-## 3. Primeiro experimento **real** — um ciclo
+## 3. Primeiro experimento **real** — receita científica instalada (duas análises)
 
-Crie uma pasta própria, nova, para cada tentativa. Parta da **receita científica de referência validada**: `experiment.yaml`, `site.yaml` (se usado), `science/jedi.yaml`, `science/mpas.yaml`, observações, templates, backgrounds, executáveis e arquivos de malha/partição. `examples/case` contém referências e marcadores `EDITAR` e **não** é um experimento pronto para rodar.
+**Qual é a receita?** Ela vem instalada no pacote, no catálogo `monan_jedi_workflow/catalog/reference-20250901/`. É a configuração de referência de **1º de setembro de 2025**, com malha x1.10242 (~240 km), 55 níveis, matriz B correspondente, 128 ranks MPI, 3D-FGAT e intervalo de 6 horas. O primeiro teste executa análises em **00Z e 06Z**, com uma previsão entre elas, para verificar a passagem de estados. A consistência estática dos templates foi auditada, mas **a execução e a equivalência numérica na JACI ainda não foram homologadas**.
 
-### 3.1 Inspecione os arquivos antes de executar
+**Não copie `examples/case` para o primeiro teste real**: ele contém `EDITAR` e não é uma receita pronta. **Não use `examples/beta`**: é exclusivamente artificial. Não é necessário encontrar um antigo `jedi.yaml`, nem criar manualmente os YAMLs.
 
-No arquivo principal, `experiment.destination` determina os produtos e o estado persistido. Caminhos de arquivos referenciados são relativos ao YAML que os declara. Verifique especialmente:
-
-1. Aquisição ou arquivos observacionais existentes em cada horário, conversores e outputs IODA esperados;
-2. Aplicação JEDI, background/estado completo, trajetória FGAT, B, geometria, variáveis, observadores, QC, executável e validação;
-3. Previsão MPAS: malha, níveis, partição, passo de tempo, estados de saída e MPI;
-4. Configuração de site: `site.execution.mode`, PBS real na JACI, bibliotecas, bootstrap, filas e recursos;
-5. Diretórios independentes por ciclo e produtos previstos para alimentar o horário seguinte;
-6. Para o primeiro ciclo, **estado inicial real** disponível ou sequência de inicialização declarada (não presumir que a beta prepara análises externas automaticamente).
-
-Não mude a ciência durante a validação da plataforma. Guarde hashes/versões do baseline e logs.
-
-### 3.2 Exercite os apps separadamente
-
-Com um `experiment.yaml` científico completo, uma data com observações disponíveis e um destino novo:
+A receita é criada pelo comando:
 
 ```bash
-CYCLE=2025-09-01T00:00:00Z   # EXEMPLO: substituir pelo ciclo do baseline
-obs acquire inspect experiment.yaml --cycle "$CYCLE"
-obs acquire check experiment.yaml --cycle "$CYCLE"
-obs convert check experiment.yaml --cycle "$CYCLE"
-jedi check experiment.yaml --cycle "$CYCLE"
-mpas check experiment.yaml --cycle "$CYCLE"
-diagnostics check experiment.yaml --cycle "$CYCLE"
+python -m monan_jedi_workflow.experiment_start --help
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
 ```
 
-Se alguma operação não fizer parte da receita, não a execute artificialmente; ajuste as operações selecionadas. Para cada app efetivamente usado, o ciclo de vida é `prepare -> run -> validate -> status`. Em site PBS, o `run` do worker científico depende da alocação gerenciada pelo simpleWorkflow (ou de alocação previamente obtida no uso manual). **Não** execute o mesmo ciclo em paralelo manualmente e pelo simpleWorkflow.
+O comando recusa sobrescrever um destino existente, copia o catálogo e materializa `experiment.yaml`, `initialization.yaml`, `init.yaml`, `science/` e `run-case.pbs`. **Ele cria configurações; não baixa os dados científicos nem executa o modelo.**
+
+### 3.1 Confirme o pacote instalado e as dependências
+
+No checkout atualizado do branch `feat/platform-domain-apps`, com o ambiente MONAN-JEDI ativado:
+
+```bash
+cd /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow
+git switch feat/platform-domain-apps
+git pull --ff-only
+python -m pip install --no-deps --no-build-isolation -e .
+python -m monan_jedi_workflow.experiment_start --help
+```
+
+A instalação do workflow não instala/compila MONAN/MPAS, MPAS-JEDI, WPS ou Obs2IODA. O Python e o ambiente de runtime precisam funcionar nos nós de computação, não apenas no login. Antes de submeter, confira o manifesto real da instalação e as bibliotecas MPI/PBS.
+
+### 3.2 Declare os caminhos e confira os arquivos de entrada
+
+Estes caminhos são os **valores documentados para o ambiente de João na JACI**; confirme que existem no filesystem. Não são valores universais nem arquivos automaticamente disponibilizados pelo pacote.
+
+```bash
+export STACK_ROOT=/p/projetos/monan_das/joao.gerd/work/spack-stack-inpe-overlay-20260515T181917Z/spack-stack
+export MONAN_JEDI_INSTALL_ROOT=/p/projetos/monan_das/$USER/build/monan-jedi
+export MONAN_MESH_ROOT=/p/projetos/monan_das/share/MONAN-JEDI-Data/meshes/quasi_uniform/x1.10242_240km
+export MONAN_PHYSICS_ROOT=/p/projetos/monan_das/share/MONAN-JEDI-Data/physics/mpas/files
+export MONAN_BMATRIX_ROOT=/p/projetos/monan_das/share/MONAN-JEDI-Data/covariance/x1.10242_240km/55levels
+export MONAN_LIBFABRIC_ROOT=/opt/cray/libfabric/1.22.0/lib64
+export MONAN_INPUT_ROOT=/p/projetos/monan_das/$USER/external-inputs
+export MONAN_GFS_ROOT=/p/projetos/monan_das/$USER/data/gfs
+export NEW_CASE=/p/projetos/monan_das/$USER/work/first-experiment-20250901
+```
+
+Verifique a **existência e legibilidade** dos insumos reais, antes de gastar recursos computacionais:
+
+```bash
+test -r "$MONAN_JEDI_INSTALL_ROOT/share/monan-jedi/install-manifest.json" && echo "Manifesto: OK"
+test -r "$MONAN_MESH_ROOT/static/x1.10242.invariant.nc" && echo "Malha: OK"
+test -r "$MONAN_MESH_ROOT/partitions/x1.10242.graph.info.part.128" && echo "Particao: OK"
+test -d "$MONAN_BMATRIX_ROOT" && echo "Diretorio B: existe (conteudo ainda precisa ser validado)"
+test -r "$MONAN_GFS_ROOT/2025083118/gfs.t18z.pgrb2.0p25.f000" && echo "GFS inicial: OK"
+test -r "$MONAN_INPUT_ROOT/observations/prepnr/2025/prepbufr.gdas.2025090100.nr" && echo "PREPBUFR 00Z: OK"
+test -r "$MONAN_INPUT_ROOT/observations/prepnr/2025/prepbufr.gdas.2025090106.nr" && echo "PREPBUFR 06Z: OK"
+test -r "$MONAN_INPUT_ROOT/observations/gpsro/2025/gdas.gpsro.t00z.20250901.bufr" && echo "GNSS-RO 00Z: OK"
+test -r "$MONAN_INPUT_ROOT/observations/gpsro/2025/gdas.gpsro.t06z.20250901.bufr" && echo "GNSS-RO 06Z: OK"
+```
+
+**Atenção:** os `test` individuais não produzem erro detalhado quando falham; a ausência de `OK` significa que aquele caminho deve ser investigado. A existência do diretório B não comprova a presença de todos os arquivos de covariância. A receita **não** faz download automático desses insumos históricos. Não substitua por dados artificiais ou de outra data.
+
+### 3.3 Gere o primeiro experimento sem copiar arquivos à mão
+
+```bash
+python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
+cd "$NEW_CASE"
+ls -l experiment.yaml initialization.yaml init.yaml run-case.pbs
+```
+
+A estrutura criada inclui `science/jedi.yaml`, `science/mpas.yaml`, `science/obs2ioda.yaml`, os arquivos de inicialização, os templates e os wrappers. Se `$NEW_CASE` já existir, escolha **outro diretório vazio e ainda inexistente**; não apague um resultado anterior para reutilizar o nome.
+
+### 3.4 Inspecione o caso antes de submeter
+
+```bash
+obs convert check experiment.yaml --cycle 2025-09-01T00:00:00Z
+obs convert check experiment.yaml --cycle 2025-09-01T06:00:00Z
+jedi inspect experiment.yaml --cycle 2025-09-01T00:00:00Z
+mpas inspect initialization.yaml --cycle 2025-08-31T18:00:00Z
+cat run-case.pbs
+```
+
+Os dois `check` precisam terminar sem erro. `inspect` mostra a configuração e os caminhos, inclusive produtos que só existirão após as etapas produtoras; não confunda inspeção com aprovação científica. Confira especialmente o `#PBS -q`, `select`, `mpiprocs`, `walltime` e a visibilidade dos executáveis no compute node.
+
+### 3.5 Submeta o primeiro teste científico
+
+```bash
+qsub run-case.pbs
+```
+
+A receita gera **um shell PBS sequencial**, não um `workflow.yaml` do simpleWorkflow. O shell executa WPS, `mpas init`, a previsão inicial, as observações e JEDI 00Z, MPAS 00Z e JEDI 06Z. WPS ainda usa a interface legada. **Não execute esse shell no login** e não rode simultaneamente o simpleWorkflow sobre o mesmo caso.
+
+### 3.6 Verifique o resultado
+
+Após o job concluir:
+
+```bash
+jedi status experiment.yaml --cycle 2025-09-01T00:00:00Z
+jedi status experiment.yaml --cycle 2025-09-01T06:00:00Z
+python -m monan_jedi_workflow.scientific_feedback \
+  work/jedi/20250901T000000Z/Data/os/obsout_3dvar_sondes.nc4
+python -m monan_jedi_workflow.scientific_feedback \
+  work/jedi/20250901T060000Z/Data/os/obsout_3dvar_sondes.nc4
+```
+
+Esperado: as duas análises validadas, PREPBUFR/GNSS-RO convertidos conforme o caso, MPAS inicial e MPAS intermediário validados, backgrounds nos horários apropriados e feedback observacional verificável. Consulte `case.stdout.log`, `case.stderr.log` e os logs de cada runtime. O shell para na primeira falha; **não possui restart automático**.
+
+Para os detalhes completos deste procedimento e do inventário dos dados, consulte **[Primeiro experimento real](first-experiment.md)**. Para a comparação numérica com a referência histórica (que exige os dados originais de comparação), consulte **[Validação científica](validation/2025-reference-scientific-validation.md)** e **[Piloto curto](validation/run-short-pilot.md)**.
+
+**Importante para a futura versão 1.0:** o procedimento acima é um ensaio real de **dois ciclos encadeados usando um shell PBS**, ainda não a campanha de um dia gerenciada pelo simpleWorkflow. A etapa seguinte exige integrar e validar essa mesma receita no formato de campanha, com inicialização e transferência de background corretas; não basta criar um `campaign.yaml` genérico para afirmar que isso está pronto.
 
 ## 4. Campanha de **um dia** no simpleWorkflow
 
