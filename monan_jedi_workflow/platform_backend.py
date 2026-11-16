@@ -1,4 +1,4 @@
-"""Adapters for existing scientific stage APIs; no scheduler submission."""
+"""Login-side native adapters; stage apps own scientific PBS submissions."""
 
 from pathlib import Path
 import json
@@ -84,10 +84,25 @@ def execute_native(op, request, directory):
     mode = op.site.get("execution", {}).get("mode", "pbs")
     if mode not in {"local", "pbs"}:
         raise ValueError("site.execution.mode must be local or pbs")
-    if mode == "pbs" and not os.environ.get("PBS_JOBID"):
-        raise RuntimeError(
-            "PBS worker requires an existing allocation (PBS_JOBID); run does not submit jobs"
-        )
+    if mode == "pbs":
+        # The platform CLI runs on the LOGIN node. Native stage applications
+        # submit their already-rendered scientific PBS scripts and wait there.
+        # No Python/Conda task is ever sent to a compute node.
+        if os.environ.get("PBS_JOBID"):
+            raise RuntimeError(
+                "Scientific PBS submission must be controlled from the login node, "
+                "not from inside another PBS allocation"
+            )
+        if op.key == "jedi":
+            from .jedi_stage import submit_jedi
+            return submit_jedi(directory, request.cycle, wait=True)
+        if op.key == "mpas":
+            from .mpas_stage import submit_mpas
+            return submit_mpas(directory, request.cycle, wait=True)
+        if op.key == "mpas_init":
+            from .init_stage import submit_mpas_init
+            return submit_mpas_init(directory, request.cycle, wait=True)
+        raise ValueError(f"unsupported PBS native stage: {op.key}")
     cfg = run.config["pbs"]
     if mode == "local":
         if int(cfg.get("mpiprocs", 1)) != 1:
