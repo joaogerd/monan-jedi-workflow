@@ -60,3 +60,45 @@ def test_new_first_experiment_all_native_stages_reference_shared_site(tmp_path):
     ):
         data = yaml.safe_load((root / rel).read_text())
         assert data[key]["pbs"]["site_config"] == str(site)
+
+
+@pytest.mark.parametrize("stage_module", [
+    "monan_jedi_workflow.mpas_stage",
+    "monan_jedi_workflow.jedi_stage",
+])
+def test_native_mpi_pbs_sources_site_before_launcher(tmp_path, monkeypatch, stage_module):
+    import importlib
+    from types import SimpleNamespace
+    module = importlib.import_module(stage_module)
+    monkeypatch.setattr(
+        module, "render_native_site_setup",
+        lambda pbs, *, config_dir: [
+            "module purge",
+            "module load installed-scientific-stack",
+            "export LD_LIBRARY_PATH=/scientific/stack/lib",
+        ],
+    )
+    run = SimpleNamespace(
+        config={
+            "pbs": {
+                "queue": "pesqmini",
+                "select": 1, "ncpus": 1, "mpiprocs": 1,
+                "walltime": "00:10:00",
+                "launcher": "mpiexec",
+                "command": ["./mpas_init_atmosphere"],
+                "site_config": str(tmp_path / "site.yaml"),
+            },
+        },
+        context={},
+        config_dir=tmp_path,
+        run_dir=tmp_path,
+        pbs_path=tmp_path / "science.pbs",
+    )
+    module._render_pbs(run)
+    content = run.pbs_path.read_text()
+    assert content.index("module purge") < content.index("module load installed-scientific-stack")
+    assert content.index("module load installed-scientific-stack") < content.index(
+        "mpiexec -n 1 ./mpas_init_atmosphere"
+    )
+    assert "export LD_LIBRARY_PATH=/scientific/stack/lib" in content
+    assert "python" not in content.lower()
