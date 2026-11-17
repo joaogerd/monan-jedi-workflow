@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -214,6 +215,38 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
             "verificar a biblioteca no nó alocado antes de repetir. "
             "Não copiar bibliotecas nem criar links simbólicos para contornar a incompatibilidade.",
         )
+    # Explain a common HPC misconfiguration when the correct library is
+    # available on the login node but absent from the generated PBS setup.
+    runtime_check = None
+    if code == "missing-shared-library":
+        lib_root = os.environ.get("MONAN_LIBFABRIC_ROOT")
+        shared_lib = Path(lib_root) / "libfabric.so.1" if lib_root else None
+        native_scripts = []
+        for state_record in states:
+            folder = state_record.get("run_dir")
+            if folder:
+                try:
+                    native_scripts += list(Path(folder).glob("*.pbs"))
+                except OSError:
+                    pass
+        scripts_missing_bootstrap = [
+            str(script) for script in native_scripts
+            if script.is_file() and "MONAN_LIBFABRIC_ROOT" not in _tail(script)
+            and "LD_LIBRARY_PATH" not in _tail(script)
+        ]
+        runtime_check = {
+            "configured_root": lib_root,
+            "library_found_on_login": shared_lib.is_file() if shared_lib else None,
+            "scripts_missing_runtime_bootstrap": scripts_missing_bootstrap,
+        }
+        if shared_lib and shared_lib.is_file() and scripts_missing_bootstrap:
+            action = (
+                "A biblioteca existe no login, mas o script PBS não inclui seu "
+                "diretório no LD_LIBRARY_PATH. Atualize a instalação, gere um "
+                "novo script científico com o bootstrap do ambiente e confira "
+                "o acesso à biblioteca no compute node. Não ressubmeta o job "
+                "anterior nem altere manualmente o manifesto."
+            )
     failed_jobs = [j for j in jobs if j.get("exit_status") not in (None, 0)]
     if failed_jobs and code == "unknown":
         code, title, action = ("pbs-failed", "O PBS registrou um job encerrado com erro.",
@@ -228,6 +261,7 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
                           "confidence": "possible" if code not in ("pbs-failed",) else "confirmed-scheduler-failure"},
             "operations": states[:30], "validation": reports[:30],
             "pbs_jobs": jobs, "log_evidence": matches,
+            "runtime_check": runtime_check,
             "next_steps": [
                 "Não executar novamente o workflow antes de verificar a situação do PBS.",
                 "Conferir as linhas de erro e os arquivos ausentes listados neste relatório.",
@@ -295,6 +329,14 @@ def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
         print()
         print("DETALHES TÉCNICOS")
         print("  Experimento: " + report["experiment"])
+        runtime_check = report.get("runtime_check")
+        if runtime_check:
+            print("  MONAN_LIBFABRIC_ROOT: " +
+                  str(runtime_check.get("configured_root") or "não definido"))
+            print("  libfabric presente no login: " +
+                  str(runtime_check.get("library_found_on_login")))
+            for script in runtime_check.get("scripts_missing_runtime_bootstrap", []):
+                print("  PBS sem bootstrap de bibliotecas: " + script)
         for item in report["operations"]:
             print(f"  Operação: {item['operation']} | {item['cycle']} | {item['state']}")
             if item.get("last_error"):
