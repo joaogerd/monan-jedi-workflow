@@ -1,4 +1,4 @@
-"""Create the installed, fixed September 2025 first-experiment recipe.
+"""Create an independent, date-configurable two-analysis reference experiment.
 
 This is case creation only. Scientific execution remains in the domain apps.
 """
@@ -265,7 +265,7 @@ def suggest_available_dates(*, input_root, gfs_root, exclude='2025-09-01T00:00:0
     for path in source.glob('*/prepbufr.gdas.*.nr'):
         if not path.is_file() or path.stat().st_size == 0:
             continue
-        match = re.fullmatch(r'prepbufr\\.gdas\\.(\\d{10})\\.nr', path.name)
+        match = re.fullmatch(r'prepbufr\.gdas\.(\d{10})\.nr', path.name)
         if match:
             stamps.add(match[1])
     results = []
