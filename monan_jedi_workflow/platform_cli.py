@@ -123,10 +123,18 @@ def inspect_native(op, request, directory):
             elif source.is_dir():
                 inputs.extend(p for p in source.iterdir() if p.is_file())
         if op.key == "obs2ioda":
-            for converter in description["conversion_plan"]["converters"]:
-                commands = [converter["argv"]]
-                from .obs2ioda_stage import _render_inspection
+            from .obs2ioda_stage import _render_inspection
 
+            for converter in description["conversion_plan"]["converters"]:
+                # Generated IODA files are PRODUCTS, never input dependencies.
+                # Prior code scanned all absolute argv arguments and added
+                # products only after they appeared on disk. This changed the
+                # input fingerprint between 'run' and 'validate' and rejected
+                # valid executions before scientific validation could start.
+                products = {
+                    Path(value).resolve() for value in converter["outputs"]
+                }
+                commands = [converter["argv"]]
                 commands += [
                     _render_inspection(run, converter, Path(output))["argv"]
                     for output in converter["outputs"]
@@ -134,7 +142,11 @@ def inspect_native(op, request, directory):
                 for command in commands:
                     for argument in command:
                         path = Path(argument)
-                        if path.is_absolute() and path.is_file():
+                        if (
+                            path.is_absolute()
+                            and path.is_file()
+                            and path.resolve() not in products
+                        ):
                             inputs.append(path)
         expanded_inputs = []
         for path in inputs:
