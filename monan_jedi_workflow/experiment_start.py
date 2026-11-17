@@ -278,7 +278,7 @@ def suggest_available_dates(*, input_root, gfs_root, exclude='2025-09-01T00:00:0
             first = datetime.strptime(stamp, '%Y%m%d%H').replace(tzinfo=timezone.utc)
         except ValueError:
             continue
-        if first.hour not in (0, 6, 12, 18) or _cycle(first) == exclude:
+        if first.hour not in (0, 6, 12, 18) or first.date() == _utc_start(exclude).date():
             continue
         second = first + timedelta(hours=6)
         initial = first - timedelta(hours=6)
