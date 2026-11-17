@@ -3,6 +3,7 @@
 This is case creation only. Scientific execution remains in the domain apps.
 """
 import argparse
+from datetime import datetime, timedelta, timezone
 from importlib.resources import files
 from pathlib import Path
 import shlex
@@ -17,7 +18,42 @@ def write(path, data):
     path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 
-def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None):
+def _utc_start(value):
+    """Validate the first analysis UTC; the reference workflow uses 6 h cycles."""
+    if isinstance(value, datetime):
+        start = value
+    elif isinstance(value, str):
+        try:
+            start = datetime.strptime(value, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+        except ValueError as error:
+            raise ValueError(
+                '--start must be UTC YYYY-MM-DDTHH:MM:SSZ, e.g. 2024-02-29T00:00:00Z'
+            ) from error
+    else:
+        raise ValueError('--start must be a UTC date/time string')
+    if start.tzinfo is None or start.utcoffset() != timedelta(0):
+        raise ValueError('--start must have UTC timezone')
+    if start.hour not in (0, 6, 12, 18) or start.minute or start.second or start.microsecond:
+        raise ValueError('--start must use a 6-hourly cycle (00, 06, 12 or 18 UTC)')
+    return start
+
+
+def _cycle(dt):
+    return dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _cycle_id(dt):
+    return dt.strftime('%Y%m%dT%H%M%SZ')
+
+
+def _mpas_file_time(dt):
+    return dt.strftime('%Y-%m-%d_%H.%M.%S')
+
+
+def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z'):
+    first_analysis = _utc_start(start)
+    second_analysis = first_analysis + timedelta(hours=6)
+    initialization_time = first_analysis - timedelta(hours=6)
     # Site policy documented in mpas-bmatrix-global/docs/jaci-operational-guide.md.
     # User should recheck the scheduler's live limits before submitting.
     queue_limits = {'pesqmini': 30, 'pesqmidi': 120, 'pesqhigh': 360,
@@ -121,19 +157,29 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     }
     write(obs_file, obs_doc)
     site = {'execution': {'mode': 'pbs'}}
-    principal = {'schema_version': 1, 'experiment': {'name': 'first-20250901', 'destination': str(root)},
+    principal = {'schema_version': 1, 'experiment': {'name': 'first-' + first_analysis.strftime('%Y%m%d%H'), 'destination': str(root)},
                  'site': site, 'jedi': './science/jedi.yaml', 'mpas': './science/mpas.yaml',
                  'observations': './science/obs2ioda.yaml', 'cycle': {'interval':'PT6H'}}
     write(root / 'experiment.yaml', principal)
     write(root / 'initialization.yaml', {**principal, 'mpas': './science/initialization/mpas.yaml'})
     # init has its own principal, because native mpas/init and forecast configurations are distinct.
     write(root / 'init.yaml', {**principal, 'mpas': './science/initialization/mpas_init.yaml'})
-    for cid, parent, stamp in [('20250901T000000Z','work/initialization/mpas/20250831T180000Z','2025-08-31_21.00.00'),
-                               ('20250901T060000Z','work/mpas/20250901T000000Z','2025-09-01_03.00.00')]:
-        folder=root/'work/background'/cid;folder.mkdir(parents=True)
-        (folder/'trajectory.nc').symlink_to(root/parent/f'mpasout.{stamp}.nc')
-        valid='2025-09-01_00.00.00' if cid.endswith('000000Z') else '2025-09-01_06.00.00'
-        (folder/'state.nc').symlink_to(root/parent/f'mpasout.{valid}.nc')
+    # Each first analysis consumes the 3 h and 6 h outputs of the
+    # initialization forecast; the second consumes the cycling forecast.
+    # Derive all dates, including month/year/leap transitions, from --start.
+    for analysis, forecast_start, forecast_dir in (
+        (first_analysis, initialization_time, 'work/initialization/mpas'),
+        (second_analysis, first_analysis, 'work/mpas'),
+    ):
+        folder = root / 'work/background' / _cycle_id(analysis)
+        folder.mkdir(parents=True)
+        forecast = root / forecast_dir / _cycle_id(forecast_start)
+        (folder / 'trajectory.nc').symlink_to(
+            forecast / ('mpasout.' + _mpas_file_time(analysis - timedelta(hours=3)) + '.nc')
+        )
+        (folder / 'state.nc').symlink_to(
+            forecast / ('mpasout.' + _mpas_file_time(analysis) + '.nc')
+        )
     (root / 'environment.sh').write_text(render_environment(root))
     # Legacy optional worker wrapper kept for compatibility. The exported
     # simpleWorkflow DAG now runs native stage apps on the login node and does
@@ -179,12 +225,12 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     (root / 'run-worker.sh').write_text('\n'.join(worker)+'\n')
     # Each stage is an individual simpleWorkflow task; PBS is requested only
     # by each declared scientific run task, never by the full experiment.
-    initialization_cycle = '2025-08-31T18:00:00Z'
-    first_cycle = '2025-09-01T00:00:00Z'
-    last_cycle = '2025-09-01T06:00:00Z'
+    initialization_cycle = _cycle(initialization_time)
+    first_cycle = _cycle(first_analysis)
+    last_cycle = _cycle(second_analysis)
     campaign = {
         'schema_version': 1,
-        'name': 'reference-20250901-two-analyses',
+        'name': 'reference-' + first_analysis.strftime('%Y%m%d%H') + '-two-analyses',
         'experiment': './experiment.yaml',
         'calendar': {
             'start': first_cycle, 'end': last_cycle,
@@ -288,6 +334,8 @@ def upgrade_existing_login_execution(destination):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination',type=Path)
+    parser.add_argument('--start', default='2025-09-01T00:00:00Z',
+                        help='First analysis (UTC), YYYY-MM-DDTHH:MM:SSZ; two 6-hour cycles')
     parser.add_argument('--pbs-queue', default='pesqmidi', help='PBS queue for the entire initial case (default: pesqmidi)')
     parser.add_argument('--pbs-walltime', default='01:00:00', help='Walltime HH:MM:SS (default: 01:00:00)')
     parser.add_argument('--upgrade-existing', action='store_true', help='Create a new login-side campaign for existing experiments without overwriting old exported workflow')
@@ -305,7 +353,7 @@ def main():
             print(f'[OK] Ambiente gerado: {env_path}')
             print('Proximo passo: cd '+str(args.destination.resolve())+'; source ./environment.sh')
             return
-        create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime, runtime_bin=args.runtime_bin)
+        create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime, runtime_bin=args.runtime_bin, start=args.start)
     except FileExistsError as error:
         if args.configure_existing:
             parser.exit(2, f'[AVISO] {error}\\nNenhum arquivo foi modificado.\\n')
