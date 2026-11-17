@@ -109,3 +109,17 @@ def test_unresolved_shared_site_anchor_fails_before_creating_case(tmp_path, monk
     with pytest.raises(ValueError, match="unresolved environment"):
         create_experiment(root, site_config=profile)
     assert not root.exists()
+
+
+
+def test_missing_workspace_profile_and_ambiguous_stack_fails_early(tmp_path, monkeypatch):
+    import monan_jedi_workflow.experiment_environment as environment
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(environment, "_workspace", lambda root: workspace)
+    monkeypatch.setattr(environment, "_discover_stack", lambda root: None)
+    monkeypatch.delenv("STACK_ROOT", raising=False)
+    case = workspace / "work" / "not-created"
+    with pytest.raises(ValueError, match="experiment site save"):
+        create_experiment(case, start="2026-01-29T00:00:00Z")
+    assert not case.exists()
