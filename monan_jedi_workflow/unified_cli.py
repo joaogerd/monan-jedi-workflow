@@ -35,6 +35,8 @@ def _experiment(argv: list[str]) -> int:
                             help="Cold start; warm start requires a validated model restart and is not implemented yet")
         parser.add_argument("--start", "--date", dest="start",
                             default="2025-09-01T00:00:00Z")
+        parser.add_argument("--site", type=Path,
+                            help="Persistent site YAML; otherwise read workspace/site.yaml")
         parser.add_argument("--pbs-queue", default="pesqmidi")
         parser.add_argument("--pbs-walltime", default="01:00:00")
         parser.add_argument("--runtime-bin", type=Path)
@@ -50,7 +52,7 @@ def _experiment(argv: list[str]) -> int:
             create_experiment(
                 opt.destination, start=opt.start,
                 pbs_queue=opt.pbs_queue, pbs_walltime=opt.pbs_walltime,
-                runtime_bin=opt.runtime_bin,
+                runtime_bin=opt.runtime_bin, site_config=opt.site,
             )
         except (ValueError, OSError) as error:
             print(f"[ERRO] Experimento não criado: {error}", file=sys.stderr)
