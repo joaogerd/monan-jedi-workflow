@@ -6,6 +6,8 @@ the experiment. Historical availability is never assumed or fabricated.
 from __future__ import annotations
 
 import hashlib
+import json
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import shutil
@@ -89,6 +91,32 @@ def ensure_input(*, target: Path, url: str | None, label: str,
                     raise InputUnavailable(f"{label}: incomplete download from {url}")
                 validate(part)
                 os.link(part, target)
+                # Record the exact provider/time/content identity next to the
+                # cached raw input for reproducibility and later audit.
+                digest = hashlib.sha256()
+                with part.open("rb") as stream:
+                    for block in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(block)
+                provenance = {
+                    "schema_version": 1,
+                    "label": label,
+                    "source_url": url,
+                    "fetched_at": datetime.now(timezone.utc).isoformat(),
+                    "size_bytes": part.stat().st_size,
+                    "sha256": digest.hexdigest(),
+                }
+                sidecar = target.with_name(target.name + ".acquisition.json")
+                if not sidecar.exists():
+                    fd_meta, temp_meta = tempfile.mkstemp(
+                        prefix=".acquisition-meta-", dir=target.parent
+                    )
+                    try:
+                        with os.fdopen(fd_meta, "w", encoding="utf-8") as meta:
+                            json.dump(provenance, meta, indent=2, sort_keys=True)
+                            meta.write("\\n")
+                        os.link(temp_meta, sidecar)
+                    finally:
+                        Path(temp_meta).unlink(missing_ok=True)
             except (urllib.error.URLError, OSError) as error:
                 raise InputUnavailable(
                     f"{label}: acquisition failed from {url}: {error}"
