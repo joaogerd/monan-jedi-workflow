@@ -13,13 +13,13 @@ import sys
 
 def _usage() -> int:
     print(
-        "experiment — MONAN-JEDI campaign management\\n\\n"
-        "  experiment create DEST --start YYYY-MM-DDTHH:MM:SSZ [--mode cold]\\n"
-        "  experiment check|export campaign.yaml\\n"
-        "  experiment validate|plan|run|status workflow.yaml\\n"
-        "  experiment suggest-dates [--case EXISTING_CASE]\\n"
-        "  experiment check-inputs CASE\\n\\n"
-        "Other independent commands: wps, obs, mpas, jedi, diagnostic, diagnose.\\n"
+        "experiment — MONAN-JEDI campaign management\n\n"
+        "  experiment create DEST --start YYYY-MM-DDTHH:MM:SSZ [--mode cold]\n"
+        "  experiment check|export campaign.yaml\n"
+        "  experiment validate|plan|run|status workflow.yaml\n"
+        "  experiment suggest-dates [--case EXISTING_CASE]\n"
+        "  experiment check-inputs CASE\n\n"
+        "Other independent commands: wps, obs, mpas, jedi, diagnostic, diagnose.\n"
         "Each command is installed by the monan-jedi-workflow package."
     )
     return 0
