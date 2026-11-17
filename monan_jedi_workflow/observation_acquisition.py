@@ -91,7 +91,10 @@ def acquire_required_observations(op, request) -> list[Path]:
     config = op.section.get("acquisition", {})
     if not isinstance(config, dict):
         raise ValueError("obs2ioda.acquisition must be a mapping")
-    if config.get("enabled", True) is False:
+    enabled = config.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ValueError("obs2ioda.acquisition.enabled must be boolean")
+    if not enabled:
         providers = {}
     else:
         declared = config.get("providers", [])
@@ -135,7 +138,7 @@ def acquire_required_observations(op, request) -> list[Path]:
                     found = find_local_cycle_input(candidate, run.cycle, name)
                     if found is not None:
                         continue
-                    provider = providers.get(name) or _default_provider(name, run.cycle)
+                    provider = (providers.get(name) or _default_provider(name, run.cycle)) if enabled else None
                     if provider is None:
                         raise InputUnavailable(
                             f"Observations for {request.cycle} unavailable: {candidate}. "
