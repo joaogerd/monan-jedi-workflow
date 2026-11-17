@@ -33,3 +33,22 @@ def pbs_header_lines(
         lines.append("#PBS -l place=excl")
     lines.append(f"#PBS -l walltime={walltime}")
     return lines
+
+
+def pbs_runtime_library_lines() -> list[str]:
+    """Make the declared libfabric runtime visible to native PBS applications.
+
+    MONAN_LIBFABRIC_ROOT must point to a directory of a compatible scientific
+    runtime. It is provided through PBS -V; no personal hardcoded paths.
+    This is shell-only and never launches a Python runtime on a compute node.
+    """
+    return [
+        '# Preserve the site-provided MPI runtime, including Cray libfabric.',
+        'if [[ -n "${MONAN_LIBFABRIC_ROOT:-}" ]]; then',
+        '  if [[ ! -r "$MONAN_LIBFABRIC_ROOT/libfabric.so.1" ]]; then',
+        '    echo "[FALHA] MONAN_LIBFABRIC_ROOT nao contem libfabric.so.1 acessivel: $MONAN_LIBFABRIC_ROOT" >&2',
+        '    exit 127',
+        '  fi',
+        '  export LD_LIBRARY_PATH="$MONAN_LIBFABRIC_ROOT${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"',
+        'fi',
+    ]
