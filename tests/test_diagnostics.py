@@ -62,8 +62,8 @@ def test_diagnose_command_returns_human_summary_and_json(tmp_path, capsys):
     assert main([str(root), "--no-pbs"]) == 0
     out = capsys.readouterr().out
     assert "libfabric.so.1" in out
-    assert "Ação sugerida:" in out
-    assert "mensagem repetida 128 vezes" in out
+    assert "AÇÃO RECOMENDADA" in out
+    assert "128 ocorrências da mesma mensagem MPI" in out
     assert main([str(root), "--no-pbs", "--json"]) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "failure"
@@ -75,3 +75,21 @@ def test_no_failure_is_not_invented(tmp_path):
     report = diagnose(root, query_pbs=False)
     assert report["status"] == "no-failure-found"
     assert report["diagnosis"]["code"] == "unknown"
+
+
+def test_diagnose_verbose_preserves_full_pbs_evidence(tmp_path, capsys, monkeypatch):
+    root = _failed_mpas_init(tmp_path)
+    def fake_run(argv, **kwargs):
+        return subprocess.CompletedProcess(
+            argv, 0,
+            "Job Id: 826106.pbs-ha\\n"
+            "    job_state = F\\n    Exit_status = 127\\n"
+            "    Output_Path = host:/p/outputs\\n", "",
+        )
+    monkeypatch.setattr("monan_jedi_workflow.diagnostics.subprocess.run", fake_run)
+    assert main([str(root), "--verbose"]) == 0
+    out = capsys.readouterr().out
+    assert "DETALHES TÉCNICOS" in out
+    assert "826106.pbs-ha" in out
+    assert "Exit_status=127" in out
+    assert "libfabric.so.1" in out
