@@ -304,3 +304,24 @@ def test_arbitrary_dates_are_explicit_not_overwritten_by_september(tmp_path):
     # The generated campaign may not recycle any September 2025 links.
     for link in root.joinpath('work/background').rglob('*.nc'):
         assert '2025-09' not in str(link.readlink())
+
+
+def test_suggest_available_dates_requires_two_real_cycles_and_previous_gfs(tmp_path):
+    from monan_jedi_workflow.experiment_start import suggest_available_dates
+    input_root = tmp_path / 'inputs'
+    gfs_root = tmp_path / 'gfs'
+    prepnr = input_root / 'observations/prepnr/2024'
+    gpsro = input_root / 'observations/gpsro/2024'
+    prepnr.mkdir(parents=True)
+    gpsro.mkdir(parents=True)
+    gfs = gfs_root / '2024022818'
+    gfs.mkdir(parents=True)
+    for stamp in ('2024022900', '2024022906'):
+        (prepnr / ('prepbufr.gdas.' + stamp + '.nr')).write_text('prep')
+    for hour in ('00', '06'):
+        (gpsro / f'gdas.gpsro.t{hour}z.20240229.bufr').write_text('gps')
+    (gfs / 'gfs.t18z.pgrb2.0p25.f000').write_text('gfs')
+    dates = suggest_available_dates(input_root=input_root, gfs_root=gfs_root)
+    assert dates == ['2024-02-29T00:00:00Z']
+    (gpsro / 'gdas.gpsro.t06z.20240229.bufr').unlink()
+    assert suggest_available_dates(input_root=input_root, gfs_root=gfs_root) == []
