@@ -256,3 +256,51 @@ def test_cli_can_create_cross_year_case_from_start(tmp_path):
     campaign = yaml.safe_load((dest/'campaign.yaml').read_text())
     assert campaign['initialization'][0]['cycle'] == '2022-12-31T18:00:00Z'
     assert campaign['calendar']['start'] == '2023-01-01T00:00:00Z'
+
+
+def test_date_input_preflight_requires_only_selected_cycle_files(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import monan_jedi_workflow.experiment_start as startmod
+    from monan_jedi_workflow import wps_stage, obs2ioda_stage
+    root = tmp_path / 'case'
+    startmod.create_experiment(root, start='2024-02-29T00:00:00Z')
+    raw_gfs = tmp_path / 'gfs' / '2024022818.grib2'
+    raw_obs0 = tmp_path / 'obs' / '2024022900.bufr'
+    raw_obs1 = tmp_path / 'obs' / '2024022906.bufr'
+    runner = tmp_path / 'run_gpsro.sh'
+    runner.write_text('runner')
+    raw_gfs.parent.mkdir(parents=True)
+    raw_obs0.parent.mkdir(parents=True)
+    monkeypatch.setattr(wps_stage, 'load_wps_run', lambda *args: SimpleNamespace(
+        config={'acquisition': {'source': str(raw_gfs)}},
+        config_dir=tmp_path, context={},
+    ))
+    def load_obs(config_dir, cycle):
+        assert cycle in {'2024-02-29T00:00:00Z', '2024-02-29T06:00:00Z'}
+        return SimpleNamespace(cycle=cycle)
+    monkeypatch.setattr(obs2ioda_stage, 'load_obs2ioda_run', load_obs)
+    monkeypatch.setattr(obs2ioda_stage, '_build_plan', lambda run: {
+        'converters': [{
+            'name': 'gpsro',
+            'inputs': [str(raw_obs0 if run.cycle.endswith('00:00:00Z') else raw_obs1),
+                       str(runner)],
+        }]
+    })
+    missing = startmod.check_date_inputs(root)
+    assert sum(not available for _, _, available in missing) == 3
+    for path in (raw_gfs, raw_obs0, raw_obs1):
+        path.write_text('input')
+    ready = startmod.check_date_inputs(root)
+    assert all(available for _, _, available in ready)
+    assert len(ready) == 4
+
+
+def test_arbitrary_dates_are_explicit_not_overwritten_by_september(tmp_path):
+    root = tmp_path / 'independent-period'
+    create_experiment(root, start='2024-02-29T12:00:00Z')
+    campaign = yaml.safe_load((root / 'campaign.yaml').read_text())
+    assert campaign['calendar']['start'] == '2024-02-29T12:00:00Z'
+    assert campaign['initialization'][0]['cycle'] == '2024-02-29T06:00:00Z'
+    # The generated campaign may not recycle any September 2025 links.
+    for link in root.joinpath('work/background').rglob('*.nc'):
+        assert '2025-09' not in str(link.readlink())
