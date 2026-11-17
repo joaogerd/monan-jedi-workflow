@@ -18,7 +18,8 @@ def _usage() -> int:
         "  experiment check|export campaign.yaml\n"
         "  experiment validate|plan|run|status workflow.yaml\n"
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
-        "  experiment check-inputs CASE\n\n"
+        "  experiment check-inputs CASE\n"
+        "  experiment site save     # one-time workspace configuration\n\n"
         "Other independent commands: wps, obs, mpas, jedi, diagnostic, diagnose.\n"
         "Each command is installed by the monan-jedi-workflow package."
     )
@@ -28,6 +29,19 @@ def _experiment(argv: list[str]) -> int:
     if not argv or argv[0] in {"-h", "--help"}:
         return _usage()
     action, *args = argv
+    if action == "site":
+        if args != ["save"]:
+            print("[ERRO] Use: experiment site save", file=sys.stderr)
+            return 2
+        from .experiment_environment import save_project_site
+        try:
+            target = save_project_site(Path.cwd())
+        except (ValueError, OSError) as error:
+            print(f"[ERRO] {error}", file=sys.stderr)
+            return 2
+        print(f"[OK] Configuração permanente do site gravada: {target}")
+        print("Novos experimentos neste workspace vão consumir esse site.yaml.")
+        return 0
     if action in {"create", "start"}:
         parser = argparse.ArgumentParser(prog="experiment create")
         parser.add_argument("destination", type=Path)
