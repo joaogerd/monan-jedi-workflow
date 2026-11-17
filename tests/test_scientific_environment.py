@@ -144,3 +144,32 @@ def test_real_main_site_renderer_loads_stack_before_native_jobs(tmp_path, monkey
     assert "module load \"$STACK_ENV_MODULE\"" in code
     assert "LD_LIBRARY_PATH" in code
     assert "python3 -" not in code
+
+
+def test_wps_and_obs_native_pbs_use_same_site_bootstrap(tmp_path, monkeypatch):
+    import subprocess
+    import monan_jedi_workflow.native_pbs as native
+    monkeypatch.delenv("PBS_JOBID", raising=False)
+    monkeypatch.setattr(
+        native, "render_native_site_setup",
+        lambda resources, *, config_dir: ["module purge", "module load scientific-env"],
+    )
+    def fake_run(argv, **kwargs):
+        if argv[0] == "qsub":
+            return subprocess.CompletedProcess(argv, 0, "1000.pbs-ha\n", "")
+        return subprocess.CompletedProcess(
+            argv, 0,
+            "job_state = F\nExit_status = 0\n", ""
+        )
+    monkeypatch.setattr(native.subprocess, "run", fake_run)
+    native.native_pbs_run(
+        name="test_converter", commands=[["./obs2ioda"]],
+        cwd=tmp_path, stdout=tmp_path / "out.log", stderr=tmp_path / "err.log",
+        resources={"queue": "pesqmini", "select": 1, "ncpus": 1,
+                   "mpiprocs": 1, "walltime": "00:10:00",
+                   "site_config": str(tmp_path / "site.yaml")},
+    )
+    script = (tmp_path / "test_converter.native.pbs").read_text()
+    assert "module load scientific-env" in script
+    assert script.index("module load scientific-env") < script.index("./obs2ioda")
+    assert "python" not in script.lower()
