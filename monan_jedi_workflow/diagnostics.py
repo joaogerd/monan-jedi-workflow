@@ -178,8 +178,8 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
             if _ERROR.search(line):
                 message = line.strip()[:360]
                 # Repeated MPI rank failures have a single root cause.
-                normalized = re.sub(r"^.*?:\s*(error while loading shared libraries:)", r"\\1", message, flags=re.I)
-                normalized = re.sub(r"\\s+", " ", normalized).strip().lower()
+                normalized = re.sub(r"^.*?:\s*(error while loading shared libraries:)", r"\1", message, flags=re.I)
+                normalized = re.sub(r"\s+", " ", normalized).strip().lower()
                 if normalized in seen_messages:
                     seen_messages[normalized]["occurrences"] += 1
                     continue
@@ -202,7 +202,7 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
             break
     # A dynamic loader error is stronger evidence than a generic missing file.
     loader = re.search(
-        r"error while loading shared libraries:\\s*([^: ]+):\\s*cannot open",
+        r"error while loading shared libraries:\s*([^: ]+):\s*cannot open",
         evidence, re.I,
     )
     if loader:
