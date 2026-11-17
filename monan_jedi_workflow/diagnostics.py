@@ -382,7 +382,7 @@ def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
             print(f"  {item['file']}: {item['message']}")
     else:
         print()
-        print("Detalhes adicionais: monan-jedi-workflow diagnose --verbose")
+        print("Detalhes adicionais: monan-workflow diagnose --verbose")
     print("-" * 62)
     print()
 
@@ -390,7 +390,7 @@ def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="monan-jedi-workflow diagnose",
+        prog="monan-workflow diagnose",
         description="Diagnosticar falhas de experimento e PBS sem alterar arquivos.",
     )
     parser.add_argument("experiment", nargs="?", type=Path, default=Path("."),
