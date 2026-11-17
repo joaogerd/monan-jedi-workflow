@@ -1,4 +1,8 @@
 obs2ioda:
+  # Add verified date-aware HTTPS sources per converter when available.
+  # Do not guess historical NOAA archive paths: unavailable cycles fail clearly.
+  acquisition:
+    providers: []
   variables:
     monan_jedi_install_root: ${MONAN_JEDI_INSTALL_ROOT}
     data_root: ${MONAN_INPUT_ROOT}
