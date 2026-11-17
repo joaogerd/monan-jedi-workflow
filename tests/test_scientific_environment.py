@@ -102,6 +102,7 @@ def test_native_mpi_pbs_sources_site_before_launcher(tmp_path, monkeypatch, stag
     )
     assert "export LD_LIBRARY_PATH=/scientific/stack/lib" in content
     assert "python" not in content.lower()
+    assert "#PBS -V" not in content  # Do not inherit controller Conda.
 
 
 def test_real_main_site_renderer_loads_stack_before_native_jobs(tmp_path, monkeypatch):
@@ -173,3 +174,4 @@ def test_wps_and_obs_native_pbs_use_same_site_bootstrap(tmp_path, monkeypatch):
     assert "module load scientific-env" in script
     assert script.index("module load scientific-env") < script.index("./obs2ioda")
     assert "python" not in script.lower()
+    assert "#PBS -V" not in script
