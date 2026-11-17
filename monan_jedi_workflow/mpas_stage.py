@@ -14,7 +14,7 @@ from typing import Any
 
 from .cycle_context import CycleContext, parse_cycle_time
 from .netcdf_validation import NetcdfStructureContract, validate_netcdf_structure
-from .pbs_directives import pbs_header_lines, pbs_runtime_library_lines
+from .pbs_directives import pbs_header_lines, pbs_runtime_library_lines, pbs_linker_preflight_lines
 from .scientific_environment import render_native_site_setup
 from .scheduler import PBSError, query
 from .stage_config import (
@@ -295,6 +295,7 @@ def _render_pbs(run: MPASRun) -> None:
         *exports,
         *(pbs_runtime_library_lines() if not pbs.get("site_config") else []),
         "ulimit -s unlimited || true",
+        *pbs_linker_preflight_lines(render_text(command[0], run.context, label="pbs.command executable")),
         f"{shlex.quote(launcher)} -n {mpiprocs} {rendered_command} > {shlex.quote(stdout)} 2> {shlex.quote(stderr)}",
         "",
     ]
