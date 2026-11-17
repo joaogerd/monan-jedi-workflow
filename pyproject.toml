@@ -11,11 +11,12 @@ dependencies = [
   "PyYAML>=6.0",
   "numpy>=1.24",
   "netCDF4>=1.6",
+  "simpleworkflow>=0.6.2",
 ]
 
 [project.optional-dependencies]
 plots = ["matplotlib>=3.7"]
-orchestration = ["simpleworkflow>=0.6.2"]
+orchestration = []  # compatibility: orchestration is now part of the core package
 dev = [
   "pytest>=8.0",
 ]
