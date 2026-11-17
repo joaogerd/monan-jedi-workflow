@@ -1,8 +1,6 @@
-"""Cycle-aware WPS/UNGRIB preparation, execution and validation.
+"""Cycle-aware WPS/UNGRIB with optional login-side GRIB acquisition.
 
-This module never downloads GRIB data and never builds WPS.  It consumes the
-WPS tools published by MONAN-JEDI and transforms one declared GRIB input into
-the WPS intermediate file required by ``mpas_init_atmosphere``.
+Scientific work remains native PBS; only input acquisition runs on login.
 """
 
 from __future__ import annotations
@@ -159,8 +157,28 @@ def _load_manifest(run: WPSRun) -> dict[str, Any]:
 
 
 def prepare_wps(config_dir: Path, cycle_time: str) -> WPSRun:
-    """Stage declared WPS tools, GRIB link and rendered namelist for one cycle."""
+    """Acquire configured GFS if absent, then prepare WPS without compute Python."""
     run = load_wps_run(config_dir, cycle_time)
+    acquisition = _mapping(run.config.get("acquisition", {}), "wps.acquisition")
+    if acquisition:
+        from .input_acquisition import ensure_input
+        source = resolve_path(
+            _string(acquisition.get("source"), "wps.acquisition.source"),
+            config_dir=run.config_dir, context=run.context,
+            label="wps.acquisition.source",
+        )
+        enabled = acquisition.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise StageConfigurationError("wps.acquisition.enabled must be boolean")
+        url = (
+            render_text(acquisition["url"], run.context, label="wps.acquisition.url")
+            if enabled and acquisition.get("url") else None
+        )
+        ensure_input(
+            target=source, url=url, label=f"GFS {run.cycle.cycle_time}",
+            timeout=int(acquisition.get("timeout_seconds", 300)),
+            magic=b"GRIB" if acquisition.get("validate_grib", False) else None,
+        )
     run.work_dir.mkdir(parents=True, exist_ok=True)
     _clean(run)
 
