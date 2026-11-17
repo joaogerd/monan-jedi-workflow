@@ -109,3 +109,35 @@ A successful setup records the chosen verified runtime in a persistent
 `site.yaml`, generates a case-specific `science/site.yaml` and
 `environment.sh`, and needs no prior experiment. New terminals reuse the
 site profile automatically.
+
+
+## Isolated first-user test without touching the primary JACI profile
+
+A new Conda environment alone does not isolate
+`/p/projetos/<group>/<user>/site.yaml`.
+The new `experiment create --workspace DIRECTORY` flag selects an **existing**
+site-profile directory. It does not relocate, duplicate, or manufacture any
+scientific installation or data. Runtime discovery continues under the
+authorized user's real JACI project tree.
+
+```bash
+mkdir -p /p/projetos/monan_das/$USER/onboarding-test
+unset STACK_ROOT MONAN_JEDI_INSTALL_ROOT MONAN_MESH_ROOT MONAN_PHYSICS_ROOT
+unset MONAN_BMATRIX_ROOT MONAN_INPUT_ROOT MONAN_GFS_ROOT MONAN_LIBFABRIC_ROOT
+
+experiment create \
+  /p/projetos/monan_das/$USER/onboarding-test/experiments/first-experiment \
+  --workspace /p/projetos/monan_das/$USER/onboarding-test \
+  --start 2026-01-30T00:00:00Z
+```
+
+On first use, if more than one valid stack exists, the terminal asks the
+user to select one. It then writes
+`onboarding-test/site.yaml` and generates the case-local settings.
+The original `/p/projetos/<group>/<user>/site.yaml` is neither read nor
+modified. Subsequent experiments with the same `--workspace` reuse that
+isolated profile.
+
+A workspace outside the user's project or one that does not yet exist
+is rejected with a clear error. This option does **not** constitute
+isolation from installed JACI libraries/data or a separate OS account.
