@@ -24,6 +24,7 @@ GDEX_PROVIDERS = {
             "https://data.gdex.ucar.edu/d337000/prepnr/{cycle_year}/"
             "prepbufr.gdas.{cycle_yyyymmddhh}.nr"
         ),
+        "product": "PREPNR",
         "timeout_seconds": 300,
     },
     "gpsro-gnssro": {
@@ -39,6 +40,28 @@ GDEX_PROVIDERS = {
         "timeout_seconds": 300,
     },
 }
+
+
+def _default_provider(converter: str, cycle):
+    """Historical GDEX layout differs across years.
+
+    Before 2025, PREPNR is distributed as daily TARs. Use the explicit,
+    cycle-matched PREP48H product for this portability test, never a
+    different cycle. The source URL/provenance marks the product difference.
+    """
+    if converter == "prepbufr-conventional" and cycle.value.year < 2025:
+        return {
+            "type": "https",
+            "url": (
+                "https://data.gdex.ucar.edu/d337000/prep48h/{cycle_year}/"
+                "prepbufr.gdas.{cycle_year}{cycle_month}{cycle_day}."
+                "t{cycle_hour}z.nr.48h"
+            ),
+            "product": "PREP48H",
+            "timeout_seconds": 300,
+        }
+    return GDEX_PROVIDERS.get(converter)
+
 
 
 @contextmanager
@@ -87,7 +110,7 @@ def acquire_required_observations(op, request) -> list[Path]:
             raise ValueError("obs2ioda.acquisition.providers must be list or mapping")
         # Archive defaults preserve the early JACI GDEX acquisition behavior;
         # experiment-specific providers can override or disable the defaults.
-        providers = {**GDEX_PROVIDERS, **providers}
+        # Resolver picks the actual historical archive format by cycle.
 
     acquired = []
     with tempfile.TemporaryDirectory(prefix="monan-obs-acquisition-") as temporary:
@@ -112,7 +135,7 @@ def acquire_required_observations(op, request) -> list[Path]:
                     found = find_local_cycle_input(candidate, run.cycle, name)
                     if found is not None:
                         continue
-                    provider = providers.get(name)
+                    provider = providers.get(name) or _default_provider(name, run.cycle)
                     if provider is None:
                         raise InputUnavailable(
                             f"Observations for {request.cycle} unavailable: {candidate}. "
@@ -120,7 +143,11 @@ def acquire_required_observations(op, request) -> list[Path]:
                         )
                     if provider.get("type", "https") not in {"https", "https-tar"}:
                         raise ValueError(f"Unsupported observation provider type: {provider.get('type')}")
-                    print(f"[OBS] {request.cycle}: acquiring {name} from GDEX/provider", flush=True)
+                    product = provider.get("product", "configured-provider")
+                    print(
+                        f"[OBS] {request.cycle}: acquiring {name} "
+                        f"({product}) from GDEX/provider", flush=True
+                    )
                     try:
                         _acquire_remote(candidate, run.cycle, name, provider)
                     except Exception as error:
