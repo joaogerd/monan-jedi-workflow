@@ -244,3 +244,53 @@ def test_first_time_interactive_setup_requests_missing_scientific_root(
            if prompt.startswith("MONAN_GFS_ROOT") else "",
     )
     assert yaml.safe_load(path.read_text())["environment"]["MONAN_GFS_ROOT"] == str(correct)
+
+
+
+def test_isolated_workspace_bootstrap_does_not_consume_or_modify_primary_site(
+    tmp_path, monkeypatch
+):
+    import monan_jedi_workflow.experiment_environment as environment
+    real_workspace, paths = _fixture(tmp_path)
+    isolated = real_workspace / "onboarding-test"
+    isolated.mkdir()
+    # The real JACI project may already have a successfully configured site.
+    existing = real_workspace / "site.yaml"
+    existing.write_text("DO_NOT_TOUCH: true\n")
+    monkeypatch.setattr(environment, "_workspace", lambda root: real_workspace)
+    monkeypatch.setattr(
+        environment, "_defaults",
+        lambda root: {k: Path(v) for k, v in paths.items() if k != "STACK_ROOT"},
+    )
+    selected = real_workspace / "work" / "spack-stack-inpe-overlay" / "spack-stack"
+    source = Path(paths["STACK_ROOT"])
+    selected.parent.mkdir(parents=True)
+    source.rename(selected)
+    for key in REQUIRED:
+        monkeypatch.delenv(key, raising=False)
+    case = isolated / "experiments" / "first-ever"
+    create_experiment(
+        case, start="2026-01-30T00:00:00Z", workspace=isolated,
+    )
+    assert existing.read_text() == "DO_NOT_TOUCH: true\n"
+    assert (isolated / "site.yaml").is_file()
+    assert yaml.safe_load((isolated / "site.yaml").read_text())["stack"]["root"] == str(selected)
+    assert (case / "environment.sh").is_file()
+    assert (case / "science/site.yaml").is_file()
+
+
+def test_isolated_workspace_rejects_nonexistent_and_outside_project(
+    tmp_path, monkeypatch
+):
+    import monan_jedi_workflow.experiment_environment as environment
+    real_workspace, paths = _fixture(tmp_path)
+    monkeypatch.setattr(environment, "_workspace", lambda root: real_workspace)
+    case = real_workspace / "case"
+    with pytest.raises(ValueError, match="does not exist"):
+        create_experiment(case, workspace=real_workspace / "not-created")
+    assert not case.exists()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    with pytest.raises(ValueError, match="must be inside"):
+        create_experiment(case, workspace=outside)
+    assert not case.exists()
