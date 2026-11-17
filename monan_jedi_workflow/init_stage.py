@@ -116,7 +116,7 @@ def wait_mpas_init(config_dir: Path, cycle_time: str, *, poll_seconds: int = 30)
                     "Exit_status could not be verified; inspect qstat -x -f "
                     f"{job_id} before retrying."
                 )
-            result = re.search(r"(?m)^\\s*Exit_status\\s*=\\s*(-?\\d+)\\s*$", history.stdout)
+            result = re.search(r"(?m)^\s*Exit_status\s*=\s*(-?\d+)\s*$", history.stdout)
             if result is None:
                 manifest.update({
                     "state": "scheduler-unconfirmed",
