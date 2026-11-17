@@ -13,24 +13,16 @@ import sys
 
 def _usage() -> int:
     print(
-        "MONAN-JEDI Workflow — direct commands\n\n"
-        "  experiment create DEST --start YYYY-MM-DDTHH:MM:SSZ\n"
-        "  experiment check|export CAMPAIGN.yaml\n"
-        "  experiment validate|plan|run WORKFLOW.yaml [--ui plain]\n"
-        "  experiment status WORKFLOW.yaml\n"
-        "  experiment suggest-dates [--case EXISTING_CASE]\n"
-        "  experiment check-inputs CASE\n"
-        "  wps prepare|run|validate CONFIG_DIR --cycle UTC\n"
-        "  obs acquire|convert prepare|run|validate|status CONFIG.yaml --cycle UTC\n"
-        "  mpas init prepare|run|validate CONFIG.yaml --cycle UTC\n"
-        "  mpas prepare|run|validate|status CONFIG.yaml --cycle UTC\n"
-        "  jedi prepare|run|validate|status CONFIG.yaml --cycle UTC\n"
-        "  diagnostic inspect|check|prepare|run|validate|status CONFIG.yaml --cycle UTC\n"
-        "  diagnose [CASE] [--verbose|--json|--no-pbs]\n\n"
-        "Use 'experiment create --help' for the experiment options."
+        "experiment — MONAN-JEDI campaign management\\n\\n"
+        "  experiment create DEST --start YYYY-MM-DDTHH:MM:SSZ [--mode cold]\\n"
+        "  experiment check|export campaign.yaml\\n"
+        "  experiment validate|plan|run|status workflow.yaml\\n"
+        "  experiment suggest-dates [--case EXISTING_CASE]\\n"
+        "  experiment check-inputs CASE\\n\\n"
+        "Other independent commands: wps, obs, mpas, jedi, diagnostic, diagnose.\\n"
+        "Each command is installed by the monan-jedi-workflow package."
     )
     return 0
-
 
 def _experiment(argv: list[str]) -> int:
     if not argv or argv[0] in {"-h", "--help"}:
