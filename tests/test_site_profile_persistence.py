@@ -189,3 +189,58 @@ def test_ambiguous_stacks_print_choices_and_explicit_select_works(
     assert initialized == workspace / "site.yaml"
     create_experiment(case, start="2026-01-30T00:00:00Z")
     assert (case / "environment.sh").exists()
+
+
+
+def test_first_time_interactive_setup_asks_stack_and_creates_profile(
+    tmp_path, monkeypatch
+):
+    import monan_jedi_workflow.experiment_environment as environment
+    workspace, paths = _fixture(tmp_path)
+    monkeypatch.setattr(environment, "_workspace", lambda root: workspace)
+    monkeypatch.setattr(
+        environment, "_defaults",
+        lambda root: {k: Path(v) for k, v in paths.items() if k != "STACK_ROOT"},
+    )
+    stacks = []
+    for name in ("spack-stack-A", "spack-stack-B"):
+        stack = workspace / "work" / name / "spack-stack"
+        setup = stack / "configs/sites/tier2/jaci/setup.sh"
+        setup.parent.mkdir(parents=True)
+        setup.write_text("# setup\n")
+        (stack / "envs/test/modules").mkdir(parents=True)
+        stacks.append(stack)
+    answers = iter(["2"])
+    profile = environment.initialize_site(
+        workspace / "work" / "first-experiment",
+        environ={},
+        interactive=True,
+        input_fn=lambda prompt: next(answers),
+    )
+    assert profile.is_file()
+    assert yaml.safe_load(profile.read_text())["stack"]["root"] == str(stacks[1])
+
+
+def test_first_time_interactive_setup_requests_missing_scientific_root(
+    tmp_path, monkeypatch
+):
+    import monan_jedi_workflow.experiment_environment as environment
+    workspace, paths = _fixture(tmp_path)
+    monkeypatch.setattr(environment, "_workspace", lambda root: workspace)
+    monkeypatch.setattr(
+        environment, "_defaults",
+        lambda root: {k: Path(v) for k, v in paths.items()},
+    )
+    missing = Path(paths["MONAN_GFS_ROOT"])
+    missing.rmdir()
+    correct = workspace / "real-gfs"
+    correct.mkdir()
+    path = environment.initialize_site(
+        workspace / "work" / "experiment",
+        environ={},
+        stack=Path(paths["STACK_ROOT"]),
+        interactive=True,
+        input_fn=lambda prompt: str(correct)
+           if prompt.startswith("MONAN_GFS_ROOT") else "",
+    )
+    assert yaml.safe_load(path.read_text())["environment"]["MONAN_GFS_ROOT"] == str(correct)
