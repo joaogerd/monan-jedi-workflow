@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from .pbs_directives import pbs_runtime_library_lines
+from .scientific_environment import render_native_site_setup
 import os
 import re
 import shlex
@@ -66,11 +67,17 @@ def native_pbs_run(
         "#PBS -e " + str(stderr),
         "set -euo pipefail",
         "cd " + shlex.quote(str(cwd)),
+        *render_native_site_setup(resources, config_dir=cwd),
     ]
     for key, value in sorted((environment or {}).items()):
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
             raise ValueError(f"invalid PBS environment variable {key!r}")
-        lines.append("export " + key + "=" + shlex.quote(str(value)))
+        if key == "LD_LIBRARY_PATH":
+            # Preserve libraries loaded by the site/spack-stack module.
+            lines.append("export LD_LIBRARY_PATH=" + shlex.quote(str(value)) +
+                         "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")
+        else:
+            lines.append("export " + key + "=" + shlex.quote(str(value)))
     lines.extend(pbs_runtime_library_lines())
     lines.extend(shlex.join(argv) for argv in commands)
     script.write_text("\n".join(lines) + "\n")
