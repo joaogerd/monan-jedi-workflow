@@ -192,3 +192,67 @@ def test_generator_allows_login_home_python_runtime(tmp_path, home_runtime):
     create_experiment(root, runtime_bin=home_runtime)
     assert (root / 'campaign.yaml').is_file()
     assert not (root / 'run-case.pbs').exists()
+
+
+@pytest.mark.parametrize('start,init,second,trajectory0,state0,trajectory1', [
+    ('2024-02-29T00:00:00Z', '2024-02-28T18:00:00Z', '2024-02-29T06:00:00Z',
+     '2024-02-28_21.00.00', '2024-02-29_00.00.00', '2024-02-29_03.00.00'),
+    ('2023-01-01T00:00:00Z', '2022-12-31T18:00:00Z', '2023-01-01T06:00:00Z',
+     '2022-12-31_21.00.00', '2023-01-01_00.00.00', '2023-01-01_03.00.00'),
+    ('2026-11-16T18:00:00Z', '2026-11-16T12:00:00Z', '2026-11-17T00:00:00Z',
+     '2026-11-16_15.00.00', '2026-11-16_18.00.00', '2026-11-16_21.00.00'),
+])
+def test_arbitrary_first_analysis_generates_correct_initialization_and_cycling(
+    tmp_path, start, init, second, trajectory0, state0, trajectory1,
+):
+    from datetime import datetime
+    root = tmp_path / ('case-' + start[:10])
+    create_experiment(root, start=start)
+    campaign = yaml.safe_load((root / 'campaign.yaml').read_text())
+    assert campaign['calendar']['start'] == start
+    assert campaign['calendar']['end'] == second
+    assert len(campaign['initialization']) == 3
+    assert all(step['cycle'] == init for step in campaign['initialization'])
+    first_id = datetime.strptime(start, '%Y-%m-%dT%H:%M:%SZ').strftime('%Y%m%dT%H%M%SZ')
+    second_id = datetime.strptime(second, '%Y-%m-%dT%H:%M:%SZ').strftime('%Y%m%dT%H%M%SZ')
+    init_id = datetime.strptime(init, '%Y-%m-%dT%H:%M:%SZ').strftime('%Y%m%dT%H%M%SZ')
+    bg0 = root / 'work/background' / first_id
+    bg1 = root / 'work/background' / second_id
+    assert bg0.joinpath('trajectory.nc').readlink() == (
+        root / 'work/initialization/mpas' / init_id / ('mpasout.' + trajectory0 + '.nc')
+    )
+    assert bg0.joinpath('state.nc').readlink() == (
+        root / 'work/initialization/mpas' / init_id / ('mpasout.' + state0 + '.nc')
+    )
+    assert bg1.joinpath('trajectory.nc').readlink() == (
+        root / 'work/mpas' / first_id / ('mpasout.' + trajectory1 + '.nc')
+    )
+    assert bg1.joinpath('state.nc').readlink() == (
+        root / 'work/mpas' / first_id /
+        ('mpasout.' + datetime.strptime(second, '%Y-%m-%dT%H:%M:%SZ').strftime('%Y-%m-%d_%H.%M.%S') + '.nc')
+    )
+    assert yaml.safe_load((root / 'experiment.yaml').read_text())['experiment']['name'] != 'first-20250901'
+
+
+@pytest.mark.parametrize('start', [
+    '2025-02-29T00:00:00Z', # not a leap year
+    '2025-09-01T03:00:00Z', # unsupported DA slot
+    '2025-09-01', '2030-13-01T00:00:00Z',
+])
+def test_generator_rejects_invalid_start_without_creating_experiment(tmp_path, start):
+    root = tmp_path / 'not-created'
+    with pytest.raises(ValueError, match='--start'):
+        create_experiment(root, start=start)
+    assert not root.exists()
+
+
+def test_cli_can_create_cross_year_case_from_start(tmp_path):
+    dest = tmp_path / 'new-year'
+    result = subprocess.run([
+        sys.executable, '-m', 'monan_jedi_workflow.experiment_start',
+        str(dest), '--start', '2023-01-01T00:00:00Z',
+    ], text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    campaign = yaml.safe_load((dest/'campaign.yaml').read_text())
+    assert campaign['initialization'][0]['cycle'] == '2022-12-31T18:00:00Z'
+    assert campaign['calendar']['start'] == '2023-01-01T00:00:00Z'
