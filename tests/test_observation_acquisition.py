@@ -1,64 +1,92 @@
-"""Observation acquisition runs before conversion preflight and never guesses dates."""
+"""Regression tests for the restored, date-safe historical GDEX acquisition."""
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from monan_jedi_workflow.cycle_context import parse_cycle_time
 from monan_jedi_workflow.input_acquisition import InputUnavailable
 import monan_jedi_workflow.observation_acquisition as acquire
+import monan_jedi_workflow.obs_acquisition as legacy
 import monan_jedi_workflow.platform_backend as backend
 import monan_jedi_workflow.obs2ioda_stage as obs
 
 
-def _setup(tmp_path, monkeypatch, *, configured):
-    raw = tmp_path / 'obs/2024/prepbufr.gdas.2024022900.nr'
-    run = SimpleNamespace(context={'cycle_year': '2024',
-                                   'cycle_yyyymmddhh': '2024022900'})
-    op = SimpleNamespace(section={
-        'acquisition': {'providers': (
-            [{'converter': 'prepbufr-conventional',
-              'url': 'https://example.invalid/{cycle_year}/{cycle_yyyymmddhh}.nr'}]
-            if configured else []
-        )},
-    })
-    request = SimpleNamespace(cycle='2024-02-29T00:00:00Z')
-    monkeypatch.setattr(backend, 'materialize', lambda _op, d: d)
-    monkeypatch.setattr(backend, 'render_run', lambda _op, _req, _dir: run)
-    monkeypatch.setattr(obs, '_build_plan', lambda _run: {'converters': [{
-        'name': 'prepbufr-conventional',
-        'inputs': [str(raw), str(tmp_path / 'run_prepbufr.sh')],
-    }]})
-    return raw, op, request
+def setup_case(tmp_path, monkeypatch, *, config=None):
+    cycle = parse_cycle_time("2024-02-29T00:00:00Z")
+    raw_pre = tmp_path / "obs/2024/prepbufr.gdas.2024022900.nr"
+    raw_gps = tmp_path / "obs/2024/gdas.gpsro.t00z.20240229.bufr"
+    run = SimpleNamespace(cycle=cycle)
+    op = SimpleNamespace(section={"acquisition": config or {"providers": []}})
+    request = SimpleNamespace(cycle=cycle.cycle_time)
+    monkeypatch.setattr(backend, "materialize", lambda _op, directory: directory)
+    monkeypatch.setattr(backend, "render_run", lambda _op, _req, _dir: run)
+    monkeypatch.setattr(obs, "_build_plan", lambda _run: {"converters": [
+        {"name": "prepbufr-conventional", "inputs": [
+            str(raw_pre), str(tmp_path / "run_prepbufr.sh")
+        ]},
+        {"name": "gpsro-gnssro", "inputs": [
+            str(raw_gps), str(tmp_path / "run_gpsro.sh")
+        ]},
+    ]})
+    return raw_pre, raw_gps, op, request
 
 
-def test_missing_observation_uses_declared_provider_only(tmp_path, monkeypatch):
-    raw, op, request = _setup(tmp_path, monkeypatch, configured=True)
+def test_previous_gdex_provider_is_restored_for_both_products(tmp_path, monkeypatch):
+    raw_pre, raw_gps, op, request = setup_case(tmp_path, monkeypatch)
     seen = []
-    def fake_ensure_input(**kwargs):
-        seen.append(kwargs)
-        raw.parent.mkdir(parents=True, exist_ok=True)
-        raw.write_bytes(b'BUFR fixture')
-        return raw
-    monkeypatch.setattr(acquire, 'ensure_input', fake_ensure_input)
-    assert acquire.acquire_required_observations(op, request) == [raw]
-    assert seen[0]['url'] == 'https://example.invalid/2024/2024022900.nr'
-    assert seen[0]['target'] == raw
-    # Download is only necessary for missing data.
+
+    def mock_download(path, cycle, converter, provider):
+        seen.append((converter, provider["type"], provider["url"], provider.get("member")))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"BUFR" + b"x" * 32)
+        return SimpleNamespace(destination=str(path))
+
+    monkeypatch.setattr(legacy, "_acquire_remote", mock_download)
+    assert acquire.acquire_required_observations(op, request) == [raw_pre, raw_gps]
+    assert seen[0][0:2] == ("prepbufr-conventional", "https")
+    assert "/d337000/prepnr/" in seen[0][2]
+    assert seen[1][0:2] == ("gpsro-gnssro", "https-tar")
+    assert "/d735000/gpsro/" in seen[1][2]
+    assert "gdas.gpsro.t{cycle_hour}z." in seen[1][3]
+    # Both products remain cached, no new remote operations.
     assert acquire.acquire_required_observations(op, request) == []
-    assert len(seen) == 1
+    assert len(seen) == 2
 
 
-def test_missing_historical_provider_reports_exact_date(tmp_path, monkeypatch):
-    raw, op, request = _setup(tmp_path, monkeypatch, configured=False)
-    with pytest.raises(InputUnavailable, match='No URL provider configured') as error:
+def test_opt_out_is_explicit_and_never_downloads(tmp_path, monkeypatch):
+    raw_pre, _, op, request = setup_case(
+        tmp_path, monkeypatch, config={"enabled": False}
+    )
+    monkeypatch.setattr(legacy, "_acquire_remote",
+                        lambda *a: pytest.fail("download should be disabled"))
+    with pytest.raises(InputUnavailable, match="No acquisition provider"):
         acquire.acquire_required_observations(op, request)
-    assert str(raw) in str(error.value)
-    assert request.cycle in str(error.value)
-    assert not raw.exists()
+    assert not raw_pre.exists()
 
 
-def test_existing_observations_work_without_provider(tmp_path, monkeypatch):
-    raw, op, request = _setup(tmp_path, monkeypatch, configured=False)
-    raw.parent.mkdir(parents=True)
-    raw.write_bytes(b'BUFR fixture')
+def test_existing_data_reused_without_remote_access(tmp_path, monkeypatch):
+    raw_pre, raw_gps, op, request = setup_case(tmp_path, monkeypatch)
+    for path in (raw_pre, raw_gps):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"BUFR existing")
+    monkeypatch.setattr(legacy, "_acquire_remote",
+                        lambda *a: pytest.fail("should not download existing observations"))
     assert acquire.acquire_required_observations(op, request) == []
+
+
+def test_custom_provider_overrides_default_without_fabricating(tmp_path, monkeypatch):
+    _, _, op, request = setup_case(tmp_path, monkeypatch, config={
+        "providers": [{"converter": "prepbufr-conventional",
+                       "type": "https",
+                       "url": "https://archive.example.org/{cycle_yyyymmddhh}.nr"}],
+    })
+    seen = []
+    def mock_download(path, cycle, converter, provider):
+        seen.append(provider["url"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"BUFR fixture")
+    monkeypatch.setattr(legacy, "_acquire_remote", mock_download)
+    acquire.acquire_required_observations(op, request)
+    assert seen[0].startswith("https://archive.example.org/")
+    assert "/d735000/gpsro/" in seen[1]
