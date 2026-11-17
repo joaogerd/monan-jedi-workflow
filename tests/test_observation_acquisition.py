@@ -45,7 +45,7 @@ def test_previous_gdex_provider_is_restored_for_both_products(tmp_path, monkeypa
     monkeypatch.setattr(legacy, "_acquire_remote", mock_download)
     assert acquire.acquire_required_observations(op, request) == [raw_pre, raw_gps]
     assert seen[0][0:2] == ("prepbufr-conventional", "https")
-    assert "/d337000/prepnr/" in seen[0][2]
+    assert "/d337000/prep48h/" in seen[0][2]
     assert seen[1][0:2] == ("gpsro-gnssro", "https-tar")
     assert "/d735000/gpsro/" in seen[1][2]
     assert "gdas.gpsro.t{cycle_hour}z." in seen[1][3]
@@ -90,3 +90,18 @@ def test_custom_provider_overrides_default_without_fabricating(tmp_path, monkeyp
     acquire.acquire_required_observations(op, request)
     assert seen[0].startswith("https://archive.example.org/")
     assert "/d735000/gpsro/" in seen[1]
+
+
+
+def test_historical_gdex_provider_switches_with_year():
+    from monan_jedi_workflow.cycle_context import parse_cycle_time
+    prior = acquire._default_provider(
+        "prepbufr-conventional", parse_cycle_time("2024-02-29T00:00:00Z")
+    )
+    recent = acquire._default_provider(
+        "prepbufr-conventional", parse_cycle_time("2025-09-01T00:00:00Z")
+    )
+    assert prior["product"] == "PREP48H"
+    assert "t{cycle_hour}z.nr.48h" in prior["url"]
+    assert recent["product"] == "PREPNR"
+    assert "prepbufr.gdas.{cycle_yyyymmddhh}.nr" in recent["url"]
