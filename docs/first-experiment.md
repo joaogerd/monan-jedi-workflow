@@ -119,7 +119,25 @@ A validação estrutural não prova a existência de todos os dados ou o sucesso
 do PBS científico. Apenas depois do preflight completo, execute **no login**
 `swf run workflow-login.yaml --ui plain`.
 
-## 6. Verificação
+## 6. Falhas: diagnóstico automático para o usuário
+
+Se alguma etapa falhar, use **um único comando** no diretório do experimento:
+
+```bash
+monan-jedi-workflow diagnose
+```
+
+O programa identifica os estados inválidos, consulta o histórico dos jobs
+PBS, procura o erro real nos logs e mostra as primeiras ações recomendadas.
+Repetições idênticas entre ranks MPI são agrupadas. Este comando é somente
+leitura e não ressubmete tarefas. Para obter o relatório estruturado, use
+`monan-jedi-workflow diagnose --json`.
+
+Consulte [diagnóstico de falhas](diagnostics.md) para a explicação e
+orientações completas. Não reinicie uma campanha até entender o resultado
+da execução anterior.
+
+## 7. Verificação
 
 Use `swf status workflow-login.yaml`, logs científicos em `work/`,
 manifests por aplicação e arquivos PBS nativos. A comparação científica
