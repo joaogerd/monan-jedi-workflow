@@ -43,6 +43,4 @@ def test_observation_outputs_never_change_input_fingerprint(tmp_path, monkeypatc
     output.write_text("an IODA product")
     after = cli.input_records(cli.inspect_native(op, request, tmp_path))
     assert before == after
-    assert str(output) not in [
-        item["path"] for item in after
-    ] if after else True
+    assert str(output.resolve()) not in [item["path"] for item in after]
