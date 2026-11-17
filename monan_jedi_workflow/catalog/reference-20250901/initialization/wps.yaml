@@ -8,6 +8,7 @@ wps:
     source: '{gfs_file}'
     url: https://noaa-gfs-bdp-pds.s3.amazonaws.com/gfs.{cycle_year}{cycle_month}{cycle_day}/{cycle_hour}/atmos/gfs.t{cycle_hour}z.pgrb2.0p25.f000
     timeout_seconds: 300
+    validate_grib: true
   clean_patterns:
   - GRIBFILE.*
   - GFS:*
