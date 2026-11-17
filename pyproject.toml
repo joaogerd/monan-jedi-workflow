@@ -11,7 +11,7 @@ dependencies = [
   "PyYAML>=6.0",
   "numpy>=1.24",
   "netCDF4>=1.6",
-  "simpleworkflow>=0.6.2",
+  "simpleworkflow @ git+https://github.com/joaogerd/simpleWorkflow.git@b38733cb77950810a510d22cd96a999b53150f95",
 ]
 
 [project.optional-dependencies]
