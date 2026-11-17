@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shlex
+
 
 def pbs_header_lines(
     *,
@@ -50,5 +52,29 @@ def pbs_runtime_library_lines() -> list[str]:
         '    exit 127',
         '  fi',
         '  export LD_LIBRARY_PATH="$MONAN_LIBFABRIC_ROOT${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"',
+        'fi',
+    ]
+
+
+def pbs_linker_preflight_lines(executable: str) -> list[str]:
+    """Check ELF dependencies once before launching every MPI rank.
+
+    Preserves native-only compute execution. A single clear stderr message
+    replaces hundreds of identical dynamic loader errors.
+    """
+    if not isinstance(executable, str) or not executable:
+        raise ValueError("PBS scientific executable must be a nonempty string")
+    quoted = shlex.quote(executable)
+    return [
+        "# Validate native shared libraries after loading the site modules.",
+        "if command -v ldd >/dev/null 2>&1; then",
+        f'  _monan_missing_libs="$(ldd {quoted} 2>&1 | grep "not found" || true)"',
+        '  if [[ -n "$_monan_missing_libs" ]]; then',
+        '    echo "[FALHA] O executavel cientifico nao encontra bibliotecas no ambiente PBS:" >&2',
+        '    echo "$_monan_missing_libs" >&2',
+        '    echo "[ACAO] Revise o perfil de modulos/spack-stack configurado em pbs.site_config." >&2',
+        '    exit 127',
+        '  fi',
+        '  unset _monan_missing_libs',
         'fi',
     ]
