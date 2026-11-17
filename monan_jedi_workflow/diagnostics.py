@@ -235,37 +235,92 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
             ]}
 
 
-def _display(report: dict[str, Any]) -> None:
-    print("MONAN-JEDI — Diagnóstico do experimento")
-    print(f"Experimento: {report['experiment']}")
-    print(f"Situação: {report['status']}")
+def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
+    """Present a short, actionable diagnosis before technical evidence."""
     diagnosis = report["diagnosis"]
-    print(f"Diagnóstico: {diagnosis['summary']}")
-    print(f"Ação sugerida: {diagnosis['suggestion']}")
-    for record in report["operations"]:
-        print(f"Operação: {record['operation']} ciclo={record['cycle']} estado={record['state']}")
-        if record["last_error"]:
-            print(f"  Detalhe: {record['last_error']}")
-    for report_item in report["validation"]:
-        print(f"Validação: {report_item['path']}")
-        for value in report_item["missing_outputs"][:5]:
-            print(f"  Arquivo não produzido: {value}")
-        for value in report_item["missing_log_markers"][:5]:
-            print(f"  Mensagem de conclusão ausente: {value}")
-    for job in report["pbs_jobs"]:
-        if job.get("available"):
-            print(f"PBS: {job['job_id']} estado={job['state']} exit_status={job['exit_status']}")
-            for key, value in job.get("paths", {}).items():
-                print(f"  {key}: {value}")
-        else:
-            print(f"PBS: {job['job_id']}: {job.get('detail', 'Não disponível')}")
-    for item in report["log_evidence"][:12]:
-        print(f"Log: {item['file']}")
-        print(f"  {item['message']}")
-        if item.get("occurrences", 1) > 1:
-            print(f"  (mensagem repetida {item['occurrences']} vezes; exibida uma vez)")
-    if not report["log_evidence"]:
-        print("Nenhuma mensagem de erro explícita encontrada nos logs analisados.")
+    operations = [item for item in report["operations"]
+                  if item["state"] in {"failed", "invalid"}]
+    failed = [j for j in report["pbs_jobs"]
+              if j.get("exit_status") not in (None, 0)]
+    first = operations[0] if operations else None
+    job = failed[0] if failed else None
+    evidence = report["log_evidence"][0] if report["log_evidence"] else None
+
+    print()
+    print("MONAN-JEDI  |  Diagnóstico da execução")
+    print("-" * 62)
+    if report["status"] == "failure":
+        target = first["operation"].replace("-", " ").upper() if first else "EXPERIMENTO"
+        cycle = first["cycle"] if first else ""
+        print(f"[FALHA] {target}" + (f"  |  ciclo {cycle}" if cycle else ""))
+    elif report["status"] == "incomplete":
+        print("[PENDENTE] Existem operações ainda não concluídas")
+    else:
+        print("[INFO] Nenhuma falha identificada nos registros disponíveis")
+
+    print()
+    print("CAUSA IDENTIFICADA" if diagnosis["code"] != "unknown" else "RESULTADO")
+    print("  " + diagnosis["summary"])
+
+    if job:
+        print(f"  Job PBS: {job['job_id']}  |  código de saída: {job['exit_status']}")
+
+    if evidence:
+        print()
+        print("EVIDÊNCIA PRINCIPAL")
+        print("  " + evidence["message"])
+        count = evidence.get("occurrences", 1)
+        if count > 1:
+            print(f"  ({count} ocorrências da mesma mensagem MPI)")
+        print("  Log: " + str(Path(evidence["file"]).relative_to(
+            report["experiment"]) if Path(evidence["file"]).is_relative_to(
+            report["experiment"]) else evidence["file"]))
+
+    print()
+    print("AÇÃO RECOMENDADA")
+    print("  " + diagnosis["suggestion"])
+
+    if report["validation"]:
+        missing = sum(len(item["missing_outputs"]) for item in report["validation"])
+        if missing:
+            print()
+            print("CONSEQUÊNCIA")
+            print(f"  {missing} arquivo(s) científico(s) esperado(s) não produzido(s).")
+            if verbose:
+                for item in report["validation"]:
+                    for value in item["missing_outputs"]:
+                        print("  - " + value)
+
+    if verbose:
+        print()
+        print("DETALHES TÉCNICOS")
+        print("  Experimento: " + report["experiment"])
+        for item in report["operations"]:
+            print(f"  Operação: {item['operation']} | {item['cycle']} | {item['state']}")
+            if item.get("last_error"):
+                print("    " + item["last_error"])
+        for job in report["pbs_jobs"]:
+            if job.get("available"):
+                print(f"  PBS {job['job_id']}: state={job.get('state')} "
+                      f"Exit_status={job.get('exit_status')}")
+                for key, value in job.get("details", {}).items():
+                    print(f"    {key}: {value}")
+                for key, value in job.get("paths", {}).items():
+                    print(f"    {key}: {value}")
+            else:
+                print(f"  PBS {job['job_id']}: {job.get('detail', 'Indisponível')}")
+        for item in report["validation"]:
+            print("  Relatório: " + item["path"])
+            for marker in item["missing_log_markers"]:
+                print("    Marcador ausente: " + marker)
+        for item in report["log_evidence"][1:12]:
+            print(f"  {item['file']}: {item['message']}")
+    else:
+        print()
+        print("Detalhes adicionais: monan-jedi-workflow diagnose --verbose")
+    print("-" * 62)
+    print()
+
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -277,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="Diretório do experimento (padrão: diretório atual)")
     parser.add_argument("--task", default=None, help="Filtrar por operação/ciclo")
     parser.add_argument("--json", action="store_true", help="Relatório estruturado em JSON")
+    parser.add_argument("--verbose", action="store_true", help="Incluir logs, caminhos e detalhes PBS")
     parser.add_argument("--no-pbs", action="store_true", help="Consultar somente arquivos locais")
     args = parser.parse_args(argv)
     try:
@@ -287,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        _display(result)
+        _display(result, verbose=args.verbose)
     # A reported failed execution is not a diagnostic command failure.
     return 0
 
