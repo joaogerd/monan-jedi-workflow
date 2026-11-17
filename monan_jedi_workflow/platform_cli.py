@@ -374,10 +374,29 @@ def main(app, argv=None):
             "state": "error",
             "error": str(error),
         }
+        if request.action in {"run", "validate"} and request.config:
+            experiment_dir = Path(request.config).expanduser().resolve().parent
+            if (experiment_dir / "campaign.yaml").is_file():
+                result["diagnostic_command"] = (
+                    f"monan-jedi-workflow diagnose {experiment_dir}"
+                )
+                try:
+                    from .diagnostics import diagnose
+                    diagnosis = diagnose(experiment_dir, query_pbs=False)
+                    if diagnosis["status"] == "failure":
+                        result["diagnosis"] = diagnosis["diagnosis"]
+                except (OSError, ValueError):
+                    pass  # Never replace the original scientific error.
         print(
-            json.dumps(result, default=str),
+            json.dumps(result, ensure_ascii=False, default=str),
             file=sys.stdout if request.json_output else sys.stderr,
         )
+        if not request.json_output and result.get("diagnostic_command"):
+            print(
+                "Para identificar a causa, execute: "
+                + result["diagnostic_command"],
+                file=sys.stderr,
+            )
         return 1
 
 
