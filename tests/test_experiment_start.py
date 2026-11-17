@@ -211,6 +211,8 @@ def test_arbitrary_first_analysis_generates_correct_initialization_and_cycling(
     campaign = yaml.safe_load((root / 'campaign.yaml').read_text())
     assert campaign['calendar']['start'] == start
     assert campaign['calendar']['end'] == second
+    jedi = yaml.safe_load((root / 'science/jedi.yaml').read_text())['jedi']
+    assert jedi['cycle']['first_cycle'] == start
     assert len(campaign['initialization']) == 3
     assert all(step['cycle'] == init for step in campaign['initialization'])
     first_id = datetime.strptime(start, '%Y-%m-%dT%H:%M:%SZ').strftime('%Y%m%dT%H%M%SZ')
@@ -325,3 +327,36 @@ def test_suggest_available_dates_requires_two_real_cycles_and_previous_gfs(tmp_p
     assert dates == ['2024-02-29T00:00:00Z']
     (gpsro / 'gdas.gpsro.t06z.20240229.bufr').unlink()
     assert suggest_available_dates(input_root=input_root, gfs_root=gfs_root) == []
+
+
+@pytest.mark.parametrize('start,initial', [
+    ('2024-02-29T00:00:00Z', '2024-02-28T18:00:00Z'),
+    ('2023-01-01T00:00:00Z', '2022-12-31T18:00:00Z'),
+])
+def test_nonseptember_campaign_exports_all_correct_native_stage_dates(
+    tmp_path, monkeypatch, start, initial
+):
+    from monan_jedi_workflow.domain_cli import parse_request
+    from monan_jedi_workflow.platform_campaign import campaign_action
+    for name in ('MONAN_JEDI_INSTALL', 'STACK', 'MONAN_INPUT', 'MONAN_MESH',
+                 'MONAN_PHYSICS', 'MONAN_BMATRIX', 'MONAN_LIBFABRIC', 'MONAN_GFS'):
+        monkeypatch.setenv(name + '_ROOT', str(tmp_path / name))
+    root = tmp_path / 'case'
+    create_experiment(root, start=start)
+    result = campaign_action(
+        parse_request('campaign', ['export', str(root / 'campaign.yaml')])
+    )
+    assert result['cycles'] == 2
+    workflow = yaml.safe_load((root / 'workflow.yaml').read_text())
+    assert len(workflow['initialization']['tasks']) == 9
+    assert len(workflow['tasks']) == 15
+    for task in workflow['initialization']['tasks']:
+        assert initial in task['argv']
+        assert '2025-08-31' not in str(task)
+    first = workflow['tasks'][:9]
+    second = workflow['tasks'][9:]
+    assert all(start in task['argv'] for task in first)
+    from datetime import datetime, timedelta
+    following = (datetime.strptime(start, '%Y-%m-%dT%H:%M:%SZ')
+                 + timedelta(hours=6)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    assert all(following in task['argv'] for task in second)
