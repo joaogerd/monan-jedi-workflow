@@ -71,7 +71,27 @@ def _defaults(root: Path) -> dict[str, Path]:
 
 
 
-def initialize_site(root: Path, *, stack: Path | None = None,
+def _profile_workspace(configured: Path | None, infrastructure: Path | None) -> Path:
+    """Keep profile state isolated without changing infrastructure discovery."""
+    if configured is None:
+        if infrastructure is None:
+            raise ValueError("JACI workspace cannot be determined")
+        return infrastructure
+    path = Path(configured).expanduser().resolve()
+    if not path.is_dir():
+        raise ValueError(
+            f"Configuration workspace does not exist: {path}. "
+            "Create the empty directory before passing --workspace."
+        )
+    if infrastructure is None or not path.is_relative_to(infrastructure):
+        raise ValueError(
+            f"Configuration workspace must be inside your JACI project: {infrastructure}"
+        )
+    return path
+
+
+def initialize_site(root: Path, *, configuration_workspace: Path | None = None,
+                    stack: Path | None = None,
                     install: Path | None = None,
                     environ: dict[str, str] | None = None,
                     interactive: bool | None = None,
@@ -87,7 +107,8 @@ def initialize_site(root: Path, *, stack: Path | None = None,
             "Cannot initialize site outside /p/projetos/<group>/<user>. "
             "Pass an existing site with experiment create --site."
         )
-    target = workspace / "site.yaml"
+    profile_workspace = _profile_workspace(configuration_workspace, workspace)
+    target = profile_workspace / "site.yaml"
     if target.exists():
         raise FileExistsError(f"Site profile already exists: {target}; refusing overwrite")
 
@@ -207,7 +228,8 @@ def initialize_site(root: Path, *, stack: Path | None = None,
 
 
 def load_project_site(root: Path, *, site_config: Path | None = None,
-                      environ: dict[str, str] | None = None) -> tuple[Path | None, dict]:
+                      environ: dict[str, str] | None = None,
+                      configuration_workspace: Path | None = None) -> tuple[Path | None, dict]:
     """Find the site profile explicitly or in the workspace, not by guessing stacks.
 
     A shared <workspace>/site.yaml is the stable, one-time JACI configuration
@@ -216,14 +238,17 @@ def load_project_site(root: Path, *, site_config: Path | None = None,
     """
     env = dict(os.environ if environ is None else environ)
     workspace = _workspace(Path(root))
+    profile_workspace = _profile_workspace(configuration_workspace, workspace)
     if site_config is None:
-        candidate = workspace / "site.yaml" if workspace else None
+        candidate = profile_workspace / "site.yaml"
         if candidate is None or not candidate.is_file():
             if workspace is not None:
                 # First-run bootstrap: discover valid JACI installations and
                 # create the site profile once, before writing any case files.
-                initialized = initialize_site(root, environ=env)
-                return load_project_site(root, site_config=initialized, environ=env)
+                initialized = initialize_site(root, environ=env,
+                                              configuration_workspace=profile_workspace)
+                return load_project_site(root, site_config=initialized, environ=env,
+                                         configuration_workspace=profile_workspace)
             return None, {}
         site_config = candidate
     path = Path(site_config).expanduser().resolve()
