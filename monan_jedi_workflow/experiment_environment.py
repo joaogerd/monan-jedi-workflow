@@ -129,6 +129,52 @@ def load_project_site(root: Path, *, site_config: Path | None = None,
     return path, resolved
 
 
+
+def save_project_site(root: Path, *, environ: dict[str, str] | None = None) -> Path:
+    """One-time persistent site profile from a proven, explicitly loaded runtime.
+
+    Never overwrite an existing site profile or silently pick among multiple
+    stacks. The user must first source a working experiment environment.
+    """
+    env = dict(os.environ if environ is None else environ)
+    workspace = _workspace(Path(root))
+    if workspace is None:
+        raise ValueError(
+            "Workspace is not under /p/projetos/<group>/<user>; "
+            "select an existing JACI workspace before saving its site configuration."
+        )
+    values = {}
+    for name in REQUIRED:
+        value = env.get(name, "").strip()
+        if not value or not Path(value).is_dir():
+            raise ValueError(
+                f"{name} must refer to an existing directory before saving site.yaml. "
+                "Source the environment.sh of a validated experiment first."
+            )
+        values[name] = str(Path(value).resolve())
+    path = workspace / "site.yaml"
+    if path.exists():
+        raise FileExistsError(
+            f"Refusing to overwrite the existing site profile: {path}"
+        )
+    # The installed producer is authoritative for module name/site setup.
+    from .site import runtime_contract_context
+    runtime_contract_context(values["MONAN_JEDI_INSTALL_ROOT"], values["STACK_ROOT"])
+    document = {
+        "site": {"name": "jaci"},
+        "stack": {"load": True, "root": values["STACK_ROOT"]},
+        "jedi": {"install_root": values["MONAN_JEDI_INSTALL_ROOT"]},
+        "environment": {
+            key: values[key] for key in REQUIRED
+            if key not in ("STACK_ROOT", "MONAN_JEDI_INSTALL_ROOT")
+        },
+        "runtime": {"unload_anaconda": True, "validate_python": False},
+    }
+    with path.open("x", encoding="utf-8") as handle:
+        yaml.safe_dump(document, handle, sort_keys=False)
+    return path
+
+
 def render_environment(root: Path, *, environ: dict[str, str] | None = None,
                        site_profile: dict | None = None) -> str:
     """Only select defaults actually present, never claim an unknown path exists."""
