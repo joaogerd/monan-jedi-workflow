@@ -19,7 +19,8 @@ def _usage() -> int:
         "  experiment validate|plan|run|status workflow.yaml\n"
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
         "  experiment check-inputs CASE\n"
-        "  experiment site save     # one-time workspace configuration\n\n"
+        "  experiment site init [--stack PATH] [--install PATH]\n"
+        "  experiment site save     # preserve a proven environment\n\n"
         "Other independent commands: wps, obs, mpas, jedi, diagnostic, diagnose.\n"
         "Each command is installed by the monan-jedi-workflow package."
     )
@@ -30,12 +31,21 @@ def _experiment(argv: list[str]) -> int:
         return _usage()
     action, *args = argv
     if action == "site":
-        if args != ["save"]:
-            print("[ERRO] Use: experiment site save", file=sys.stderr)
-            return 2
-        from .experiment_environment import save_project_site
+        from .experiment_environment import save_project_site, initialize_site
+        parser = argparse.ArgumentParser(prog="experiment site")
+        sub = parser.add_subparsers(dest="site_action", required=True)
+        sub.add_parser("save", help="persist a verified environment from this shell")
+        init = sub.add_parser("init", help="discover installed JACI runtime on first use")
+        init.add_argument("--stack", type=Path, help="select installed spack-stack root")
+        init.add_argument("--install", type=Path, help="select installed MONAN-JEDI prefix")
+        options = parser.parse_args(args)
         try:
-            target = save_project_site(Path.cwd())
+            if options.site_action == "init":
+                target = initialize_site(
+                    Path.cwd(), stack=options.stack, install=options.install
+                )
+            else:
+                target = save_project_site(Path.cwd())
         except (ValueError, OSError) as error:
             print(f"[ERRO] {error}", file=sys.stderr)
             return 2
