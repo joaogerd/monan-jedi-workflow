@@ -71,6 +71,7 @@ from typing import Any
 from .analysis_cycle import analysis_cycle_context
 from .cycle_context import CycleContext, parse_cycle_time
 from .pbs_directives import pbs_header_lines, pbs_runtime_library_lines
+from .scientific_environment import render_native_site_setup
 from .scheduler import PBSError, query
 from .stage_config import (
     StageConfigurationError,
@@ -928,6 +929,7 @@ def _render_pbs(run: JEDIRun) -> None:
         "",
         "set -euo pipefail",
         f"cd {shlex.quote(str(run.run_dir))}",
+        *render_native_site_setup(pbs, config_dir=run.config_dir),
         *bootstrap_lines,
         *setup_lines,
         *exports,
