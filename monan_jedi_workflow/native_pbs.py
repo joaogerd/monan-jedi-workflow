@@ -62,7 +62,9 @@ def native_pbs_run(
         f'#PBS -l select={counts["select"]}:ncpus={counts["ncpus"]}:mpiprocs={counts["mpiprocs"]}',
         *(["#PBS -l place=excl"] if queue.casefold() != "aux" else []),
         "#PBS -l walltime=" + walltime,
-        "#PBS -V",
+        # A declared site profile renders its own scientific runtime.
+        # Legacy jobs without a profile retain inherited-environment behavior.
+        *(["#PBS -V"] if not resources.get("site_config") else []),
         "#PBS -o " + str(stdout),
         "#PBS -e " + str(stderr),
         "set -euo pipefail",
