@@ -71,11 +71,12 @@ def _defaults(root: Path) -> dict[str, Path]:
 
 
 
-def _profile_workspace(configured: Path | None, infrastructure: Path | None) -> Path:
-    """Keep profile state isolated without changing infrastructure discovery."""
+def _profile_workspace(configured: Path | None, infrastructure: Path | None) -> Path | None:
+    """Isolate JACI profiles; preserve generic local and explicit-site cases."""
     if configured is None:
-        if infrastructure is None:
-            raise ValueError("JACI workspace cannot be determined")
+        # Outside JACI there is no implicit site profile: callers can still
+        # generate a case and/or supply --site explicitly. Do not force a
+        # JACI-only directory convention on portable Python consumers.
         return infrastructure
     path = Path(configured).expanduser().resolve()
     if not path.is_dir():
@@ -238,17 +239,19 @@ def load_project_site(root: Path, *, site_config: Path | None = None,
     """
     env = dict(os.environ if environ is None else environ)
     workspace = _workspace(Path(root))
-    profile_workspace = _profile_workspace(configuration_workspace, workspace)
+    # An explicit --site works regardless of whether the destination is on
+    # JACI. Resolve the implicit profile workspace only for implicit lookup.
     if site_config is None:
-        candidate = profile_workspace / "site.yaml"
+        profile_workspace = _profile_workspace(configuration_workspace, workspace)
+        candidate = profile_workspace / "site.yaml" if profile_workspace else None
         if candidate is None or not candidate.is_file():
             if workspace is not None:
                 # First-run bootstrap: discover valid JACI installations and
-                # create the site profile once, before writing any case files.
-                initialized = initialize_site(root, environ=env,
-                                              configuration_workspace=profile_workspace)
-                return load_project_site(root, site_config=initialized, environ=env,
-                                         configuration_workspace=profile_workspace)
+                # create the profile before writing any case files.
+                initialized = initialize_site(
+                    root, environ=env, configuration_workspace=profile_workspace
+                )
+                return load_project_site(root, site_config=initialized, environ=env)
             return None, {}
         site_config = candidate
     path = Path(site_config).expanduser().resolve()
