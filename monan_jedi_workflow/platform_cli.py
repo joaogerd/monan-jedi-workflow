@@ -241,6 +241,11 @@ def operate(request):
         )
     if request.action != "prepare" and state is None:
         raise RuntimeError("operation is not prepared; run prepare first")
+    if request.action == "prepare" and state is None and op.key == "obs2ioda":
+        # Acquire exact-cycle raw inputs before inspect_native() fingerprints
+        # them. This operates on login only; converter execution remains PBS.
+        from .observation_acquisition import acquire_required_observations
+        acquire_required_observations(op, request)
     from .platform_backend import (
         materialize,
         native_functions,
