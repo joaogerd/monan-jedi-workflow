@@ -86,6 +86,10 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         cfg['variables'] = {'experiment_root': str(root), 'configuration_root': str(path.parent), **cfg.get('variables', {})}
         initial = relative.startswith('initialization/')
         if key == 'jedi':
+            # The first-cycle switch controls initial vs cycling background
+            # selection; keeping the catalog's September date here silently
+            # breaks every other experiment period.
+            cfg.setdefault('cycle', {})['first_cycle'] = _cycle(first_analysis)
             cfg['run_dir'] = str(root / 'work/jedi/{cycle_id}')
             for field in ('source', 'initial_source'):
                 cfg['background'][field] = str(root / 'work/background/{cycle_id}/trajectory.nc')
