@@ -30,20 +30,48 @@ como resolvido apenas porque o job saiu da fila.
 
 ## Exemplo: biblioteca compartilhada ausente
 
+A apresentação padrão prioriza apenas o que interessa para resolver:
+
 ```text
-MONAN-JEDI — Diagnóstico do experimento
-Situação: failure
-Diagnóstico: O executável não iniciou: biblioteca libfabric.so.1 indisponível no nó de computação.
-Ação sugerida: Conferir os módulos MPI/Cray e o LD_LIBRARY_PATH efetivo do job PBS...
-PBS: 826106.pbs-ha estado=F exit_status=127
-Log: .../mpas-init/.../stderr.log
-  ./mpas_init_atmosphere: error while loading shared libraries: libfabric.so.1...
-  (mensagem repetida 128 vezes; exibida uma vez)
+MONAN-JEDI  |  Diagnóstico da execução
+--------------------------------------------------------------
+[FALHA] MPAS INIT  |  ciclo 20250831T180000Z
+
+CAUSA IDENTIFICADA
+  O executável não iniciou: biblioteca libfabric.so.1
+  indisponível no nó de computação.
+  Job PBS: 826106.pbs-ha  |  código de saída: 127
+
+EVIDÊNCIA PRINCIPAL
+  ./mpas_init_atmosphere: error while loading shared libraries:
+  libfabric.so.1: cannot open shared object file
+  (128 ocorrências da mesma mensagem MPI)
+
+AÇÃO RECOMENDADA
+  Conferir os módulos MPI/Cray e o LD_LIBRARY_PATH do job PBS.
+
+CONSEQUÊNCIA
+  1 arquivo científico esperado não produzido.
+
+Detalhes adicionais: monan-jedi-workflow diagnose --verbose
+--------------------------------------------------------------
 ```
 
+Para dados extensos (outros jobs, caminhos completos, recursos PBS e
+relatórios de validação), execute:
+
+```bash
+monan-jedi-workflow diagnose --verbose
+```
+
+Se a falha envolver libfabric na JACI, o caminho declarado em
+`MONAN_LIBFABRIC_ROOT` deve apontar para uma instalação compatível
+disponível nos compute nodes. O bootstrap gerado para os scripts científicos
+adiciona essa instalação ao `LD_LIBRARY_PATH`, depois de conferir a existência
+de `libfabric.so.1`. **O Conda do controlador continua no login.**
+
 A ferramenta não sugere copiar bibliotecas nem criar links simbólicos
-artificiais. A configuração correta deve ser feita pelos módulos e caminhos
-oficiais do ambiente HPC, compatíveis com o executável.
+artificiais.
 
 ## Integração e suporte
 
