@@ -122,7 +122,7 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
         if value and value.get("state") in {"failed", "invalid", "running", "finished"}:
             states.append({"path": str(path), "state": value.get("state"),
                            "run_dir": value.get("run_dir"),
-                           "last_error": (value.get("attempts") or [{}])[-1].get("error"),
+                           "last_error": (value.get("validation_error") or (value.get("attempts") or [{}])[-1].get("error")),
                            "cycle": path.parent.parent.name,
                            "operation": path.parent.name})
     reports = []
