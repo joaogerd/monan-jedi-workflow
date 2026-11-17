@@ -21,7 +21,10 @@ dev = [
 ]
 
 [project.scripts]
-monan-workflow = "monan_jedi_workflow.unified_cli:main"
+experiment = "monan_jedi_workflow.command_entrypoints:experiment"
+wps = "monan_jedi_workflow.command_entrypoints:wps"
+diagnostic = "monan_jedi_workflow.command_entrypoints:diagnostic"
+diagnose = "monan_jedi_workflow.command_entrypoints:diagnose"
 obs = "monan_jedi_workflow.platform_cli:obs"
 jedi = "monan_jedi_workflow.platform_cli:jedi"
 mpas = "monan_jedi_workflow.platform_cli:mpas"
