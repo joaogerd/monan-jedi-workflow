@@ -123,10 +123,10 @@ def test_reference_campaign_exports_login_apps_which_submit_native_pbs(tmp_path,
     for task in [*initial, *tasks]:
         assert task['executor'] == 'local'
         assert 'pbs' not in task
-        assert task['argv'][0] != 'bash' or task['name'].endswith('_run') is False
+        assert task['argv'][0] == 'monan-workflow'
         assert task['name'] != 'run-case'
-    assert next(t for t in initial if t['name'] == 'init000_wps_run')['argv'][0] == 'monan-jedi-workflow'
-    assert next(t for t in tasks if t['name'] == 'c00000_obs_convert_run')['argv'][:3] == ['obs', 'convert', 'run']
+    assert next(t for t in initial if t['name'] == 'init000_wps_run')['argv'][:3] == ['monan-workflow', 'wps', 'run']
+    assert next(t for t in tasks if t['name'] == 'c00000_obs_convert_run')['argv'][:4] == ['monan-workflow', 'obs', 'convert', 'run']
 
 
 def test_environment_script_exports_and_checks_required_paths(tmp_path):
