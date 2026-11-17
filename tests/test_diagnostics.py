@@ -82,9 +82,9 @@ def test_diagnose_verbose_preserves_full_pbs_evidence(tmp_path, capsys, monkeypa
     def fake_run(argv, **kwargs):
         return subprocess.CompletedProcess(
             argv, 0,
-            "Job Id: 826106.pbs-ha\\n"
-            "    job_state = F\\n    Exit_status = 127\\n"
-            "    Output_Path = host:/p/outputs\\n", "",
+            "Job Id: 826106.pbs-ha\n"
+            "    job_state = F\n    Exit_status = 127\n"
+            "    Output_Path = host:/p/outputs\n", "",
         )
     monkeypatch.setattr("monan_jedi_workflow.diagnostics.subprocess.run", fake_run)
     assert main([str(root), "--verbose"]) == 0
@@ -99,7 +99,7 @@ def test_diagnose_detects_present_libfabric_but_missing_pbs_setup(tmp_path, monk
     root = _failed_mpas_init(tmp_path)
     run = root / "work" / "mpas-init" / "20250831T180000Z"
     (run / "run_mpas_init.pbs").write_text(
-        "#!/bin/bash\\n#PBS -V\\nmpiexec -n 128 ./mpas_init_atmosphere\\n"
+        "#!/bin/bash\n#PBS -V\nmpiexec -n 128 ./mpas_init_atmosphere\n"
     )
     lib_dir = tmp_path / "cray" / "lib64"
     lib_dir.mkdir(parents=True)
@@ -122,11 +122,11 @@ def test_diagnose_finished_obs_validation_not_false_libfabric(tmp_path):
         "state": "finished", "run_dir": str(work), "attempts": [],
     }))
     (logs / "run-linker-1.stdout.log").write_text(
-        "libfabric.so.1 => /opt/cray/libfabric/1.22.0/lib64/libfabric.so.1 (0x0)\\n"
+        "libfabric.so.1 => /opt/cray/libfabric/1.22.0/lib64/libfabric.so.1 (0x0)\n"
     )
     (root / "work" / "mpas-init" / "20250831T180000Z").mkdir(parents=True)
     (root / "work" / "mpas-init" / "20250831T180000Z" / "stderr.log").write_text(
-        "Warning: SEAICE_FRACTIONAL file not found...\\n"
+        "Warning: SEAICE_FRACTIONAL file not found...\n"
     )
     result = diagnose(root, query_pbs=False)
     assert result["status"] == "incomplete"
