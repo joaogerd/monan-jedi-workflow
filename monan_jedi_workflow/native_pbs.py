@@ -78,7 +78,8 @@ def native_pbs_run(
                          "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")
         else:
             lines.append("export " + key + "=" + shlex.quote(str(value)))
-    lines.extend(pbs_runtime_library_lines())
+    if not resources.get("site_config"):
+        lines.extend(pbs_runtime_library_lines())
     lines.extend(shlex.join(argv) for argv in commands)
     script.write_text("\n".join(lines) + "\n")
     submitted = subprocess.run(["qsub", str(script)], cwd=cwd, text=True,
