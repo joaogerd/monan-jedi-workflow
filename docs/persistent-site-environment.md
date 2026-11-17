@@ -1,3 +1,31 @@
+## Clean installation contract
+
+From a new Python 3.11 Conda environment, clone the workflow repository and
+run `python -m pip install .`. This standard installation now includes
+`simpleWorkflow` pinned to the verified Git commit
+`b38733cb77950810a510d22cd96a999b53150f95`, which provides the
+`swf` executable used by `experiment plan/validate/run`.
+
+An internet connection or a reachable Git server is required to install this
+dependency from its source until the dependency is published on a trusted
+package index. The software must not be claimed to install offline.
+
+After installation, test from outside the source checkout:
+
+```bash
+cd /tmp
+python -m pip check
+python -m pip show monan-jedi-workflow simpleworkflow
+command -v experiment
+command -v swf
+swf --help
+python -c "import monan_jedi_workflow; print(monan_jedi_workflow.__file__)"
+```
+
+The import location must be the new environment's `site-packages`.
+Merely running `import monan_jedi_workflow` in the clone is not a
+valid installed-package test because Python imports the source tree.
+
 # First-use JACI onboarding and persistent site profile
 
 **New users must not need a prior experiment or pre-existing site.yaml.**
