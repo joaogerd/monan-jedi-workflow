@@ -79,6 +79,14 @@ def load_project_site(root: Path, *, site_config: Path | None = None,
     if site_config is None:
         candidate = workspace / "site.yaml" if workspace else None
         if candidate is None or not candidate.is_file():
+            if (workspace is not None and not env.get("STACK_ROOT")
+                    and _discover_stack(workspace) is None):
+                raise ValueError(
+                    "No workspace site.yaml and STACK_ROOT is undefined or ambiguous. "
+                    "In a validated login session run 'experiment site save' once, "
+                    "or use 'experiment create ... --site /path/to/site.yaml'. "
+                    "No incomplete experiment directory was created."
+                )
             return None, {}
         site_config = candidate
     path = Path(site_config).expanduser().resolve()
