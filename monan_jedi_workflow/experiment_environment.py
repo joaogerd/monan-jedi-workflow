@@ -32,16 +32,20 @@ def _workspace(root: Path) -> Path | None:
     return None
 
 
-def _discover_stack(workspace: Path) -> Path | None:
-    """Select one real local installation, never a hard-coded person's stack."""
+def discover_stacks(workspace: Path) -> list[Path]:
+    """List validated local stack installations; never choose by sort order."""
     work = workspace / "work"
     if not work.is_dir():
-        return None
-    candidates = sorted(
-        candidate
-        for candidate in work.glob("spack-stack*/spack-stack")
+        return []
+    candidates = [
+        candidate for candidate in work.glob("spack-stack*/spack-stack")
         if (candidate / "configs/sites/tier2/jaci/setup.sh").is_file()
-    )
+    ]
+    return sorted(set(candidate.resolve() for candidate in candidates))
+
+
+def _discover_stack(workspace: Path) -> Path | None:
+    candidates = discover_stacks(workspace)
     return candidates[0] if len(candidates) == 1 else None
 
 
@@ -66,6 +70,97 @@ def _defaults(root: Path) -> dict[str, Path]:
 
 
 
+def initialize_site(root: Path, *, stack: Path | None = None,
+                    install: Path | None = None,
+                    environ: dict[str, str] | None = None) -> Path:
+    """Configure first-time JACI workspace using real installations.
+
+    Each directory must exist. Multiple stack candidates require explicit
+    selection; no prior experiment or environment.sh is needed.
+    """
+    workspace = _workspace(Path(root))
+    if workspace is None:
+        raise ValueError(
+            "Cannot initialize site outside /p/projetos/<group>/<user>. "
+            "Pass an existing site with experiment create --site."
+        )
+    target = workspace / "site.yaml"
+    if target.exists():
+        raise FileExistsError(f"Site profile already exists: {target}; refusing overwrite")
+
+    environment = dict(os.environ if environ is None else environ)
+    defaults = _defaults(Path(root))
+    if install is None:
+        install = Path(environment.get("MONAN_JEDI_INSTALL_ROOT")
+                       or defaults.get("MONAN_JEDI_INSTALL_ROOT", ""))
+    install = Path(install).expanduser().resolve()
+    if not install.is_dir():
+        raise ValueError(
+            f"MONAN-JEDI installation missing: {install}. "
+            "Pass experiment site init --install /actual/installed/prefix."
+        )
+
+    if stack is None and environment.get("STACK_ROOT"):
+        stack = Path(environment["STACK_ROOT"])
+    if stack is None:
+        candidates = discover_stacks(workspace)
+        if len(candidates) != 1:
+            detail = "\\n".join(f"  - {p}" for p in candidates)
+            raise ValueError(
+                f"Cannot select a stack automatically: {len(candidates)} valid "
+                f"candidates.\\n{detail}\\nUse experiment site init "
+                "--stack /actual/stack/root (and --install if necessary)."
+            )
+        stack = candidates[0]
+    stack = Path(stack).expanduser().resolve()
+    if not stack.is_dir():
+        raise ValueError(f"Selected STACK_ROOT does not exist: {stack}")
+
+    from .site import runtime_contract_context
+    contract = runtime_contract_context(install, stack)
+    for key, relative in (
+        ("stack_site_setup", contract["stack_site_setup"]),
+        ("stack_module_root", contract["stack_module_root"]),
+    ):
+        candidate = Path(relative)
+        candidate = candidate if candidate.is_absolute() else stack / candidate
+        if not (candidate.is_file() if key == "stack_site_setup" else candidate.is_dir()):
+            raise ValueError(f"Installed runtime contract {key} missing: {candidate}")
+
+    chosen = {
+        "MONAN_JEDI_INSTALL_ROOT": str(install),
+        "STACK_ROOT": str(stack),
+    }
+    missing = []
+    for name in REQUIRED:
+        if name in chosen:
+            continue
+        value = environment.get(name) or defaults.get(name)
+        if value and Path(value).is_dir():
+            chosen[name] = str(Path(value).resolve())
+        else:
+            missing.append(f"{name}: {value or 'not configured'}")
+    if missing:
+        raise ValueError(
+            "Scientific directories could not be discovered:\\n  "
+            + "\\n  ".join(missing)
+            + "\\nSet these roots to valid directories or provide a "
+              "complete JACI site profile with experiment create --site."
+        )
+
+    document = {
+        "site": {"name": "jaci"},
+        "stack": {"load": True, "root": chosen["STACK_ROOT"]},
+        "jedi": {"install_root": chosen["MONAN_JEDI_INSTALL_ROOT"]},
+        "environment": {name: chosen[name] for name in REQUIRED
+                        if name not in ("STACK_ROOT", "MONAN_JEDI_INSTALL_ROOT")},
+        "runtime": {"unload_anaconda": True, "validate_python": False},
+    }
+    with target.open("x", encoding="utf-8") as output:
+        yaml.safe_dump(document, output, sort_keys=False)
+    return target
+
+
 def load_project_site(root: Path, *, site_config: Path | None = None,
                       environ: dict[str, str] | None = None) -> tuple[Path | None, dict]:
     """Find the site profile explicitly or in the workspace, not by guessing stacks.
@@ -79,14 +174,11 @@ def load_project_site(root: Path, *, site_config: Path | None = None,
     if site_config is None:
         candidate = workspace / "site.yaml" if workspace else None
         if candidate is None or not candidate.is_file():
-            if (workspace is not None and not env.get("STACK_ROOT")
-                    and _discover_stack(workspace) is None):
-                raise ValueError(
-                    "No workspace site.yaml and STACK_ROOT is undefined or ambiguous. "
-                    "In a validated login session run 'experiment site save' once, "
-                    "or use 'experiment create ... --site /path/to/site.yaml'. "
-                    "No incomplete experiment directory was created."
-                )
+            if workspace is not None:
+                # First-run bootstrap: discover valid JACI installations and
+                # create the site profile once, before writing any case files.
+                initialized = initialize_site(root, environ=env)
+                return load_project_site(root, site_config=initialized, environ=env)
             return None, {}
         site_config = candidate
     path = Path(site_config).expanduser().resolve()
