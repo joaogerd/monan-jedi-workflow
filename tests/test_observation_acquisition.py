@@ -105,3 +105,22 @@ def test_historical_gdex_provider_switches_with_year():
     assert "t{cycle_hour}z.nr.48h" in prior["url"]
     assert recent["product"] == "PREPNR"
     assert "prepbufr.gdas.{cycle_yyyymmddhh}.nr" in recent["url"]
+
+
+
+def test_leap_day_provider_renders_only_requested_cycle():
+    from monan_jedi_workflow.cycle_context import parse_cycle_time
+    from monan_jedi_workflow.obs_acquisition import _render
+    cycle = parse_cycle_time("2024-02-29T06:00:00Z")
+    pre = acquire._default_provider("prepbufr-conventional", cycle)
+    gps = acquire._default_provider("gpsro-gnssro", cycle)
+    assert _render(pre["url"], cycle) == (
+        "https://data.gdex.ucar.edu/d337000/prep48h/2024/"
+        "prepbufr.gdas.20240229.t06z.nr.48h"
+    )
+    assert _render(gps["url"], cycle) == (
+        "https://data.gdex.ucar.edu/d735000/gpsro/2024/gpsro.20240229.tar.gz"
+    )
+    assert _render(gps["member"], cycle) == (
+        "gdas.gpsro.t06z.20240229.bufr"
+    )
