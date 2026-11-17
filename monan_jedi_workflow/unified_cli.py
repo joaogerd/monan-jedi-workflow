@@ -13,7 +13,7 @@ import sys
 
 def _usage() -> int:
     print(
-        "monan-workflow — MONAN experiment interface\n\n"
+        "MONAN-JEDI Workflow — direct commands\n\n"
         "  experiment create DEST --start YYYY-MM-DDTHH:MM:SSZ\n"
         "  experiment check|export CAMPAIGN.yaml\n"
         "  experiment validate|plan|run WORKFLOW.yaml [--ui plain]\n"
@@ -27,7 +27,7 @@ def _usage() -> int:
         "  jedi prepare|run|validate|status CONFIG.yaml --cycle UTC\n"
         "  diagnostic inspect|check|prepare|run|validate|status CONFIG.yaml --cycle UTC\n"
         "  diagnose [CASE] [--verbose|--json|--no-pbs]\n\n"
-        "Use 'monan-workflow experiment create --help' for the experiment options."
+        "Use 'experiment create --help' for the experiment options."
     )
     return 0
 
@@ -37,7 +37,7 @@ def _experiment(argv: list[str]) -> int:
         return _usage()
     action, *args = argv
     if action in {"create", "start"}:
-        parser = argparse.ArgumentParser(prog="monan-workflow experiment create")
+        parser = argparse.ArgumentParser(prog="experiment create")
         parser.add_argument("destination", type=Path)
         parser.add_argument("--mode", choices=("cold", "warm"), default="cold",
                             help="Cold start; warm start requires a validated model restart and is not implemented yet")
@@ -65,7 +65,7 @@ def _experiment(argv: list[str]) -> int:
             return 2
         print(f"[OK] Experimento configurado: {opt.destination.resolve()}")
         print("Próximo passo: source ./environment.sh; "
-              "monan-workflow experiment check campaign.yaml")
+              "experiment check campaign.yaml")
         return 0
     if action in {"check", "export"}:
         return _domain("campaign", [action, *args])
@@ -75,7 +75,7 @@ def _experiment(argv: list[str]) -> int:
         return _run_engine([action, *args])
     if action in {"suggest-dates", "check-inputs"}:
         if action == "check-inputs":
-            parser = argparse.ArgumentParser(prog="monan-workflow experiment check-inputs")
+            parser = argparse.ArgumentParser(prog="experiment check-inputs")
             parser.add_argument("case", type=Path)
             opt = parser.parse_args(args)
             from .experiment_start import check_date_inputs
@@ -87,7 +87,7 @@ def _experiment(argv: list[str]) -> int:
             for label, path, present in results:
                 print(f'[{"OK" if present else "MISSING"}] {label}: {path}')
             return 0 if all(ok for _, _, ok in results) else 2
-        parser = argparse.ArgumentParser(prog="monan-workflow experiment suggest-dates")
+        parser = argparse.ArgumentParser(prog="experiment suggest-dates")
         parser.add_argument("--case", type=Path, default=Path("."))
         opt = parser.parse_args(args)
         from .experiment_start import suggest_available_dates
