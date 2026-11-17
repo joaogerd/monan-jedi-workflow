@@ -50,7 +50,7 @@ def _mpas_file_time(dt):
     return dt.strftime('%Y-%m-%d_%H.%M.%S')
 
 
-def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None):
+def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None):
     first_analysis = _utc_start(start)
     second_analysis = first_analysis + timedelta(hours=6)
     initialization_time = first_analysis - timedelta(hours=6)
@@ -75,7 +75,9 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     root = Path(destination).resolve()
     if root.exists():
         raise FileExistsError(f'Choose a new experiment directory: {root}')
-    site_source, site_profile = load_project_site(root, site_config=site_config)
+    site_source, site_profile = load_project_site(
+        root, site_config=site_config, configuration_workspace=workspace
+    )
     recipe = Path(str(files('monan_jedi_workflow').joinpath('catalog/reference-20250901')))
     shutil.copytree(recipe, root / 'science')
     science = root / 'science'
