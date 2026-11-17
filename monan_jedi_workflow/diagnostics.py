@@ -16,7 +16,7 @@ from typing import Any
 _ERROR = re.compile(
     r"error|fatal|abort|segmentation|permission denied|cannot open|"
     r"not found|no such file|failed|out of memory|killed|MPI_ABORT|"
-    r"forrtl|netcdf:|hdf5-diag|undefined symbol|libfabric",
+    r"forrtl|netcdf:|hdf5-diag|undefined symbol",
     re.IGNORECASE,
 )
 _JOB = re.compile(r"^\d+(?:\.[A-Za-z0-9_.-]+)?$")
@@ -25,7 +25,7 @@ _JOB_STATE = re.compile(r"(?m)^\s*job_state\s*=\s*([A-Za-z])\s*$")
 _JOB_PATH = re.compile(r"(?m)^\s*(Output_Path|Error_Path)\s*=\s*(.*?)\s*$")
 _RULES = [
     ("library", re.compile(r"error while loading shared libraries|undefined symbol|"
-                            r"lib[^\s/]+\.so[^\s]*.*not found|libfabric", re.I),
+                            r"lib[^\s/]+\.so[^\s]*.*not found", re.I),
      "Bibliotecas ou ambiente MPI ausentes no job.",
      "Conferir os módulos carregados pelo PBS, LD_LIBRARY_PATH e a compatibilidade do executável com o stack."),
     ("input", re.compile(r"no such file|cannot open|file not found|missing input|"
@@ -119,7 +119,7 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
     states: list[dict[str, Any]] = []
     for path in sorted(root.glob(".platform/**/state.json")):
         value = _json(path)
-        if value and value.get("state") in {"failed", "invalid", "running"}:
+        if value and value.get("state") in {"failed", "invalid", "running", "finished"}:
             states.append({"path": str(path), "state": value.get("state"),
                            "run_dir": value.get("run_dir"),
                            "last_error": (value.get("attempts") or [{}])[-1].get("error"),
@@ -153,7 +153,18 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
     jobs = [_pbs(job) if query_pbs else {"job_id": job, "available": False,
                                          "detail": "Consulta PBS desativada."}
             for job in sorted(ids)[-12:]]
-    paths = _filenames(root)
+    # An unfinished validation is an operation state, not a scientific failure.
+    # Only diagnose errors from stages that actually failed. Earlier successful
+    # MPAS/WPS logs may legitimately contain warnings or resolved 'ldd' lines.
+    failing_runtime_dirs = [
+        Path(item["run_dir"]).resolve()
+        for item in states
+        if item["state"] in {"failed", "invalid"} and item.get("run_dir")
+    ]
+    paths = [
+        p for p in _filenames(root)
+        if any(p.is_relative_to(folder) for folder in failing_runtime_dirs)
+    ]
     for job in jobs:
         for raw in job.get("paths", {}).values():
             # PBS reports host:/absolute/file. Only read within the experiment.
@@ -171,12 +182,16 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
         # The task may be an orchestration name rather than a path component;
         # avoid hiding all logs in this common case.
         if not paths:
-            paths = _filenames(root)
+            paths = [p for p in _filenames(root)
+                     if any(p.is_relative_to(folder) for folder in failing_runtime_dirs)]
     matches = []
     seen_messages: dict[str, dict[str, Any]] = {}
     for path in paths:
         content = _tail(path)
         for number, line in enumerate(content.splitlines(), 1):
+            # Do not mistake successful model counters for errors.
+            if re.search(r"\b(?:critical\s+)?error messages\s*=\s*0\s*$", line, re.I):
+                continue
             if _ERROR.search(line):
                 message = line.strip()[:360]
                 # Repeated MPI rank failures have a single root cause.
@@ -256,6 +271,12 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
         code, title, action = ("missing-output", "A etapa não produziu todos os arquivos exigidos.",
                                "Verificar o Exit_status PBS e os logs da etapa antes de revisar os nomes dos produtos.")
     status = "failure" if (failed_jobs or reports or any(s["state"] in {"failed", "invalid"} for s in states)) else ("incomplete" if states else "no-failure-found")
+    if status != "failure":
+        code, title, action = (
+            "pending-validation" if status == "incomplete" else "unknown",
+            "Há uma operação executada, mas ainda sem validação concluída." if status == "incomplete" else "Nenhuma falha confirmada nos registros.",
+            "Execute a validação do estágio indicado para obter o erro exato; não repita os jobs científicos." if status == "incomplete" else "Nenhuma ação corretiva necessária sem uma falha confirmada.",
+        )
     return {"experiment": str(root), "status": status,
             "diagnosis": {"code": code, "summary": title, "suggestion": action,
                           "confidence": "possible" if code not in ("pbs-failed",) else "confirmed-scheduler-failure"},
@@ -273,7 +294,7 @@ def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
     """Present a short, actionable diagnosis before technical evidence."""
     diagnosis = report["diagnosis"]
     operations = [item for item in report["operations"]
-                  if item["state"] in {"failed", "invalid"}]
+                  if item["state"] in {"failed", "invalid", "finished"}]
     failed = [j for j in report["pbs_jobs"]
               if j.get("exit_status") not in (None, 0)]
     first = operations[0] if operations else None
@@ -288,7 +309,9 @@ def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
         cycle = first["cycle"] if first else ""
         print(f"[FALHA] {target}" + (f"  |  ciclo {cycle}" if cycle else ""))
     elif report["status"] == "incomplete":
-        print("[PENDENTE] Existem operações ainda não concluídas")
+        print("[PENDENTE] Uma execução terminou, mas ainda falta sua validação")
+        if first:
+            print(f"  Etapa: {first['operation']} | ciclo {first['cycle']}")
     else:
         print("[INFO] Nenhuma falha identificada nos registros disponíveis")
 
