@@ -57,7 +57,7 @@ mpas:
     ncpus: 128
     mpiprocs: 128
     walltime: 02:00:00
-    launcher: mpiexec
+    launcher: /opt/cray/pals/1.6/bin/mpiexec
     command:
     - ./mpas_atmosphere
     environment:
