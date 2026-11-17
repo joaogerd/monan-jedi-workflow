@@ -249,6 +249,53 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     write(root / 'campaign.yaml', campaign)
 
 
+def suggest_available_dates(*, input_root, gfs_root, exclude='2025-09-01T00:00:00Z', limit=6):
+    """Find real two-cycle dates using the reference recipe's raw input layout.
+
+    Pure filesystem discovery: no synthetic data, no download and no job
+    submission. Candidate dates require PREPNR and GNSSRO at both analyses
+    plus one GFS GRIB at T-6h. The scientific work still needs validation.
+    """
+    input_root = Path(input_root)
+    gfs_root = Path(gfs_root)
+    source = input_root / 'observations/prepnr'
+    if not source.is_dir() or not gfs_root.is_dir():
+        return []
+    stamps = set()
+    for path in source.glob('*/prepbufr.gdas.*.nr'):
+        if not path.is_file() or path.stat().st_size == 0:
+            continue
+        match = re.fullmatch(r'prepbufr\\.gdas\\.(\\d{10})\\.nr', path.name)
+        if match:
+            stamps.add(match[1])
+    results = []
+    for stamp in sorted(stamps):
+        try:
+            first = datetime.strptime(stamp, '%Y%m%d%H').replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if first.hour not in (0, 6, 12, 18) or _cycle(first) == exclude:
+            continue
+        second = first + timedelta(hours=6)
+        initial = first - timedelta(hours=6)
+        if second.strftime('%Y%m%d%H') not in stamps:
+            continue
+        obs_ready = all(
+            (input_root / 'observations/gpsro' / dt.strftime('%Y')
+             / f"gdas.gpsro.t{dt:%H}z.{dt:%Y%m%d}.bufr").is_file()
+            for dt in (first, second)
+        )
+        gfs_path = (
+            gfs_root / initial.strftime('%Y%m%d%H')
+            / f"gfs.t{initial:%H}z.pgrb2.0p25.f000"
+        )
+        if obs_ready and gfs_path.is_file() and gfs_path.stat().st_size:
+            results.append(_cycle(first))
+            if len(results) >= limit:
+                break
+    return results
+
+
 def check_date_inputs(destination):
     """Read-only availability gate for the selected two-cycle scientific period.
 
@@ -379,6 +426,8 @@ def upgrade_existing_login_execution(destination):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination',type=Path)
+    parser.add_argument('--suggest-dates', action='store_true',
+                        help='List other complete two-cycle dates from the existing raw data inventory')
     parser.add_argument('--check-inputs', action='store_true',
                         help='Read-only check of GFS and 2-cycle PREPNR/GNSSRO files in an existing case')
     parser.add_argument('--start', default='2025-09-01T00:00:00Z',
@@ -390,6 +439,19 @@ def main():
     parser.add_argument('--runtime-bin', type=Path, help='Python CLI directory for optional legacy worker wrapper; not used by login-side simpleWorkflow tasks')
     args=parser.parse_args()
     try:
+        if args.suggest_dates:
+            import os
+            input_root = os.environ.get('MONAN_INPUT_ROOT')
+            gfs_root = os.environ.get('MONAN_GFS_ROOT')
+            if not input_root or not gfs_root:
+                parser.exit(2, '[CONFIGURACAO] Source environment.sh first to define MONAN_INPUT_ROOT and MONAN_GFS_ROOT.\\n')
+            dates = suggest_available_dates(input_root=input_root, gfs_root=gfs_root)
+            for day in dates:
+                print('[AVAILABLE] ' + day)
+            if not dates:
+                parser.exit(2, '[MISSING] No other 2-cycle period has PREPNR, GPSRO and initial GFS available. '
+                           'Acquire date-specific inputs before a scientific portability test.\\n')
+            return
         if args.check_inputs:
             results = check_date_inputs(args.destination)
             for label, path, available in results:
