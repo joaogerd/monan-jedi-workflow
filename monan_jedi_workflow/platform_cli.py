@@ -337,11 +337,14 @@ def operate(request):
                 state["products"] = records(
                     product_paths(op, request, directory / "configuration")
                 )
-            except Exception:
+            except Exception as error:
                 state["state"] = "invalid"
+                state["validation_error"] = str(error)
+                state["validation_failed_at"] = now()
                 atomic_json(state_path, state)
                 raise
             state.update(state="validated", validation=str(report))
+            state.pop("validation_error", None)
             atomic_json(state_path, state)
         return state
 
