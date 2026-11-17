@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import shlex
+import re
+import yaml
 
 
 REQUIRED = (
@@ -63,10 +65,83 @@ def _defaults(root: Path) -> dict[str, Path]:
     return defaults
 
 
-def render_environment(root: Path, *, environ: dict[str, str] | None = None) -> str:
+
+def load_project_site(root: Path, *, site_config: Path | None = None,
+                      environ: dict[str, str] | None = None) -> tuple[Path | None, dict]:
+    """Find the site profile explicitly or in the workspace, not by guessing stacks.
+
+    A shared <workspace>/site.yaml is the stable, one-time JACI configuration
+    for new experiments. CLI --site can select a different existing profile.
+    The installed MONAN-JEDI v2 manifest still owns module identity.
+    """
+    env = dict(os.environ if environ is None else environ)
+    workspace = _workspace(Path(root))
+    if site_config is None:
+        candidate = workspace / "site.yaml" if workspace else None
+        if candidate is None or not candidate.is_file():
+            return None, {}
+        site_config = candidate
+    path = Path(site_config).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Site profile does not exist: {path}. "
+            "Create a shared site.yaml or pass --site with an existing profile."
+        )
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("site"), dict):
+        raise ValueError(f"{path}: expected site: mapping")
+    if not isinstance(payload.get("stack"), dict) or not isinstance(payload.get("jedi"), dict):
+        raise ValueError(f"{path}: expected stack: and jedi: mappings")
+    resolved = dict(payload)
+    for section, key in (("stack", "root"), ("jedi", "install_root")):
+        value = payload[section].get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{path}: {section}.{key} must be a nonempty path")
+        expanded = os.path.expandvars(value)
+        if re.search(r"\\$(?:\\{|[A-Za-z_])", expanded):
+            raise ValueError(
+                f"{path}: unresolved environment variable in {section}.{key}. "
+                "A shared site profile should use a real, stable path."
+            )
+        target = Path(expanded).expanduser()
+        if not target.is_absolute() or not target.is_dir():
+            raise ValueError(f"{path}: {section}.{key} is not an existing absolute directory: {target}")
+        resolved[section] = {**payload[section], key: str(target.resolve())}
+
+    extra = payload.get("environment", {})
+    if not isinstance(extra, dict):
+        raise ValueError(f"{path}: environment must be a mapping")
+    unknown = set(extra) - set(REQUIRED)
+    if unknown:
+        raise ValueError(f"{path}: unsupported environment keys: {', '.join(sorted(unknown))}")
+    extras = {}
+    for key, value in extra.items():
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"{path}: environment.{key} must be a nonempty path")
+        expanded = os.path.expandvars(value)
+        if re.search(r"\\$(?:\\{|[A-Za-z_])", expanded):
+            raise ValueError(f"{path}: environment.{key} contains an undefined variable")
+        target = Path(expanded).expanduser()
+        if not target.is_absolute() or not target.is_dir():
+            raise ValueError(f"{path}: environment.{key} directory does not exist: {target}")
+        extras[key] = str(target.resolve())
+    resolved["environment"] = extras
+    return path, resolved
+
+
+def render_environment(root: Path, *, environ: dict[str, str] | None = None,
+                       site_profile: dict | None = None) -> str:
     """Only select defaults actually present, never claim an unknown path exists."""
     env = dict(os.environ if environ is None else environ)
     defaults = _defaults(root)
+    profile_values = {}
+    if site_profile:
+        profile_values = {
+            "STACK_ROOT": Path(site_profile["stack"]["root"]),
+            "MONAN_JEDI_INSTALL_ROOT": Path(site_profile["jedi"]["install_root"]),
+            **{k: Path(v) for k, v in site_profile.get("environment", {}).items()},
+        }
+        defaults.update(profile_values)
     lines = [
         "#!/usr/bin/env bash",
         "# Generated scientific input/runtime configuration for this experiment.",
@@ -74,11 +149,17 @@ def render_environment(root: Path, *, environ: dict[str, str] | None = None) -> 
         "# Run: source ./environment.sh",
         "# To change one entry: export MONAN_...=/p/... before sourcing.",
         "# This script never downloads, creates or substitutes scientific data.",
+        "# Explicit site-profile values take precedence over inherited shell values.",
     ]
     for key in REQUIRED:
         candidate = defaults.get(key)
         selected = env.get(key, "").strip()
         origin = "existing export" if selected else "existing site path"
+        if key in profile_values:
+            selected = str(profile_values[key])
+            lines.append(f'# {key}: declared by site.yaml')
+            lines.append(f'export {key}=' + shlex.quote(selected))
+            continue
         if not selected and candidate and candidate.is_dir():
             selected = str(candidate)
         if selected:
