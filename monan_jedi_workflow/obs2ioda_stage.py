@@ -531,7 +531,15 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
                     commands=[converter["argv"]], cwd=run.work_dir,
                     stdout=stdout_path, stderr=stderr_path,
                     resources=run.config["pbs"],
-                    environment={"LD_LIBRARY_PATH": child_environment.get("LD_LIBRARY_PATH", "")},
+                    environment={
+                        # Do not propagate the controller/Conda library path
+                        # into a compute job with a site-owned scientific stack.
+                        "LD_LIBRARY_PATH": (
+                            os.pathsep.join(str(p) for p in runtime.get("library_paths", []))
+                            if run.config.get("pbs", {}).get("site_config")
+                            else child_environment.get("LD_LIBRARY_PATH", "")
+                        ),
+                    },
                 )
             except Exception:
                 manifest["state"] = "failed"
