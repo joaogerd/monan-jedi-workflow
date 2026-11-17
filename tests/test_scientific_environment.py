@@ -89,7 +89,7 @@ def test_native_mpi_pbs_sources_site_before_launcher(tmp_path, monkeypatch, stag
                 "site_config": str(tmp_path / "site.yaml"),
             },
         },
-        context={},
+        context={"cycle_id": "20250831T180000Z"},
         config_dir=tmp_path,
         run_dir=tmp_path,
         pbs_path=tmp_path / "science.pbs",
