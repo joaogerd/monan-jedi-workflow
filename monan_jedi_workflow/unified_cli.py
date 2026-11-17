@@ -39,6 +39,8 @@ def _experiment(argv: list[str]) -> int:
     if action in {"create", "start"}:
         parser = argparse.ArgumentParser(prog="monan-workflow experiment create")
         parser.add_argument("destination", type=Path)
+        parser.add_argument("--mode", choices=("cold", "warm"), default="cold",
+                            help="Cold start; warm start requires a validated model restart and is not implemented yet")
         parser.add_argument("--start", "--date", dest="start",
                             default="2025-09-01T00:00:00Z")
         parser.add_argument("--pbs-queue", default="pesqmidi")
@@ -47,6 +49,10 @@ def _experiment(argv: list[str]) -> int:
         # The mode flag is intentionally omitted while scientific warm start
         # is unimplemented. Never silently interpret a warm request as cold.
         opt = parser.parse_args(args)
+        if opt.mode == "warm":
+            print("[NÃO IMPLEMENTADO] Warm start científico requer restart ou trajetória FGAT "
+                  "validada. Nenhum experimento foi criado.", file=sys.stderr)
+            return 2
         from .experiment_start import create_experiment
         try:
             create_experiment(
