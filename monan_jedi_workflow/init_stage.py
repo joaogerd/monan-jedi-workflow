@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -85,15 +86,63 @@ def submit_mpas_init(config_dir: Path, cycle_time: str, *, wait: bool = False, p
 
 
 def wait_mpas_init(config_dir: Path, cycle_time: str, *, poll_seconds: int = 30) -> None:
+    """Wait for PBS and require a confirmed successful terminal Exit_status.
+
+    A missing qstat job or terminal state alone is NOT proof of successful
+    execution. Never report scientific success without checking outputs.
+    """
     run = _load(config_dir, cycle_time)
     manifest = _read(run)
     job_id = manifest["job_id"]
     while True:
         present, state = query(job_id)
-        if not present or state in {"C", "F"}:
-            manifest.update({"state": "scheduler-finished", "scheduler_finished_at": _timestamp(), "scheduler_last_state": state})
+        if not present or state in {"C", "F", "X"}:
+            # PBS can retire the active record before the history is available.
+            # Do not assume that this means success.
+            history = subprocess.run(
+                ["qstat", "-x", "-f", job_id], cwd=run.run_dir,
+                capture_output=True, text=True, check=False
+            )
+            if history.returncode != 0:
+                manifest.update({
+                    "state": "scheduler-unconfirmed",
+                    "scheduler_finished_at": _timestamp(),
+                    "scheduler_last_state": state,
+                    "scheduler_history_error": history.stderr.strip(),
+                })
+                _save(run, manifest)
+                raise PBSError(
+                    f"MPAS Init job {job_id} ended or disappeared but its PBS "
+                    "Exit_status could not be verified; inspect qstat -x -f "
+                    f"{job_id} before retrying."
+                )
+            result = re.search(r"(?m)^\\s*Exit_status\\s*=\\s*(-?\\d+)\\s*$", history.stdout)
+            if result is None:
+                manifest.update({
+                    "state": "scheduler-unconfirmed",
+                    "scheduler_finished_at": _timestamp(),
+                    "scheduler_last_state": state,
+                    "scheduler_history_excerpt": history.stdout[-1500:],
+                })
+                _save(run, manifest)
+                raise PBSError(
+                    f"MPAS Init job {job_id}: PBS history does not provide "
+                    "Exit_status; refusing to assume success."
+                )
+            exit_status = int(result.group(1))
+            manifest.update({
+                "state": "scheduler-finished" if exit_status == 0 else "scheduler-failed",
+                "scheduler_finished_at": _timestamp(),
+                "scheduler_last_state": state,
+                "pbs_exit_status": exit_status,
+            })
             _save(run, manifest)
-            print(f"[OK] MPAS init scheduler finished: {job_id}")
+            if exit_status != 0:
+                raise PBSError(
+                    f"MPAS Init job {job_id} failed with PBS Exit_status={exit_status}; "
+                    f"inspect stdout/stderr under {run.run_dir}."
+                )
+            print(f"[OK] MPAS init PBS job {job_id} completed with Exit_status=0")
             return
         time.sleep(poll_seconds)
 
