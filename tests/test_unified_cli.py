@@ -10,9 +10,8 @@ from monan_jedi_workflow import unified_cli as experiment_impl
 
 def test_public_package_entrypoints():
     from pathlib import Path
-    import tomllib
-    data = tomllib.loads(Path("pyproject.toml").read_text())
-    scripts = data["project"]["scripts"]
+    data = Path("pyproject.toml").read_text().split("[project.scripts]", 1)[1].split("[", 1)[0]
+    scripts = {line.split("=", 1)[0].strip() for line in data.splitlines() if "=" in line}
     for name in ("experiment", "wps", "obs", "mpas", "jedi", "diagnostic", "diagnose"):
         assert name in scripts
     assert "monan-workflow" not in scripts
