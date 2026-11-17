@@ -102,3 +102,45 @@ def test_native_mpi_pbs_sources_site_before_launcher(tmp_path, monkeypatch, stag
     )
     assert "export LD_LIBRARY_PATH=/scientific/stack/lib" in content
     assert "python" not in content.lower()
+
+
+def test_real_main_site_renderer_loads_stack_before_native_jobs(tmp_path, monkeypatch):
+    import json
+    install = tmp_path / "installed-monan-jedi"
+    manifest = install / "share" / "monan-jedi" / "install-manifest.json"
+    manifest.parent.mkdir(parents=True)
+    stack = tmp_path / "stack"
+    module_dir = stack / "envs" / "monan-jedi-env" / "modules"
+    module_dir.mkdir(parents=True)
+    (stack / "site").mkdir(parents=True)
+    (stack / "site" / "setup.sh").write_text("# site\n")
+    manifest.write_text(json.dumps({
+        "schema_version": 2,
+        "ecosystem_contract_version": 2,
+        "contract": "monan-jedi-runtime-v2",
+        "public_anchors": ["MONAN_JEDI_INSTALL_ROOT", "STACK_ROOT"],
+        "stack": {
+            "env_name": "monan-jedi-env",
+            "env_module": "monan-jedi-env",
+            "site_setup": "site/setup.sh",
+            "module_root_template": "envs/{env_name}/modules",
+        },
+    }))
+    monkeypatch.setenv("MONAN_JEDI_INSTALL_ROOT", str(install))
+    monkeypatch.setenv("STACK_ROOT", str(stack))
+    site = tmp_path / "site.yaml"
+    site.write_text(
+        "site:\n  name: jaci\n"
+        "stack:\n  load: true\n  root: ${STACK_ROOT}\n"
+        "jedi:\n  install_root: ${MONAN_JEDI_INSTALL_ROOT}\n"
+        "runtime:\n  validate_python: false\n"
+    )
+    code = "\n".join(render_native_site_setup(
+        {"site_config": str(site)}, config_dir=tmp_path
+    ))
+    assert "module purge" in code
+    assert "source \"$STACK_SITE_SETUP\"" in code
+    assert "module use \"$STACK_MODULE_ROOT\"" in code
+    assert "module load \"$STACK_ENV_MODULE\"" in code
+    assert "LD_LIBRARY_PATH" in code
+    assert "python3 -" not in code
