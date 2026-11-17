@@ -14,7 +14,7 @@ import sys
 def _usage() -> int:
     print(
         "experiment — MONAN-JEDI campaign management\n\n"
-        "  experiment create DEST --start YYYY-MM-DDTHH:MM:SSZ [--mode cold]\n"
+        "  experiment create DEST --start YYYY-MM-DDTHH:MM:SSZ [--mode cold] [--workspace DIR]\n"
         "  experiment check|export campaign.yaml\n"
         "  experiment validate|plan|run|status workflow.yaml\n"
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
@@ -64,6 +64,8 @@ def _experiment(argv: list[str]) -> int:
                             default="2025-09-01T00:00:00Z")
         parser.add_argument("--site", type=Path,
                             help="Persistent site YAML; otherwise read workspace/site.yaml")
+        parser.add_argument("--workspace", type=Path,
+                            help="Existing isolated site-profile directory; HPC paths remain unchanged")
         parser.add_argument("--pbs-queue", default="pesqmidi")
         parser.add_argument("--pbs-walltime", default="01:00:00")
         parser.add_argument("--runtime-bin", type=Path)
@@ -80,6 +82,7 @@ def _experiment(argv: list[str]) -> int:
                 opt.destination, start=opt.start,
                 pbs_queue=opt.pbs_queue, pbs_walltime=opt.pbs_walltime,
                 runtime_bin=opt.runtime_bin, site_config=opt.site,
+                workspace=opt.workspace,
             )
         except (ValueError, OSError) as error:
             print(f"[ERRO] Experimento não criado: {error}", file=sys.stderr)
