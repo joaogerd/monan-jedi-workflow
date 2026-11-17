@@ -81,6 +81,26 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
             for name, runner in [('prepbufr_runner','run_prepbufr.sh'),('gpsro_runner','run_gpsro.sh')]:
                 cfg['variables'][name] = str(science / 'runners' / runner)
         write(path, doc)
+    # Restore the working main-branch site/runtime contract to all native PBS
+    # stages. The original site's Python ABI check is disabled: no Python
+    # interpreter is needed on compute nodes.
+    site_file = science / 'site.yaml'
+    write(site_file, {
+        'site': {'name': 'jaci'},
+        'stack': {'load': True, 'root': '${STACK_ROOT}'},
+        'jedi': {'install_root': '${MONAN_JEDI_INSTALL_ROOT}'},
+        'runtime': {'unload_anaconda': True, 'validate_python': False},
+    })
+    for stage_file in (
+        science / 'jedi.yaml',
+        science / 'mpas.yaml',
+        science / 'initialization/mpas.yaml',
+        science / 'initialization/mpas_init.yaml',
+    ):
+        doc = yaml.safe_load(stage_file.read_text())
+        section = next(iter(doc.values()))
+        section['pbs']['site_config'] = str(site_file)
+        write(stage_file, doc)
     # Scientific WPS work is run by the WPS Python app on login, which submits
     # a native-only PBS job containing link_grib/ungrib.
     wps_file = science / 'initialization/wps.yaml'
@@ -88,6 +108,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     wps_doc['wps']['pbs'] = {
         'queue': 'pesqmini', 'select': 1, 'ncpus': 1,
         'mpiprocs': 1, 'walltime': '00:30:00',
+        'site_config': str(site_file),
     }
     write(wps_file, wps_doc)
     # Obs2IODA is also an HPC operation; execute conversion in its own PBS job.
@@ -96,6 +117,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     obs_doc['obs2ioda']['pbs'] = {
         'queue': 'pesqmidi', 'select': 1, 'ncpus': 1,
         'mpiprocs': 1, 'walltime': '01:00:00',
+        'site_config': str(site_file),
     }
     write(obs_file, obs_doc)
     site = {'execution': {'mode': 'pbs'}}
