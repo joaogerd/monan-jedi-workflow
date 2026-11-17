@@ -11,7 +11,7 @@ import shutil
 import re
 import sysconfig
 import yaml
-from .experiment_environment import render_environment
+from .experiment_environment import render_environment, load_project_site
 
 
 def write(path, data):
@@ -50,7 +50,7 @@ def _mpas_file_time(dt):
     return dt.strftime('%Y-%m-%d_%H.%M.%S')
 
 
-def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z'):
+def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None):
     first_analysis = _utc_start(start)
     second_analysis = first_analysis + timedelta(hours=6)
     initialization_time = first_analysis - timedelta(hours=6)
@@ -75,6 +75,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     root = Path(destination).resolve()
     if root.exists():
         raise FileExistsError(f'Choose a new experiment directory: {root}')
+    site_source, site_profile = load_project_site(root, site_config=site_config)
     recipe = Path(str(files('monan_jedi_workflow').joinpath('catalog/reference-20250901')))
     shutil.copytree(recipe, root / 'science')
     science = root / 'science'
@@ -125,12 +126,23 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     # stages. The original site's Python ABI check is disabled: no Python
     # interpreter is needed on compute nodes.
     site_file = science / 'site.yaml'
-    write(site_file, {
-        'site': {'name': 'jaci'},
-        'stack': {'load': True, 'root': '${STACK_ROOT}'},
-        'jedi': {'install_root': '${MONAN_JEDI_INSTALL_ROOT}'},
-        'runtime': {'unload_anaconda': True, 'validate_python': False},
-    })
+    site_document = (
+        {key: value for key, value in site_profile.items()
+         if key in {'site', 'stack', 'jedi', 'mpi', 'runtime'}}
+        if site_profile else {
+            'site': {'name': 'jaci'},
+            'stack': {'load': True, 'root': '${STACK_ROOT}'},
+            'jedi': {'install_root': '${MONAN_JEDI_INSTALL_ROOT}'},
+            'runtime': {'unload_anaconda': True, 'validate_python': False},
+        }
+    )
+    # Python is a login-side controller; the native scientific PBS job must
+    # not require a Conda interpreter on the compute node.
+    site_document['runtime'] = {
+        **site_document.get('runtime', {}),
+        'validate_python': False,
+    }
+    write(site_file, site_document)
     for stage_file in (
         science / 'jedi.yaml',
         science / 'mpas.yaml',
@@ -184,7 +196,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         (folder / 'state.nc').symlink_to(
             forecast / ('mpasout.' + _mpas_file_time(analysis) + '.nc')
         )
-    (root / 'environment.sh').write_text(render_environment(root))
+    (root / 'environment.sh').write_text(render_environment(root, site_profile=site_profile))
     # Legacy optional worker wrapper kept for compatibility. The exported
     # simpleWorkflow DAG now runs native stage apps on the login node and does
     # not invoke this wrapper from PBS.
@@ -436,6 +448,7 @@ def main():
                         help='Read-only check of GFS and 2-cycle PREPNR/GNSSRO files in an existing case')
     parser.add_argument('--start', default='2025-09-01T00:00:00Z',
                         help='First analysis (UTC), YYYY-MM-DDTHH:MM:SSZ; two 6-hour cycles')
+    parser.add_argument('--site', type=Path, help='Persistent YAML site profile (or workspace/site.yaml if present)')
     parser.add_argument('--pbs-queue', default='pesqmidi', help='PBS queue for the entire initial case (default: pesqmidi)')
     parser.add_argument('--pbs-walltime', default='01:00:00', help='Walltime HH:MM:SS (default: 01:00:00)')
     parser.add_argument('--upgrade-existing', action='store_true', help='Create a new login-side campaign for existing experiments without overwriting old exported workflow')
@@ -476,7 +489,7 @@ def main():
             print(f'[OK] Ambiente gerado: {env_path}')
             print('Proximo passo: cd '+str(args.destination.resolve())+'; source ./environment.sh')
             return
-        create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime, runtime_bin=args.runtime_bin, start=args.start)
+        create_experiment(args.destination, pbs_queue=args.pbs_queue, pbs_walltime=args.pbs_walltime, runtime_bin=args.runtime_bin, start=args.start, site_config=args.site)
     except FileExistsError as error:
         if args.configure_existing:
             parser.exit(2, f'[AVISO] {error}\\nNenhum arquivo foi modificado.\\n')
