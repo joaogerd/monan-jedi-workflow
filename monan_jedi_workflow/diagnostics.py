@@ -171,12 +171,22 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
         if not paths:
             paths = _filenames(root)
     matches = []
+    seen_messages: dict[str, dict[str, Any]] = {}
     for path in paths:
         content = _tail(path)
         for number, line in enumerate(content.splitlines(), 1):
             if _ERROR.search(line):
-                matches.append({"file": str(path), "tail_line": number,
-                                "message": line.strip()[:360]})
+                message = line.strip()[:360]
+                # Repeated MPI rank failures have a single root cause.
+                normalized = re.sub(r"^.*?:\s*(error while loading shared libraries:)", r"\\1", message, flags=re.I)
+                normalized = re.sub(r"\\s+", " ", normalized).strip().lower()
+                if normalized in seen_messages:
+                    seen_messages[normalized]["occurrences"] += 1
+                    continue
+                item = {"file": str(path), "tail_line": number,
+                        "message": message, "occurrences": 1}
+                seen_messages[normalized] = item
+                matches.append(item)
                 if len(matches) >= 40:
                     break
         if len(matches) >= 40:
@@ -190,6 +200,19 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
         if expression.search(evidence):
             code, title, action = key, description, recommendation
             break
+    # A dynamic loader error is stronger evidence than a generic missing file.
+    loader = re.search(
+        r"error while loading shared libraries:\\s*([^: ]+):\\s*cannot open",
+        evidence, re.I,
+    )
+    if loader:
+        code, title, action = (
+            "missing-shared-library",
+            f"O executável não iniciou: biblioteca {loader.group(1)} indisponível no nó de computação.",
+            "Conferir os módulos MPI/Cray e o LD_LIBRARY_PATH efetivo do job PBS; "
+            "verificar a biblioteca no nó alocado antes de repetir. "
+            "Não copiar bibliotecas nem criar links simbólicos para contornar a incompatibilidade.",
+        )
     failed_jobs = [j for j in jobs if j.get("exit_status") not in (None, 0)]
     if failed_jobs and code == "unknown":
         code, title, action = ("pbs-failed", "O PBS registrou um job encerrado com erro.",
@@ -238,6 +261,8 @@ def _display(report: dict[str, Any]) -> None:
     for item in report["log_evidence"][:12]:
         print(f"Log: {item['file']}")
         print(f"  {item['message']}")
+        if item.get("occurrences", 1) > 1:
+            print(f"  (mensagem repetida {item['occurrences']} vezes; exibida uma vez)")
     if not report["log_evidence"]:
         print("Nenhuma mensagem de erro explícita encontrada nos logs analisados.")
 
