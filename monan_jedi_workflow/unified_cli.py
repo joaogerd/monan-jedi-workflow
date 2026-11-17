@@ -38,7 +38,10 @@ def _experiment(argv: list[str]) -> int:
         init = sub.add_parser("init", help="discover installed JACI runtime on first use")
         init.add_argument("--stack", type=Path, help="select installed spack-stack root")
         init.add_argument("--install", type=Path, help="select installed MONAN-JEDI prefix")
-        options = parser.parse_args(args)
+        try:
+            options = parser.parse_args(args)
+        except SystemExit as error:
+            return int(error.code)
         try:
             if options.site_action == "init":
                 target = initialize_site(
