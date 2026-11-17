@@ -113,7 +113,7 @@ def ensure_input(*, target: Path, url: str | None, label: str,
                     try:
                         with os.fdopen(fd_meta, "w", encoding="utf-8") as meta:
                             json.dump(provenance, meta, indent=2, sort_keys=True)
-                            meta.write("\\n")
+                            meta.write("\n")
                         os.link(temp_meta, sidecar)
                     finally:
                         Path(temp_meta).unlink(missing_ok=True)
