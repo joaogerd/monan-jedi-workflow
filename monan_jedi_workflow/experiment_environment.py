@@ -119,7 +119,7 @@ def load_project_site(root: Path, *, site_config: Path | None = None,
     extra = payload.get("environment", {})
     if not isinstance(extra, dict):
         raise ValueError(f"{path}: environment must be a mapping")
-    unknown = set(extra) - set(REQUIRED)
+    unknown = set(extra) - (set(REQUIRED) - {'STACK_ROOT', 'MONAN_JEDI_INSTALL_ROOT'})
     if unknown:
         raise ValueError(f"{path}: unsupported environment keys: {', '.join(sorted(unknown))}")
     extras = {}
