@@ -96,3 +96,19 @@ def test_all_exported_tasks_use_direct_domain_commands(tmp_path, monkeypatch):
     assert any(t["argv"][:2] == ["wps", "run"] for t in stages)
     assert any(t["argv"][:3] == ["obs", "convert", "run"] for t in stages)
     assert any(t["argv"][:2] == ["jedi", "run"] for t in stages)
+
+
+
+def test_experiment_site_save_dispatches_to_workspace_profile(monkeypatch, tmp_path):
+    from monan_jedi_workflow import experiment_environment
+    called = []
+    monkeypatch.setattr(experiment_environment, "save_project_site",
+                        lambda path: called.append(path) or tmp_path / "site.yaml")
+    monkeypatch.setattr(sys, "argv", ["experiment", "site", "save"])
+    assert entry.experiment() == 0
+    assert called == [Path.cwd()]
+
+
+def test_experiment_site_save_rejects_invalid_action(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["experiment", "site", "overwrite"])
+    assert entry.experiment() == 2
