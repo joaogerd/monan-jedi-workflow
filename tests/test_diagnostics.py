@@ -93,3 +93,19 @@ def test_diagnose_verbose_preserves_full_pbs_evidence(tmp_path, capsys, monkeypa
     assert "826106.pbs-ha" in out
     assert "Exit_status=127" in out
     assert "libfabric.so.1" in out
+
+
+def test_diagnose_detects_present_libfabric_but_missing_pbs_setup(tmp_path, monkeypatch):
+    root = _failed_mpas_init(tmp_path)
+    run = root / "work" / "mpas-init" / "20250831T180000Z"
+    (run / "run_mpas_init.pbs").write_text(
+        "#!/bin/bash\\n#PBS -V\\nmpiexec -n 128 ./mpas_init_atmosphere\\n"
+    )
+    lib_dir = tmp_path / "cray" / "lib64"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "libfabric.so.1").write_bytes(b"test fixture")
+    monkeypatch.setenv("MONAN_LIBFABRIC_ROOT", str(lib_dir))
+    report = diagnose(root, query_pbs=False)
+    assert report["runtime_check"]["library_found_on_login"] is True
+    assert report["runtime_check"]["scripts_missing_runtime_bootstrap"]
+    assert "script PBS não inclui" in report["diagnosis"]["suggestion"]
