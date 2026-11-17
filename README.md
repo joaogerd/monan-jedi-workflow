@@ -65,6 +65,19 @@ PBS próprio para outros usos, mas **não é empregado nesta integração**:
 seus tasks ficam todos como `executor: local`; a submissão científica
 pertence aos aplicativos MONAN-JEDI.
 
+## Identificar falhas sem analisar logs manualmente
+
+Se uma execução parar, entre no diretório do experimento e use:
+
+```bash
+monan-jedi-workflow diagnose
+```
+
+O diagnóstico consulta o PBS, lê os relatórios das operações e agrupa
+mensagens repetidas de MPI para exibir uma causa provável e orientar a
+correção. O comando **não altera arquivos nem ressubmete jobs**.
+Veja o [guia de diagnóstico](docs/diagnostics.md) para uso e exemplos.
+
 ## Critérios para release estável
 
 Validar um ciclo científico real, um dia completo e depois 3, 7 e 30 dias, com inspeção de produtos, dependências entre ciclos, restart e recursos na JACI. Somente depois iniciar a operação anual. A duração não pode exigir alterações no código nem em escolhas científicas.
