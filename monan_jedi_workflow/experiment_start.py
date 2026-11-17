@@ -249,6 +249,51 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     write(root / 'campaign.yaml', campaign)
 
 
+def check_date_inputs(destination):
+    """Read-only availability gate for the selected two-cycle scientific period.
+
+    Reject a new run early when its date-specific raw GFS/PREPNR/GNSSRO files
+    are missing. Never substitute another date, download, or reuse products.
+    """
+    from .wps_stage import load_wps_run
+    from .obs2ioda_stage import load_obs2ioda_run, _build_plan
+    from .stage_config import resolve_path
+
+    root = Path(destination).expanduser().resolve()
+    campaign_file = root / 'campaign.yaml'
+    if not campaign_file.is_file():
+        raise FileNotFoundError(f'Campaign file missing: {campaign_file}')
+    campaign = yaml.safe_load(campaign_file.read_text())
+    start = _utc_start(campaign['calendar']['start'])
+    last = _utc_start(campaign['calendar']['end'])
+    if last != start + timedelta(hours=6):
+        raise ValueError('This first-experiment input preflight expects two 6-hour analyses')
+    initial = _cycle(start - timedelta(hours=6))
+    wps = load_wps_run(root / 'science/initialization', initial)
+    raw = resolve_path(
+        wps.config['acquisition']['source'],
+        config_dir=wps.config_dir, context=wps.context,
+        label='wps.acquisition.source',
+    )
+    required = [('GFS initialization ' + initial, raw)]
+    for analysis in (start, last):
+        cycle = _cycle(analysis)
+        obs = load_obs2ioda_run(root / 'science', cycle)
+        for converter in _build_plan(obs)['converters']:
+            for source in converter['inputs']:
+                required.append((f"{converter['name']} {cycle}", Path(source)))
+    seen = set()
+    results = []
+    for label, path in required:
+        path = path.resolve()
+        if path in seen:
+            continue
+        seen.add(path)
+        available = path.is_file() and path.stat().st_size > 0
+        results.append((label, path, available))
+    return results
+
+
 def configure_existing_environment(destination):
     """Add only a missing environment to an existing generated campaign."""
     root = Path(destination).resolve()
@@ -334,6 +379,8 @@ def upgrade_existing_login_execution(destination):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination',type=Path)
+    parser.add_argument('--check-inputs', action='store_true',
+                        help='Read-only check of GFS and 2-cycle PREPNR/GNSSRO files in an existing case')
     parser.add_argument('--start', default='2025-09-01T00:00:00Z',
                         help='First analysis (UTC), YYYY-MM-DDTHH:MM:SSZ; two 6-hour cycles')
     parser.add_argument('--pbs-queue', default='pesqmidi', help='PBS queue for the entire initial case (default: pesqmidi)')
@@ -343,6 +390,16 @@ def main():
     parser.add_argument('--runtime-bin', type=Path, help='Python CLI directory for optional legacy worker wrapper; not used by login-side simpleWorkflow tasks')
     args=parser.parse_args()
     try:
+        if args.check_inputs:
+            results = check_date_inputs(args.destination)
+            for label, path, available in results:
+                print(f'[{"OK" if available else "MISSING"}] {label}: {path}')
+            missing = sum(not present for _, _, present in results)
+            if missing:
+                parser.exit(2, f'[FALHA] {missing} entrada(s) indisponivel(is) para o periodo escolhido. '
+                           'Nao submeta jobs. Escolha data com cobertura completa ou obtenha os dados correspondentes.\\n')
+            print(f'[OK] Todas as {len(results)} entradas verificadas para as duas analises.')
+            return
         if args.upgrade_existing:
             output = upgrade_existing_login_execution(args.destination)
             print(f'[OK] Login-side orchestration campaign: {output}')
