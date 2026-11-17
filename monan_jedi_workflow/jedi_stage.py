@@ -933,7 +933,7 @@ def _render_pbs(run: JEDIRun) -> None:
         *bootstrap_lines,
         *setup_lines,
         *exports,
-        *pbs_runtime_library_lines(),
+        *(pbs_runtime_library_lines() if not pbs.get("site_config") else []),
         "ulimit -s unlimited || true",
         (
             f"{shlex.quote(launcher)} -n {mpiprocs} {rendered_command} "
