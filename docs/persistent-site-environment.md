@@ -59,3 +59,25 @@ python -m pytest tests/test_site_profile_persistence.py \
   tests/test_unified_cli.py tests/test_experiment_start.py \
   tests/test_scientific_environment.py -q
 ```
+
+## First-time interactive installation test
+
+After installing the Python package, with **no previously loaded scientific
+shell variables** and no workspace `site.yaml`, run:
+
+```bash
+unset STACK_ROOT MONAN_JEDI_INSTALL_ROOT MONAN_MESH_ROOT MONAN_PHYSICS_ROOT
+unset MONAN_BMATRIX_ROOT MONAN_INPUT_ROOT MONAN_GFS_ROOT MONAN_LIBFABRIC_ROOT
+experiment create /p/projetos/monan_das/$USER/work/fresh-first-run \
+  --start 2026-01-30T00:00:00Z --mode cold
+```
+
+If there are two verified stacks, the interactive terminal asks the user to
+choose 1 or 2. For missing but mandatory roots, it asks for the **existing**
+directory. It rejects nonexistent paths, so package installation alone cannot
+be mistaken for a complete HPC scientific runtime installation.
+
+A successful setup records the chosen verified runtime in a persistent
+`site.yaml`, generates a case-specific `science/site.yaml` and
+`environment.sh`, and needs no prior experiment. New terminals reuse the
+site profile automatically.
