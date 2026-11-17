@@ -100,6 +100,7 @@ def _filenames(root: Path) -> list[Path]:
     for pattern in (
         "work/**/*.log", "work/**/*.stdout", "work/**/*.stderr",
         "work/**/*.o[0-9]*", "work/**/*.e[0-9]*", "work/**/*.OU", "work/**/*.ER",
+        "work/**/log.*.out", "work/**/*.out",
         ".platform/**/*.log",
     ):
         for candidate in root.glob(pattern):
@@ -117,7 +118,7 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
     states: list[dict[str, Any]] = []
     for path in sorted(root.glob(".platform/**/state.json")):
         value = _json(path)
-        if value and value.get("state") in {"failed", "invalid", "running", "prepared"}:
+        if value and value.get("state") in {"failed", "invalid", "running"}:
             states.append({"path": str(path), "state": value.get("state"),
                            "run_dir": value.get("run_dir"),
                            "last_error": (value.get("attempts") or [{}])[-1].get("error"),
