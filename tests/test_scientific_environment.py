@@ -139,9 +139,9 @@ def test_real_main_site_renderer_loads_stack_before_native_jobs(tmp_path, monkey
         {"site_config": str(site)}, config_dir=tmp_path
     ))
     assert "module purge" in code
-    assert "source \"$STACK_SITE_SETUP\"" in code
-    assert "module use \"$STACK_MODULE_ROOT\"" in code
-    assert "module load \"$STACK_ENV_MODULE\"" in code
+    assert 'source "${STACK_SITE_SETUP}"' in code
+    assert 'module use "${STACK_MODULE_ROOT}"' in code
+    assert 'module load "${STACK_ENV_MODULE}"' in code
     assert "LD_LIBRARY_PATH" in code
     assert "python3 -" not in code
 
