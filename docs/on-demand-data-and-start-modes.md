@@ -50,39 +50,37 @@ The current generated `campaign.yaml` always contains cold-start WPS /
 MPAS Init / initial MPAS tasks. Do not claim warm start is operational until
 its state contract, CLI, checks and scientific validation are implemented.
 
-## Observation provider configuration
+## Observation provider configuration — restored GDEX support
 
-The new Obs acquisition hook is called by `obs convert prepare` before
-fingerprinting input files. It checks exact cycle-specific paths and can
-download missing data via explicitly configured `obs2ioda.acquisition`
-providers. Example shape (illustrative, do **not** copy the URL as a real
-archive endpoint):
+The experiment directly invokes `obs convert prepare`, which acquires
+only missing inputs for the requested UTC cycle on the JACI login node.
 
-```yaml
-obs2ioda:
-  acquisition:
-    providers:
-      - converter: prepbufr-conventional
-        url: https://YOUR-VERIFIED-ARCHIVE/{cycle_year}/{cycle_yyyymmddhh}.nr
-      - converter: gpsro-gnssro
-        url: https://YOUR-VERIFIED-ARCHIVE/{cycle_year}/{cycle_yyyymmddhh}.bufr
-```
+The previous project's proven GDEX downloader (`obs_acquisition.py`) has
+been reconnected. It handles direct HTTPS files and **daily GNSS-RO TAR.GZ
+archives**, including extracting the exact-cycle BUFR member and writing
+`.source.json` provenance.
 
-Archive providers must be genuinely verified and may need authentication,
-catalog discovery, renamed products, or access controls. A URL template is
-not proof of historical availability. The default catalog intentionally has
-no invented observation URL. When no provider exists and a requested raw
-file is absent, the stage fails clearly *before submitting conversion jobs*.
+Default source selection for the first experiment:
+- 2025 onward: GDEX d337000 PREPNR hourly URLs
+- Before 2025: GDEX d337000 PREP48H hour-specific URLs (distinct conventional
+  observation product, explicitly logged and recorded in provenance)
+- GNSS-RO: GDEX d735000 daily `gpsro.YYYYMMDD.tar.gz`, with
+  `gdas.gpsro.tHHz.YYYYMMDD.bufr` extracted for the selected cycle
 
-Source inputs already present are reused and are never overwritten. New
-transfers are staged atomically, checked for Content-Length (and optional
-BUFR signature), and protected by file locks. Scientific validation
-continues to happen inside Obs2IODA.
+**Important:** the 2024 GDEX PREPNR collection is published as a daily
+TAR archive, not as the 2025 hourly PREPNR URLs. For the 2024 leap-day
+integration test, the downloader therefore selects the available PREP48H
+product. It is **not** the same as PREPNR. The original target filename still
+follows the reference converter's local input contract; its provenance
+records the actual PREP48H source. Do not compare PREPNR versus PREP48H
+analyses as scientifically identical without separate assessment.
 
-For arbitrary dates, guarantee *correct temporal resolution and clear
-failures*, not universal data availability. The historical GFS endpoint is
-separate from the archived PREPNR/GNSSRO providers and is expected to have
-its own coverage/access rules.
+Users can provide their own `obs2ioda.acquisition.providers` to override
+defaults, or `enabled: false` to disable network acquisition.
+
+Historical archive coverage and access remain dependent on GDEX. HTTPS
+404 for a date is an actionable missing input; the workflow must not
+silently substitute another date. The source provider archive can change.
 
 ## Remaining acceptance tests
 
