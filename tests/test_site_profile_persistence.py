@@ -294,3 +294,37 @@ def test_isolated_workspace_rejects_nonexistent_and_outside_project(
     with pytest.raises(ValueError, match="must be inside"):
         create_experiment(case, workspace=outside)
     assert not case.exists()
+
+
+
+def test_portable_non_jaci_case_without_site_profile(tmp_path, monkeypatch):
+    """A missing JACI workspace must not block ordinary case generation."""
+    from monan_jedi_workflow import experiment_environment as environment
+    monkeypatch.setattr(environment, "_workspace", lambda root: None)
+    root = tmp_path / "portable-case"
+    create_experiment(root, start="2024-02-29T00:00:00Z")
+    assert (root / "environment.sh").is_file()
+    assert (root / "science/site.yaml").is_file()
+    assert (root / "campaign.yaml").is_file()
+    assert not (tmp_path / "site.yaml").exists()
+
+
+def test_explicit_site_bypasses_implicit_workspace_resolution(tmp_path, monkeypatch):
+    """--site must not depend on /p/projetos or create a shared profile."""
+    from monan_jedi_workflow import experiment_environment as environment
+    workspace, paths = _fixture(tmp_path)
+    site = workspace / "explicit.yaml"
+    site.write_text(yaml.safe_dump({
+        "site": {"name": "jaci"},
+        "stack": {"load": True, "root": paths["STACK_ROOT"]},
+        "jedi": {"install_root": paths["MONAN_JEDI_INSTALL_ROOT"]},
+        "environment": {
+            name: value for name, value in paths.items()
+            if name not in ("STACK_ROOT", "MONAN_JEDI_INSTALL_ROOT")
+        },
+    }))
+    monkeypatch.setattr(environment, "_workspace", lambda root: None)
+    case = tmp_path / "explicit-site-case"
+    create_experiment(case, site_config=site)
+    assert yaml.safe_load((case / "science/site.yaml").read_text())["stack"]["root"] == paths["STACK_ROOT"]
+    assert not (tmp_path / "site.yaml").exists()
