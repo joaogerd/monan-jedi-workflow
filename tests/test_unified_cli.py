@@ -112,3 +112,24 @@ def test_experiment_site_save_dispatches_to_workspace_profile(monkeypatch, tmp_p
 def test_experiment_site_save_rejects_invalid_action(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["experiment", "site", "overwrite"])
     assert entry.experiment() == 2
+
+
+
+def test_experiment_site_init_disambiguates_stack_without_old_case(monkeypatch, tmp_path):
+    from monan_jedi_workflow import experiment_environment
+    calls = []
+    stack = tmp_path / "stack"
+    install = tmp_path / "install"
+    monkeypatch.setattr(
+        experiment_environment, "initialize_site",
+        lambda root, *, stack=None, install=None: (
+            calls.append((root, stack, install)) or tmp_path / "site.yaml"
+        ),
+    )
+    monkeypatch.setattr(
+        sys, "argv",
+        ["experiment", "site", "init", "--stack", str(stack),
+         "--install", str(install)],
+    )
+    assert entry.experiment() == 0
+    assert calls == [(Path.cwd(), stack, install)]
