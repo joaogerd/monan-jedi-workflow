@@ -35,20 +35,30 @@ apps, including the MPAS Init stage. Its example YAML declared
 **no complete stack/bootstrap sequence**. The new `_render_pbs()`
 preserved only those declarations and invoked MPI directly.
 
-A second portability regression was a **hardcoded Cray PALS 1.6 launcher**
-(`/opt/cray/pals/1.6/bin/mpiexec`) in four new science recipes instead of
-letting the loaded site profile choose `mpiexec`. The fixed recipe now uses
-the generic launcher and relies on the configured site modules.
+The October 2026 historical working reference (commit `09a5ecb`) explicitly
+uses `/opt/cray/pals/1.6/bin/mpiexec` and warns that plain `mpiexec`
+can resolve to an incompatible SGI launcher. That path is preserved for
+this *JACI scientific reference recipe*; other profiles remain configurable.
+
+A further difference is the unconditional `#PBS -V` added after `main`.
+The validated October script did not inherit all login variables. Exporting
+the controller's Conda paths to compute nodes can contaminate the scientific
+runtime. The corrected site-controlled native jobs now render explicit
+scientific bootstrap lines and omit blanket PBS inheritance.
 
 The primary regression is thus **a missing connection between the
 native stage PBS generation and the existing site bootstrap contract**.
 The failure is not evidence that the September GFS, MPAS grid, B matrix
 or JEDI observations are invalid.
 
-The packaged September 2025 reference case exists in the branch but
-not in `main`; scientific equivalence with earlier successfully executed
-cases must be established separately, based on archived actual run inputs,
-not inferred from code alone.
+The packaged September 2025 reference case exists in the new branch but
+not current `main`. A historical `feature/2025-reference-case` run at commit
+`09a5ecb` did validate WPS, MPAS Init and initial MPAS forecast, publishing
+the first background, before failing later due to a simpleWorkflow
+`analysis_mpas_file_time` context error after JEDI wait. That prior
+execution proves the *initialization* can run with the same dates and mesh;
+it does not prove a complete two-analysis campaign succeeded. Actual
+generated PBS from the historical case remains the definitive comparison.
 
 ## Correction
 
@@ -57,8 +67,8 @@ not inferred from code alone.
 - `mpas_stage.py` and `jedi_stage.py` insert the shared site bootstrap
   **before** the native launcher. `init_stage.py` uses the MPAS renderer.
 - `native_pbs.py` uses the same bootstrap for WPS and Obs2IODA.
-- Native MPI recipes use the site-provided `mpiexec` instead of an
-  embedded PALS version. Users may override the launcher per site.
+- The proven JACI recipe retains the Cray PALS launcher; users may
+  select another launcher explicitly for other installations.
 - The installed example now creates one `science/site.yaml` per experiment
   and references it in every native stage via `pbs.site_config`.
 - The reference site profile explicitly sets `validate_python: false` to
