@@ -109,3 +109,27 @@ def test_diagnose_detects_present_libfabric_but_missing_pbs_setup(tmp_path, monk
     assert report["runtime_check"]["library_found_on_login"] is True
     assert report["runtime_check"]["scripts_missing_runtime_bootstrap"]
     assert "script PBS não inclui" in report["diagnosis"]["suggestion"]
+
+
+def test_diagnose_finished_obs_validation_not_false_libfabric(tmp_path):
+    root = tmp_path / "case"
+    state = root / ".platform" / "20250901T000000Z" / "obs-convert" / "state.json"
+    state.parent.mkdir(parents=True)
+    work = root / "work" / "obs" / "2025090100"
+    logs = work / "logs"
+    logs.mkdir(parents=True)
+    state.write_text(json.dumps({
+        "state": "finished", "run_dir": str(work), "attempts": [],
+    }))
+    (logs / "run-linker-1.stdout.log").write_text(
+        "libfabric.so.1 => /opt/cray/libfabric/1.22.0/lib64/libfabric.so.1 (0x0)\\n"
+    )
+    (root / "work" / "mpas-init" / "20250831T180000Z").mkdir(parents=True)
+    (root / "work" / "mpas-init" / "20250831T180000Z" / "stderr.log").write_text(
+        "Warning: SEAICE_FRACTIONAL file not found...\\n"
+    )
+    result = diagnose(root, query_pbs=False)
+    assert result["status"] == "incomplete"
+    assert result["diagnosis"]["code"] == "pending-validation"
+    assert result["log_evidence"] == []
+    assert result["operations"][0]["operation"] == "obs-convert"
