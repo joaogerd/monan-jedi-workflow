@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import shlex
 import re
+import sys
 import yaml
 
 
@@ -72,7 +73,9 @@ def _defaults(root: Path) -> dict[str, Path]:
 
 def initialize_site(root: Path, *, stack: Path | None = None,
                     install: Path | None = None,
-                    environ: dict[str, str] | None = None) -> Path:
+                    environ: dict[str, str] | None = None,
+                    interactive: bool | None = None,
+                    input_fn=None) -> Path:
     """Configure first-time JACI workspace using real installations.
 
     Each directory must exist. Multiple stack candidates require explicit
@@ -88,6 +91,51 @@ def initialize_site(root: Path, *, stack: Path | None = None,
     if target.exists():
         raise FileExistsError(f"Site profile already exists: {target}; refusing overwrite")
 
+    if interactive is None:
+        interactive = bool(sys.stdin.isatty() and sys.stdout.isatty())
+    if input_fn is None:
+        input_fn = input
+
+    def ask_directory(label: str, suggested: Path | None = None) -> Path:
+        """Resolve a required existing directory, never create fictitious inputs."""
+        default = str(suggested) if suggested else ""
+        for _attempt in range(5):
+            prompt = f"{label} (existing directory)"
+            if default:
+                prompt += f" [{default}]"
+            answer = input_fn(prompt + ": ").strip()
+            candidate = Path(answer or default).expanduser() if (answer or default) else None
+            if candidate and candidate.is_dir():
+                return candidate.resolve()
+            print(f"[CONFIGURACAO] Directory not found: {candidate or '<empty>'}", file=sys.stderr)
+        raise ValueError(f"Could not configure {label}; no existing directory selected.")
+
+    def choose_stack(candidates: list[Path]) -> Path:
+        if len(candidates) == 1:
+            print(f"[SITE] Stack discovered: {candidates[0]}")
+            return candidates[0]
+        if not interactive:
+            detail = "\\n".join(f"  - {p}" for p in candidates)
+            raise ValueError(
+                f"Cannot select a stack automatically: {len(candidates)} valid "
+                f"candidates.\\n{detail}\\nUse experiment site init "
+                "--stack /actual/stack/root (and --install if necessary)."
+            )
+        if candidates:
+            print("[SITE] Multiple stack installations found:")
+            for number, candidate in enumerate(candidates, 1):
+                print(f"  {number}. {candidate}")
+            for _attempt in range(5):
+                choice = input_fn("Select the stack number (or enter a full path): ").strip()
+                if choice.isdecimal() and 1 <= int(choice) <= len(candidates):
+                    return candidates[int(choice) - 1]
+                path = Path(choice).expanduser()
+                if path.is_dir():
+                    return path.resolve()
+                print("[CONFIGURACAO] Invalid selection", file=sys.stderr)
+            raise ValueError("No valid stack selected.")
+        return ask_directory("STACK_ROOT")
+
     environment = dict(os.environ if environ is None else environ)
     defaults = _defaults(Path(root))
     if install is None:
@@ -95,23 +143,18 @@ def initialize_site(root: Path, *, stack: Path | None = None,
                        or defaults.get("MONAN_JEDI_INSTALL_ROOT", ""))
     install = Path(install).expanduser().resolve()
     if not install.is_dir():
-        raise ValueError(
-            f"MONAN-JEDI installation missing: {install}. "
-            "Pass experiment site init --install /actual/installed/prefix."
-        )
+        if interactive:
+            install = ask_directory("MONAN_JEDI_INSTALL_ROOT", install)
+        else:
+            raise ValueError(
+                f"MONAN-JEDI installation missing: {install}. "
+                "Pass experiment site init --install /actual/installed/prefix."
+            )
 
     if stack is None and environment.get("STACK_ROOT"):
         stack = Path(environment["STACK_ROOT"])
     if stack is None:
-        candidates = discover_stacks(workspace)
-        if len(candidates) != 1:
-            detail = "\n".join(f"  - {p}" for p in candidates)
-            raise ValueError(
-                f"Cannot select a stack automatically: {len(candidates)} valid "
-                f"candidates.\n{detail}\nUse experiment site init "
-                "--stack /actual/stack/root (and --install if necessary)."
-            )
-        stack = candidates[0]
+        stack = choose_stack(discover_stacks(workspace))
     stack = Path(stack).expanduser().resolve()
     if not stack.is_dir():
         raise ValueError(f"Selected STACK_ROOT does not exist: {stack}")
@@ -138,6 +181,8 @@ def initialize_site(root: Path, *, stack: Path | None = None,
         value = environment.get(name) or defaults.get(name)
         if value and Path(value).is_dir():
             chosen[name] = str(Path(value).resolve())
+        elif interactive:
+            chosen[name] = str(ask_directory(name, Path(value) if value else None))
         else:
             missing.append(f"{name}: {value or 'not configured'}")
     if missing:
