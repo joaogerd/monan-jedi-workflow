@@ -27,7 +27,7 @@ def operation_tasks(request, principal, operation, cycle, prefix, previous):
     op = load_operation(
         replace(request, app=app, operation=domain, config=principal, cycle=cycle)
     )
-    command = [app] + (
+    command = ["monan-workflow", app] + (
         [domain] if operation in {"obs.acquire", "obs.convert", "mpas.init"} else []
     )
     tasks = []
@@ -65,7 +65,7 @@ def wps_tasks(request, principal, cycle, prefix, previous):
     tasks = []
     for action in ("prepare", "run", "validate"):
         name = f"{prefix}_wps_{action}"
-        argv = ["monan-jedi-workflow", f"wps-{action}", str(config_dir),
+        argv = ["monan-workflow", "wps", action, str(config_dir),
                 "--cycle", cycle]
         task = {"name": name, "argv": argv, "executor": "local"}
         if previous:
