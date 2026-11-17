@@ -21,6 +21,7 @@ dev = [
 ]
 
 [project.scripts]
+monan-workflow = "monan_jedi_workflow.unified_cli:main"
 obs = "monan_jedi_workflow.platform_cli:obs"
 jedi = "monan_jedi_workflow.platform_cli:jedi"
 mpas = "monan_jedi_workflow.platform_cli:mpas"
