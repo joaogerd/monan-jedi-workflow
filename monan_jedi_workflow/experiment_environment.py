@@ -106,7 +106,7 @@ def load_project_site(root: Path, *, site_config: Path | None = None,
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{path}: {section}.{key} must be a nonempty path")
         expanded = os.path.expandvars(value)
-        if re.search(r"\\$(?:\\{|[A-Za-z_])", expanded):
+        if re.search(r"\$(?:\{|[A-Za-z_])", expanded):
             raise ValueError(
                 f"{path}: unresolved environment variable in {section}.{key}. "
                 "A shared site profile should use a real, stable path."
@@ -127,7 +127,7 @@ def load_project_site(root: Path, *, site_config: Path | None = None,
         if not isinstance(value, str) or not value:
             raise ValueError(f"{path}: environment.{key} must be a nonempty path")
         expanded = os.path.expandvars(value)
-        if re.search(r"\\$(?:\\{|[A-Za-z_])", expanded):
+        if re.search(r"\$(?:\{|[A-Za-z_])", expanded):
             raise ValueError(f"{path}: environment.{key} contains an undefined variable")
         target = Path(expanded).expanduser()
         if not target.is_absolute() or not target.is_dir():
