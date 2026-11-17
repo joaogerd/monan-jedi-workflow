@@ -120,6 +120,72 @@ def test_missing_workspace_profile_and_ambiguous_stack_fails_early(tmp_path, mon
     monkeypatch.setattr(environment, "_discover_stack", lambda root: None)
     monkeypatch.delenv("STACK_ROOT", raising=False)
     case = workspace / "work" / "not-created"
-    with pytest.raises(ValueError, match="experiment site save"):
+    with pytest.raises(ValueError, match="experiment site init"):
         create_experiment(case, start="2026-01-29T00:00:00Z")
     assert not case.exists()
+
+
+
+def test_first_use_discovers_unique_stack_and_creates_site_automatically(
+    tmp_path, monkeypatch
+):
+    import monan_jedi_workflow.experiment_environment as environment
+    workspace, paths = _fixture(tmp_path)
+    # Arrange the one actual stack installation in the documented scan path.
+    original = Path(paths["STACK_ROOT"])
+    discovered = workspace / "work" / "spack-stack-production" / "spack-stack"
+    discovered.parent.mkdir(parents=True)
+    original.rename(discovered)
+    paths["STACK_ROOT"] = str(discovered)
+    monkeypatch.setattr(environment, "_workspace", lambda root: workspace)
+    monkeypatch.setattr(
+        environment, "_defaults",
+        lambda root: {k: Path(v) for k, v in paths.items() if k != "STACK_ROOT"},
+    )
+    for key in REQUIRED:
+        monkeypatch.delenv(key, raising=False)
+    root = workspace / "work" / "first-ever-case"
+    assert not (workspace / "site.yaml").exists()
+    create_experiment(root, start="2026-01-30T00:00:00Z")
+    persisted = yaml.safe_load((workspace / "site.yaml").read_text())
+    assert persisted["stack"]["root"] == str(discovered)
+    assert yaml.safe_load((root / "science/site.yaml").read_text())["stack"]["root"] == str(discovered)
+    check = subprocess.run(
+        ["bash", "-c", 'source "$1"; test "$STACK_ROOT" = "$2"',
+         "bash", str(root / "environment.sh"), str(discovered)],
+        env={"PATH": os.environ["PATH"]}, capture_output=True, text=True,
+    )
+    assert check.returncode == 0, check.stderr
+
+
+def test_ambiguous_stacks_print_choices_and_explicit_select_works(
+    tmp_path, monkeypatch
+):
+    import monan_jedi_workflow.experiment_environment as environment
+    workspace, paths = _fixture(tmp_path)
+    monkeypatch.setattr(environment, "_workspace", lambda root: workspace)
+    monkeypatch.setattr(
+        environment, "_defaults",
+        lambda root: {k: Path(v) for k, v in paths.items() if k != "STACK_ROOT"},
+    )
+    stacks = []
+    for name in ("spack-stack-production", "spack-stack-testing"):
+        stack = workspace / "work" / name / "spack-stack"
+        setup = stack / "configs/sites/tier2/jaci/setup.sh"
+        setup.parent.mkdir(parents=True)
+        setup.write_text("# valid\n")
+        (stack / "envs/test/modules").mkdir(parents=True)
+        stacks.append(stack)
+    for key in REQUIRED:
+        monkeypatch.delenv(key, raising=False)
+    case = workspace / "work" / "new"
+    with pytest.raises(ValueError, match="2 valid candidates") as exc:
+        create_experiment(case)
+    assert str(stacks[0]) in str(exc.value)
+    assert str(stacks[1]) in str(exc.value)
+    assert not case.exists()
+    assert not (workspace / "site.yaml").exists()
+    initialized = environment.initialize_site(case, stack=stacks[0])
+    assert initialized == workspace / "site.yaml"
+    create_experiment(case, start="2026-01-30T00:00:00Z")
+    assert (case / "environment.sh").exists()
