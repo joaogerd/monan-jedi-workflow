@@ -303,7 +303,22 @@ def operate(request):
             if state["inputs"] != input_records(inspect_native(op, request, directory)):
                 raise RuntimeError("inputs changed after execution")
             if state["state"] not in {"finished", "validated"}:
-                raise RuntimeError("validate requires a completed run")
+                if state["state"] == "invalid":
+                    from .platform_backend import native_functions
+                    _, _, validate_again = native_functions(op.key)
+                    try:
+                        validate_again(directory / "configuration", request.cycle)
+                    except Exception as error:
+                        raise RuntimeError(
+                            f"Previous scientific validation failed: {error}"
+                        ) from error
+                    raise RuntimeError(
+                        "Previous validation was marked invalid; inspect scientific "
+                        "logs and existing operation status before retrying"
+                    )
+                raise RuntimeError(
+                    f"validate requires a completed run; current state={state['state']}"
+                )
             _, _, validate = native_functions(op.key)
             try:
                 report = validate(directory / "configuration", request.cycle)
