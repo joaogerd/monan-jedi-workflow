@@ -105,10 +105,10 @@ def initialize_site(root: Path, *, stack: Path | None = None,
     if stack is None:
         candidates = discover_stacks(workspace)
         if len(candidates) != 1:
-            detail = "\\n".join(f"  - {p}" for p in candidates)
+            detail = "\n".join(f"  - {p}" for p in candidates)
             raise ValueError(
                 f"Cannot select a stack automatically: {len(candidates)} valid "
-                f"candidates.\\n{detail}\\nUse experiment site init "
+                f"candidates.\n{detail}\nUse experiment site init "
                 "--stack /actual/stack/root (and --install if necessary)."
             )
         stack = candidates[0]
@@ -142,9 +142,9 @@ def initialize_site(root: Path, *, stack: Path | None = None,
             missing.append(f"{name}: {value or 'not configured'}")
     if missing:
         raise ValueError(
-            "Scientific directories could not be discovered:\\n  "
-            + "\\n  ".join(missing)
-            + "\\nSet these roots to valid directories or provide a "
+            "Scientific directories could not be discovered:\n  "
+            + "\n  ".join(missing)
+            + "\nSet these roots to valid directories or provide a "
               "complete JACI site profile with experiment create --site."
         )
 
@@ -332,10 +332,10 @@ def render_environment(root: Path, *, environ: dict[str, str] | None = None,
         "_monan_env_missing=0",
         "for _monan_env_name in " + " ".join(REQUIRED) + "; do",
         '  if [[ -z "${!_monan_env_name:-}" ]]; then',
-        '    printf "[CONFIGURACAO] %s nao definido. Configure um caminho real.\\n" "$_monan_env_name" >&2',
+        '    printf "[CONFIGURACAO] %s nao definido. Configure um caminho real.\n" "$_monan_env_name" >&2',
         "    _monan_env_missing=1",
         '  elif [[ ! -d "${!_monan_env_name}" ]]; then',
-        '    printf "[CONFIGURACAO] %s aponta para diretorio inexistente: %s\\n" "$_monan_env_name" "${!_monan_env_name}" >&2',
+        '    printf "[CONFIGURACAO] %s aponta para diretorio inexistente: %s\n" "$_monan_env_name" "${!_monan_env_name}" >&2',
         "    _monan_env_missing=1",
         "  fi",
         "done",
