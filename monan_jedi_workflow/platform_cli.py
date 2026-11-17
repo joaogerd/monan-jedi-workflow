@@ -398,7 +398,7 @@ def main(app, argv=None):
             experiment_dir = Path(request.config).expanduser().resolve().parent
             if (experiment_dir / "campaign.yaml").is_file():
                 result["diagnostic_command"] = (
-                    f"monan-workflow diagnose {experiment_dir}"
+                    f"diagnose {experiment_dir}"
                 )
                 try:
                     from .diagnostics import diagnose
