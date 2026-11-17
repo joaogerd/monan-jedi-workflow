@@ -6,6 +6,7 @@ The simpleWorkflow task itself remains executor=local.
 from __future__ import annotations
 
 from pathlib import Path
+from .pbs_directives import pbs_runtime_library_lines
 import os
 import re
 import shlex
@@ -70,6 +71,7 @@ def native_pbs_run(
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
             raise ValueError(f"invalid PBS environment variable {key!r}")
         lines.append("export " + key + "=" + shlex.quote(str(value)))
+    lines.extend(pbs_runtime_library_lines())
     lines.extend(shlex.join(argv) for argv in commands)
     script.write_text("\n".join(lines) + "\n")
     submitted = subprocess.run(["qsub", str(script)], cwd=cwd, text=True,
