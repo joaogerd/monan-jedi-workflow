@@ -32,7 +32,7 @@ def inspect_header(path: Path) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Read real NetCDF/IO​DA header structure")
+    parser = argparse.ArgumentParser(description="Read real NetCDF/IODA header structure")
     parser.add_argument("file", type=Path)
     options = parser.parse_args(argv)
     try:
