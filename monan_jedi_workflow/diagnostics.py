@@ -24,6 +24,12 @@ _EXIT = re.compile(r"(?m)^\s*Exit_status\s*=\s*(-?\d+)\s*$")
 _JOB_STATE = re.compile(r"(?m)^\s*job_state\s*=\s*([A-Za-z])\s*$")
 _JOB_PATH = re.compile(r"(?m)^\s*(Output_Path|Error_Path)\s*=\s*(.*?)\s*$")
 _RULES = [
+    ("missing-inspector", re.compile(
+        r"(?:no such file or directory: ['\\\"]?ncdump|"
+        r"ncdump.*(?:not found|no such file))", re.I),
+     "O validador IODA não encontrou o executável ncdump no ambiente de login.",
+     "Atualize o monan-jedi-workflow para usar a inspeção NetCDF4 embutida; "
+     "revalide os produtos existentes sem repetir a conversão."),
     ("library", re.compile(r"error while loading shared libraries|undefined symbol|"
                             r"lib[^\s/]+\.so[^\s]*.*not found", re.I),
      "Bibliotecas ou ambiente MPI ausentes no job.",
@@ -219,9 +225,12 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
                     break
         if len(matches) >= 40:
             break
-    evidence = "\n".join((item.get("message") or "") for item in matches)
-    if not evidence:
-        evidence = "\n".join((item.get("last_error") or "") for item in states)
+    # A persisted stage exception is stronger than unrelated warning lines
+    # from the previously successful converter stdout.
+    state_errors = "\n".join(item.get("last_error") or "" for item in states)
+    evidence = state_errors + "\n" + "\n".join(
+        item.get("message") or "" for item in matches
+    )
     code, title, action = ("unknown", "A causa não foi identificada automaticamente.",
                           "Consultar os logs indicados e o histórico PBS. Não ressubmeter antes de verificar o job anterior.")
     for key, expression, description, recommendation in _RULES:
