@@ -133,3 +133,33 @@ def test_diagnose_finished_obs_validation_not_false_libfabric(tmp_path):
     assert result["diagnosis"]["code"] == "pending-validation"
     assert result["log_evidence"] == []
     assert result["operations"][0]["operation"] == "obs-convert"
+
+
+
+def test_public_dotted_obs_task_filter_finds_hyphenated_runtime_failure(tmp_path):
+    root = tmp_path / "case"
+    run = root / "work" / "obs" / "2026013000"
+    run.mkdir(parents=True)
+    state = root / ".platform" / "20260130T000000Z" / "obs-convert" / "state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({
+        "state": "invalid",
+        "run_dir": str(run),
+        "validation_error": "invalid IODA header",
+        "attempts": [],
+    }))
+    report = diagnose(root, task="obs.convert", query_pbs=False)
+    assert report["status"] == "failure"
+    assert len(report["operations"]) == 1
+    assert report["operations"][0]["operation"] == "obs-convert"
+    assert "invalid IODA header" in report["operations"][0]["last_error"]
+
+
+def test_public_dotted_obs_task_filter_preserves_pending_validation(tmp_path):
+    root = tmp_path / "case"
+    state = root / ".platform" / "20260130T000000Z" / "obs-convert" / "state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"state": "finished", "attempts": []}))
+    report = diagnose(root, task="obs.convert", query_pbs=False)
+    assert report["status"] == "incomplete"
+    assert report["operations"][0]["operation"] == "obs-convert"
