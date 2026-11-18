@@ -163,3 +163,24 @@ def test_public_dotted_obs_task_filter_preserves_pending_validation(tmp_path):
     report = diagnose(root, task="obs.convert", query_pbs=False)
     assert report["status"] == "incomplete"
     assert report["operations"][0]["operation"] == "obs-convert"
+
+
+
+def test_missing_ncdump_error_is_not_hidden_by_converter_warnings(tmp_path):
+    root = tmp_path / "case"
+    run = root / "work" / "obs" / "2026013000"
+    logs = run / "logs"
+    logs.mkdir(parents=True)
+    (logs / "converter.stdout.log").write_text(
+        "Warning: ./gnssro.bufr not found for decoding...\\n"
+    )
+    state = root / ".platform" / "20260130T000000Z" / "obs-convert" / "state.json"
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({
+        "state": "invalid", "run_dir": str(run), "attempts": [],
+        "validation_error": "[Errno 2] No such file or directory: 'ncdump'",
+    }))
+    result = diagnose(root, task="obs.convert", query_pbs=False)
+    assert result["status"] == "failure"
+    assert result["diagnosis"]["code"] == "missing-inspector"
+    assert "ncdump" in result["diagnosis"]["summary"]
