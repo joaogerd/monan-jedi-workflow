@@ -638,7 +638,7 @@ def validate_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
             except OSError as error:
                 # Persist failure in the scientific validation report rather
                 # than aborting without an obs2ioda-validation.json artifact.
-                stderr_path.write_text(str(error) + "\\n", encoding="utf-8")
+                stderr_path.write_text(str(error) + "\n", encoding="utf-8")
                 record.update({
                     "valid": False, "problem": f"inspector unavailable: {error}",
                     "inspection_argv": inspection["argv"],
