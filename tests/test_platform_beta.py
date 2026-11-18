@@ -754,3 +754,28 @@ def test_unfinished_attempt_is_not_silently_reexecuted(tmp_path, capsys):
     state_path.write_text(json.dumps(state))
     assert call("mpas", "run", cfg) != 0
     assert "unfinished" in capsys.readouterr().out
+
+
+
+def test_invalid_inspector_can_revalidate_existing_products_without_rerun(tmp_path, capsys):
+    """Restored login dependency must not force a second successful scientific job."""
+    config = case(tmp_path)
+    assert call("mpas", "prepare", config) == 0
+    assert call("mpas", "run", config) == 0
+    capsys.readouterr()
+    state_file = (
+        tmp_path / "results" / ".platform"
+        / "20250901T000000Z" / "mpas-mpas" / "state.json"
+    )
+    assert state_file.is_file()
+    state = json.loads(state_file.read_text())
+    assert state["state"] == "finished"
+    assert len(state["attempts"]) == 1
+    state.update(state="invalid", validation_error="[Errno 2] ncdump missing")
+    state_file.write_text(json.dumps(state))
+    assert call("mpas", "validate", config) == 0, capsys.readouterr().out
+    recovered = json.loads(state_file.read_text())
+    assert recovered["state"] == "validated"
+    assert "validation_error" not in recovered
+    assert len(recovered["attempts"]) == 1
+    assert recovered.get("revalidated_at")
