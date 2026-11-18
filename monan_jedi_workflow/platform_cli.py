@@ -134,11 +134,13 @@ def inspect_native(op, request, directory):
                 products = {
                     Path(value).resolve() for value in converter["outputs"]
                 }
+                # Inspectors validate *products* after execution. They are not
+                # scientific converter inputs, and their executable may change
+                # from ncdump to the packaged Python fallback between login
+                # environments. Tracking that tool as an input would reject
+                # revalidation of otherwise unchanged converted products.
+                # The inspector specification itself is tracked by op.identity.
                 commands = [converter["argv"]]
-                commands += [
-                    _render_inspection(run, converter, Path(output))["argv"]
-                    for output in converter["outputs"]
-                ]
                 for command in commands:
                     for argument in command:
                         path = Path(argument)
