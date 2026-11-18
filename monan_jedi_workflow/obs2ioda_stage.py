@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -328,8 +329,21 @@ def _render_inspection(run: Obs2IODARun, converter: dict[str, Any], output: Path
     )
     if any(not isinstance(item, str) or not item for item in markers):
         raise StageConfigurationError("Obs2IODA header markers must be non-empty strings.")
+    command = _render_argv(
+        argv, {**run.context, "output": str(output)}, "obs2ioda inspection.argv"
+    )
+    # The packaged reference recipe historically uses 'ncdump -h'. A clean
+    # Python installation does not necessarily expose that Spack executable
+    # on the login PATH. Only for that exact conventional inspection, fall
+    # back to the installed netCDF4 Python API, which reads real IODA groups.
+    # Do not override custom inspection commands or explicit ncdump paths.
+    if (
+        len(command) == 3 and command[:2] == ["ncdump", "-h"]
+        and shutil.which("ncdump") is None
+    ):
+        command = [sys.executable, "-m", "monan_jedi_workflow.ioda_header", command[2]]
     return {
-        "argv": _render_argv(argv, {**run.context, "output": str(output)}, "obs2ioda inspection.argv"),
+        "argv": command,
         "required_header_markers": markers,
         "timeout_seconds": _timeout(local_cfg.get("timeout_seconds", global_cfg.get("timeout_seconds")), "obs2ioda inspection.timeout_seconds", 60),
     }
@@ -621,6 +635,16 @@ def validate_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
                 stderr_path.write_text(error.stderr or "", encoding="utf-8")
                 record.update({"valid": False, "problem": "inspection timeout"})
                 problems.append(f"{name}: IODA inspection timed out for {output}")
+            except OSError as error:
+                # Persist failure in the scientific validation report rather
+                # than aborting without an obs2ioda-validation.json artifact.
+                stderr_path.write_text(str(error) + "\\n", encoding="utf-8")
+                record.update({
+                    "valid": False, "problem": f"inspector unavailable: {error}",
+                    "inspection_argv": inspection["argv"],
+                    "inspection_stderr": str(stderr_path),
+                })
+                problems.append(f"{name}: IODA inspector unavailable: {error}")
             records.append(record)
     report = {"schema_version": 2, "validated_at": _timestamp(), "cycle_time": run.cycle.cycle_time, "cycle_id": run.cycle.cycle_id, "plan_sha256": manifest.get("plan_sha256"), "valid": not problems, "records": records, "problems": problems}
     report_path = run.manifest_path.with_name("obs2ioda-validation.json")
