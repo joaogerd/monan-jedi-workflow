@@ -321,18 +321,30 @@ def operate(request):
                 raise RuntimeError("inputs changed after execution")
             if state["state"] not in {"finished", "validated"}:
                 if state["state"] == "invalid":
-                    from .platform_backend import native_functions
+                    # Only validation failed, not conversion/execution. Recheck
+                    # the existing products using the current inspector; do not
+                    # rerun a successful PBS job or discard provenance.
                     _, _, validate_again = native_functions(op.key)
                     try:
-                        validate_again(directory / "configuration", request.cycle)
+                        report = validate_again(directory / "configuration", request.cycle)
                     except Exception as error:
+                        state["validation_error"] = str(error)
+                        state["validation_failed_at"] = now()
+                        atomic_json(state_path, state)
                         raise RuntimeError(
-                            f"Previous scientific validation failed: {error}"
+                            f"Scientific revalidation of existing products failed: {error}"
                         ) from error
-                    raise RuntimeError(
-                        "Previous validation was marked invalid; inspect scientific "
-                        "logs and existing operation status before retrying"
+                    state["products"] = records(
+                        product_paths(op, request, directory / "configuration")
                     )
+                    state.update(
+                        state="validated", validation=str(report),
+                        revalidated_at=now()
+                    )
+                    state.pop("validation_error", None)
+                    state.pop("validation_failed_at", None)
+                    atomic_json(state_path, state)
+                    return state
                 raise RuntimeError(
                     f"validate requires a completed run; current state={state['state']}"
                 )
