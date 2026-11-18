@@ -172,7 +172,7 @@ def test_missing_ncdump_error_is_not_hidden_by_converter_warnings(tmp_path):
     logs = run / "logs"
     logs.mkdir(parents=True)
     (logs / "converter.stdout.log").write_text(
-        "Warning: ./gnssro.bufr not found for decoding...\\n"
+        "Warning: ./gnssro.bufr not found for decoding...\n"
     )
     state = root / ".platform" / "20260130T000000Z" / "obs-convert" / "state.json"
     state.parent.mkdir(parents=True)
