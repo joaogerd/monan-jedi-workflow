@@ -137,7 +137,9 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
             ids.add(record["job_id"])
         if ("missing_log_markers" in record or "missing_outputs" in record
                 or record.get("valid") is False):
-            if task and task.lower() not in str(path).lower():
+            if task and re.sub(r"[._-]+", "-", task.casefold()) not in re.sub(
+                r"[._-]+", "-", str(path).casefold()
+            ):
                 continue
             if (record.get("valid") is False or record.get("missing_log_markers")
                     or record.get("missing_outputs")):
@@ -146,9 +148,18 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
                                 "missing_log_markers": record.get("missing_log_markers", []),
                                 "valid": record.get("valid")})
     if task:
-        states = [item for item in states if task.lower() in (
-            item["operation"] + " " + item["cycle"] + " " + item["path"]
-        ).lower()]
+        # Public operation names use dots (obs.convert, mpas.init), whereas
+        # persisted state directories use hyphens (obs-convert, mpas-init).
+        # Normalize both before filtering; never suppress an existing failure.
+        def normalize(value: str) -> str:
+            return re.sub(r"[._-]+", "-", value.casefold())
+        wanted = normalize(task)
+        states = [
+            item for item in states
+            if wanted in normalize(
+                item["operation"] + " " + item["cycle"] + " " + item["path"]
+            )
+        ]
         ids = {item["job_id"] for item in reports if item.get("job_id")}
     jobs = [_pbs(job) if query_pbs else {"job_id": job, "available": False,
                                          "detail": "Consulta PBS desativada."}
