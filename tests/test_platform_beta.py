@@ -100,15 +100,28 @@ def test_domain_subset_does_not_load_jedi(tmp_path, capsys):
     assert call("mpas", "check", config) == 0
 
 
-def test_pbs_worker_cannot_run_on_login(tmp_path, monkeypatch, capsys):
+def test_pbs_submission_error_is_reported_without_contacting_scheduler(
+    tmp_path, monkeypatch, capsys
+):
+    # Login-side orchestration is allowed to submit PBS jobs. This regression
+    # test must NEVER submit to a real scheduler (especially on JACI).
+    import subprocess
+    import monan_jedi_workflow.mpas_stage as mpas_stage
     config = case(tmp_path)
     data = yaml.safe_load(config.read_text())
     data["site"] = {"execution": {"mode": "pbs"}}
     write(config, data)
     monkeypatch.delenv("PBS_JOBID", raising=False)
+    submitted = []
+    def failed_qsub(argv, **kwargs):
+        assert argv[0] == "qsub"
+        submitted.append(argv)
+        return subprocess.CompletedProcess(argv, 170, "", "test-only qsub failure")
+    monkeypatch.setattr(mpas_stage.subprocess, "run", failed_qsub)
     assert call("mpas", "prepare", config) == 0
     assert call("mpas", "run", config) != 0
-    assert "PBS" in capsys.readouterr().out
+    assert submitted
+    assert "qsub failed" in capsys.readouterr().out
 
 
 def test_source_file_paths_are_relative_to_declaring_file(tmp_path, capsys):
@@ -763,11 +776,15 @@ def test_invalid_inspector_can_revalidate_existing_products_without_rerun(tmp_pa
     assert call("mpas", "prepare", config) == 0
     assert call("mpas", "run", config) == 0
     capsys.readouterr()
-    state_file = (
-        tmp_path / "results" / ".platform"
-        / "20250901T000000Z" / "mpas-mpas" / "state.json"
-    )
-    assert state_file.is_file()
+    # Resolve from the operation configuration rather than guessing where
+    # experiment.destination is rooted; the platform owns this state path.
+    from monan_jedi_workflow.platform_config import load_operation
+    from monan_jedi_workflow.platform_cli import location
+    from monan_jedi_workflow.domain_cli import parse_request
+    request = parse_request("mpas", ["status", str(config), "--cycle", T])
+    op = load_operation(request)
+    state_file = location(op, request) / "state.json"
+    assert state_file.is_file(), state_file
     state = json.loads(state_file.read_text())
     assert state["state"] == "finished"
     assert len(state["attempts"]) == 1
