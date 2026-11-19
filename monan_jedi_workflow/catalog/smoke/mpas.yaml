@@ -1,0 +1,31 @@
+# Artificial fixture. Real external-analysis initialization uses the native mpas_init schema.
+mpas:
+  variables:
+    python: python3
+  run_dir: mpas/{cycle_id}
+  lead_hours: 6
+  links:
+    - source: '{experiment_root}/jedi/{cycle_id}/analysis.nc'
+      target: initial.nc
+  pbs:
+    queue: test
+    walltime: '00:01:00'
+    mpiprocs: 1
+    command: ['{python}', '{configuration_root}/simulate.py', forecast]
+  validation:
+    log: stdout.log
+    required_log_markers: ['MPAS complete']
+    required_outputs: [state.nc]
+mpas_init:
+  variables:
+    python: python3
+  run_dir: initialization/{cycle_id}
+  pbs:
+    queue: test
+    walltime: '00:01:00'
+    mpiprocs: 1
+    command: ['{python}', '{configuration_root}/simulate.py', init]
+  validation:
+    log: stdout.log
+    required_log_markers: ['MPAS complete']
+    required_outputs: ['{experiment_root}/initialization/{cycle_id}/state.nc']

@@ -70,7 +70,8 @@ from typing import Any
 
 from .analysis_cycle import analysis_cycle_context
 from .cycle_context import CycleContext, parse_cycle_time
-from .pbs_directives import pbs_header_lines
+from .pbs_directives import pbs_header_lines, pbs_runtime_library_lines, pbs_linker_preflight_lines
+from .scientific_environment import render_native_site_setup
 from .scheduler import PBSError, query
 from .stage_config import (
     StageConfigurationError,
@@ -928,10 +929,13 @@ def _render_pbs(run: JEDIRun) -> None:
         "",
         "set -euo pipefail",
         f"cd {shlex.quote(str(run.run_dir))}",
+        *render_native_site_setup(pbs, config_dir=run.config_dir),
         *bootstrap_lines,
         *setup_lines,
         *exports,
+        *(pbs_runtime_library_lines() if not pbs.get("site_config") else []),
         "ulimit -s unlimited || true",
+        *pbs_linker_preflight_lines(render_text(command[0], run.context, label="pbs.command executable")),
         (
             f"{shlex.quote(launcher)} -n {mpiprocs} {rendered_command} "
             f"> {shlex.quote(stdout)} 2> {shlex.quote(stderr)}"
@@ -1217,7 +1221,9 @@ def validate_jedi(config_dir: Path, cycle_time: str) -> Path:
     run = load_jedi_run(config_dir, cycle_time)
     manifest = _read_submission_manifest(run)
     job_id = manifest.get("job_id")
-    if not isinstance(job_id, str) or not job_id:
+    if manifest.get("worker_completed") is not True and (
+        not isinstance(job_id, str) or not job_id
+    ):
         raise JEDIValidationError(
             "JEDI validation requires a submitted job manifest."
         )
@@ -1333,3 +1339,4 @@ def validate_jedi(config_dir: Path, cycle_time: str) -> Path:
 
     print(f"[OK] validated JEDI analysis cycle: {run.validation_path}")
     return run.validation_path
+

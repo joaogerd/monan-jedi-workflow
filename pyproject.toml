@@ -4,21 +4,33 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monan-jedi-workflow"
-version = "0.2.0"
+version = "0.3.0b1"
 description = "Python-first workflow for reproducible MONAN MPAS-JEDI experiments."
 requires-python = ">=3.10"
 dependencies = [
   "PyYAML>=6.0",
   "numpy>=1.24",
   "netCDF4>=1.6",
+  "simpleworkflow @ git+https://github.com/joaogerd/simpleWorkflow.git@b38733cb77950810a510d22cd96a999b53150f95",
 ]
 
 [project.optional-dependencies]
+plots = ["matplotlib>=3.7"]
+orchestration = []  # compatibility: orchestration is now part of the core package
 dev = [
   "pytest>=8.0",
 ]
 
 [project.scripts]
+experiment = "monan_jedi_workflow.command_entrypoints:experiment"
+wps = "monan_jedi_workflow.command_entrypoints:wps"
+diagnostic = "monan_jedi_workflow.command_entrypoints:diagnostic"
+diagnose = "monan_jedi_workflow.command_entrypoints:diagnose"
+obs = "monan_jedi_workflow.platform_cli:obs"
+jedi = "monan_jedi_workflow.platform_cli:jedi"
+mpas = "monan_jedi_workflow.platform_cli:mpas"
+diagnostics = "monan_jedi_workflow.platform_cli:diagnostics"
+campaign = "monan_jedi_workflow.platform_cli:campaign"
 monan-jedi-workflow = "monan_jedi_workflow.cli_frontend:main"
 monan-jedi-mpas = "monan_jedi_workflow.cli_mpas:main"
 
@@ -28,3 +40,7 @@ exclude = ["configs*", "tests*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+
+[tool.setuptools.package-data]
+monan_jedi_workflow = ["catalog/**/*"]

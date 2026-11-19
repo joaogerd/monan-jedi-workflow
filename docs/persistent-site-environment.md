@@ -1,0 +1,143 @@
+## Clean installation contract
+
+From a new Python 3.11 Conda environment, clone the workflow repository and
+run `python -m pip install .`. This standard installation now includes
+`simpleWorkflow` pinned to the verified Git commit
+`b38733cb77950810a510d22cd96a999b53150f95`, which provides the
+`swf` executable used by `experiment plan/validate/run`.
+
+An internet connection or a reachable Git server is required to install this
+dependency from its source until the dependency is published on a trusted
+package index. The software must not be claimed to install offline.
+
+After installation, test from outside the source checkout:
+
+```bash
+cd /tmp
+python -m pip check
+python -m pip show monan-jedi-workflow simpleworkflow
+command -v experiment
+command -v swf
+swf --help
+python -c "import monan_jedi_workflow; print(monan_jedi_workflow.__file__)"
+```
+
+The import location must be the new environment's `site-packages`.
+Merely running `import monan_jedi_workflow` in the clone is not a
+valid installed-package test because Python imports the source tree.
+
+# First-use JACI onboarding and persistent site profile
+
+**New users must not need a prior experiment or pre-existing site.yaml.**
+
+The initial `experiment create` now tries to bootstrap the workspace profile
+automatically from the installed MONAN-JEDI ecosystem contract v2, the one
+available spack-stack installation, and real scientific data paths. It saves
+`/p/projetos/<group>/<user>/site.yaml` once, and uses it to generate both
+the case's scientific `science/site.yaml` and its `environment.sh`.
+
+## Start in a clean JACI login terminal
+
+```bash
+conda activate monan-jedi
+experiment create /p/projetos/monan_das/$USER/work/test-new-date \
+  --start 2026-01-30T00:00:00Z --mode cold
+cd /p/projetos/monan_das/$USER/work/test-new-date
+source ./environment.sh
+experiment check campaign.yaml
+```
+
+If the workspace contains **exactly one** valid spack-stack and the installed
+MONAN-JEDI prefix, its runtime manifest, and all input roots exist, no
+additional steps are necessary.
+
+If multiple stacks exist, `experiment create` lists candidates, refuses to
+select silently, and creates **no experiment directory**. Select the installed
+runtime once, using actual paths reported by the tool:
+
+```bash
+cd /p/projetos/monan_das/$USER
+experiment site init --stack /p/.../work/SELECTED-STACK/spack-stack
+experiment create /p/projetos/monan_das/$USER/work/test-new-date \
+  --start 2026-01-30T00:00:00Z
+```
+
+If the MONAN-JEDI install is not at the documented default, add
+`--install /path/to/installed/monan-jedi` to `experiment site init`.
+No paths are fabricated, and the command refuses to overwrite an existing
+profile. If scientific input directories are absent, the error identifies
+each missing root rather than silently creating fake directories.
+
+For a non-standard JACI layout, a verified, existing site profile may be
+passed via `experiment create ... --site /absolute/site.yaml`.
+
+The v2 producer manifest is authoritative for the JACI setup script,
+module tree and module identity. `science/site.yaml` describes the
+runtime selected for PBS jobs. `environment.sh` exports the same paths
+in a fresh login shell. It does not attempt to execute scientific modules
+inside a Conda controller.
+
+Successful experiments from 2024, 2025 and 2026 are not modified or
+rewritten by this onboarding flow.
+
+Regression tests:
+
+```bash
+python -m pytest tests/test_site_profile_persistence.py \
+  tests/test_unified_cli.py tests/test_experiment_start.py \
+  tests/test_scientific_environment.py -q
+```
+
+## First-time interactive installation test
+
+After installing the Python package, with **no previously loaded scientific
+shell variables** and no workspace `site.yaml`, run:
+
+```bash
+unset STACK_ROOT MONAN_JEDI_INSTALL_ROOT MONAN_MESH_ROOT MONAN_PHYSICS_ROOT
+unset MONAN_BMATRIX_ROOT MONAN_INPUT_ROOT MONAN_GFS_ROOT MONAN_LIBFABRIC_ROOT
+experiment create /p/projetos/monan_das/$USER/work/fresh-first-run \
+  --start 2026-01-30T00:00:00Z --mode cold
+```
+
+If there are two verified stacks, the interactive terminal asks the user to
+choose 1 or 2. For missing but mandatory roots, it asks for the **existing**
+directory. It rejects nonexistent paths, so package installation alone cannot
+be mistaken for a complete HPC scientific runtime installation.
+
+A successful setup records the chosen verified runtime in a persistent
+`site.yaml`, generates a case-specific `science/site.yaml` and
+`environment.sh`, and needs no prior experiment. New terminals reuse the
+site profile automatically.
+
+
+## Isolated first-user test without touching the primary JACI profile
+
+A new Conda environment alone does not isolate
+`/p/projetos/<group>/<user>/site.yaml`.
+The new `experiment create --workspace DIRECTORY` flag selects an **existing**
+site-profile directory. It does not relocate, duplicate, or manufacture any
+scientific installation or data. Runtime discovery continues under the
+authorized user's real JACI project tree.
+
+```bash
+mkdir -p /p/projetos/monan_das/$USER/onboarding-test
+unset STACK_ROOT MONAN_JEDI_INSTALL_ROOT MONAN_MESH_ROOT MONAN_PHYSICS_ROOT
+unset MONAN_BMATRIX_ROOT MONAN_INPUT_ROOT MONAN_GFS_ROOT MONAN_LIBFABRIC_ROOT
+
+experiment create \
+  /p/projetos/monan_das/$USER/onboarding-test/experiments/first-experiment \
+  --workspace /p/projetos/monan_das/$USER/onboarding-test \
+  --start 2026-01-30T00:00:00Z
+```
+
+On first use, if more than one valid stack exists, the terminal asks the
+user to select one. It then writes
+`onboarding-test/site.yaml` and generates the case-local settings.
+The original `/p/projetos/<group>/<user>/site.yaml` is neither read nor
+modified. Subsequent experiments with the same `--workspace` reuse that
+isolated profile.
+
+A workspace outside the user's project or one that does not yet exist
+is rejected with a clear error. This option does **not** constitute
+isolation from installed JACI libraries/data or a separate OS account.
