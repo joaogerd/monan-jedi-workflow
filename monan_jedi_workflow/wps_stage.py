@@ -159,6 +159,25 @@ def _load_manifest(run: WPSRun) -> dict[str, Any]:
 def prepare_wps(config_dir: Path, cycle_time: str) -> WPSRun:
     """Acquire configured GFS if absent, then prepare WPS without compute Python."""
     run = load_wps_run(config_dir, cycle_time)
+    # A repeated preparation must never remove already-produced GFS:* files,
+    # overwrite a previously validated manifest, or silently attempt to reuse
+    # an existing native PBS job. In particular, do this before acquisition,
+    # _clean(), template writes or _write_manifest().
+    previous_validation = run.manifest_path.with_name("wps-validation.json")
+    native_script = run.work_dir / f"wps_{run.cycle.cycle_id}.native.pbs"
+    if run.manifest_path.exists() or previous_validation.exists() or native_script.exists():
+        evidence = [
+            str(path) for path in (run.manifest_path, previous_validation, native_script)
+            if path.exists()
+        ]
+        raise FileExistsError(
+            "WPS initialization already has persistent state; refusing a "
+            "second preparation because it may delete scientific outputs. "
+            f"Cycle: {run.cycle.cycle_time}. Existing: {', '.join(evidence)}. "
+            "Inspect original PBS job, manifest, and validation; never "
+            "remove these files merely to make a rerun succeed. Use a "
+            "separate experiment for intentional scientific reinitialization."
+        )
     acquisition = _mapping(run.config.get("acquisition", {}), "wps.acquisition")
     if acquisition:
         from .input_acquisition import ensure_input
