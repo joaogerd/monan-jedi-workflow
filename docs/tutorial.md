@@ -67,21 +67,113 @@ bash manual.sh experiment.yaml 2025-09-01T00:00:00Z
 
 O script registra `manual-test.log` e só imprime `TODOS OS 5 TESTES PASSARAM` se os cinco aplicativos artificiais passarem em `prepare/run/validate/status`. Não reaproveite esse diretório para ciência.
 
-## 3. Preparar um workspace científico
+## 3. Entender os diretórios e preparar seu workspace
 
-Os exemplos a seguir são **variáveis a configurar no seu ambiente**, não caminhos obrigatórios do software:
+Antes de executar o primeiro experimento, é importante diferenciar **onde o programa está instalado**, **onde o usuário trabalha** e **onde ficam os resultados de cada experimento**. Esses três locais têm funções distintas. Não é necessário copiar a organização de diretórios do desenvolvedor.
+
+### 3.1. Três conceitos diferentes
+
+| Conceito | O que é | Quem define |
+| --- | --- | --- |
+| **Instalação do software** | O código e os comandos `experiment`, `obs`, `jedi`, `mpas` e `swf`, disponíveis no ambiente Python/Conda | Instalação feita na seção 2 |
+| **Workspace** | Pasta-base do usuário, na qual podem existir configurações compartilhadas do site e **vários experimentos** | O usuário, pelo argumento `--workspace` |
+| **Experimento (case)** | Uma execução específica, com seus YAMLs, trabalhos, produtos, logs e estado do orquestrador | O usuário, pelo primeiro argumento de `experiment create` |
+
+O software pode estar instalado no ambiente Conda do usuário, enquanto o workspace e os resultados ficam em `/p`. Os dados externos (GFS, observações, malha, matriz B, física) também podem estar em diretórios **compartilhados**, fora do workspace. Não é preciso nem recomendável duplicá-los em cada experimento.
+
+Em computadores diferentes da JACI, a convenção de caminhos pode ser outra. `/p/projetos/...` é um **exemplo de armazenamento da JACI**, não uma exigência da interface MONAN-JEDI.
+
+### 3.2. Escolher seu diretório de trabalho
+
+Neste tutorial usaremos duas variáveis de shell que **não são obrigatórias para o software**: `WORKSPACE` e `CASE`. Elas apenas facilitam digitar caminhos longos sem erros.
 
 ```bash
-# Edite conforme seu grupo e usuário; diretórios em /p são exemplos JACI.
+# Exemplo ilustrativo: substitua pelos diretórios autorizados para sua conta.
 export WORKSPACE=/p/projetos/SEU_GRUPO/SEU_USUARIO/monan-jedi
-export CASE="$WORKSPACE/experiments/primeiro-experimento"
 
+# Uma pasta para UM experimento. O nome é livre e deve ser descritivo.
+export CASE="$WORKSPACE/experiments/primeiro-experimento"
+```
+
+O que cada linha significa?
+
+- `export WORKSPACE=...` guarda o **caminho da pasta principal** na variável `WORKSPACE`, tornando-o disponível para os comandos seguintes. Não cria a pasta, não instala nada e não ativa o modelo.
+- `export CASE="$WORKSPACE/experiments/primeiro-experimento"` monta o **caminho completo de um experimento**. `$WORKSPACE` é substituído pelo valor definido acima. As aspas preservam o caminho como um único argumento.
+- `SEU_GRUPO` e `SEU_USUARIO` são **marcadores para substituir**, não palavras que devem ser digitadas literalmente.
+
+Por exemplo, se a pasta de trabalho autorizada for `/p/projetos/grupo_exemplo/usuario_exemplo/monan-jedi`, a variável `CASE` será:
+
+```text
+/p/projetos/grupo_exemplo/usuario_exemplo/monan-jedi/experiments/primeiro-experimento
+```
+
+Use `echo` para conferir os caminhos **antes de criar arquivos**:
+
+```bash
+echo "$WORKSPACE"
+echo "$CASE"
+```
+
+Se a saída ainda contiver `SEU_GRUPO` ou `SEU_USUARIO`, pare e corrija o exemplo.
+
+### 3.3. Criar somente a pasta que organizará os experimentos
+
+```bash
 mkdir -p "$WORKSPACE/experiments"
 ```
 
-O workspace precisa dispor do `site.yaml` validado com o ambiente científico e as variáveis que apontam para os recursos compartilhados. No onboarding já configurado, `experiment create --workspace` reutiliza esse perfil. Em uma instalação sem perfil, consulte `experiment site init --help` e valide o `site.yaml` gerado **antes de criar o caso**. Consulte também [primeiro experimento na JACI](first-experiment.md) e [configuração do ambiente](configuration/campaign.md).
+- `mkdir` cria diretórios.
+- `-p` cria também os diretórios intermediários, quando necessário, e não falha se a pasta já existir.
+- **Este comando não cria o experimento** e não executa nenhuma tarefa científica. Ele prepara apenas o local onde o `experiment create` irá trabalhar.
+- É necessário ter permissão de escrita no local escolhido. Se houver erro de permissão, use um caminho autorizado; não altere permissões dos diretórios compartilhados da instituição.
 
-A receita científica de referência utiliza resolução, malha, partição e parâmetros declarados nos YAML gerados. Eles são **exemplos específicos da receita**, não valores embutidos que devam ser copiados para outras resoluções.
+Para confirmar:
+
+```bash
+test -d "$WORKSPACE/experiments" && echo "[OK] Pasta de experimentos encontrada"
+test -w "$WORKSPACE/experiments" && echo "[OK] Pasta permite escrita"
+```
+
+### 3.4. Como ficará a organização
+
+```text
+monan-jedi/                      <- WORKSPACE: pasta-base do usuário
+├── site.yaml                    <- perfil do ambiente científico (se configurado)
+└── experiments/
+    ├── primeiro-experimento/    <- CASE 1: criado por experiment create
+    │   ├── environment.sh
+    │   ├── experiment.yaml
+    │   ├── campaign.yaml
+    │   ├── science/
+    │   ├── work/                <- produtos e logs científicos da execução
+    │   └── .simpleworkflow/     <- estado/histórico após iniciar o workflow
+    ├── teste-3dias/             <- outro experimento, independente
+    └── teste-7dias/             <- outro experimento, independente
+```
+
+A árvore acima representa a **organização conceitual**. Alguns arquivos e diretórios só aparecem depois da criação ou da execução; o programa também pode gerar outros YAMLs e pastas auxiliares.
+
+O nome `primeiro-experimento` **não tem significado científico especial**. Pode ser `teste-20260130`, `3dvar-controle` ou outro nome. Em cada novo experimento, escolha um caminho de destino que **ainda não exista**: `experiment create` não deve sobrescrever uma execução anterior.
+
+### 3.5. Qual a diferença entre `site.yaml` e `environment.sh`?
+
+O `site.yaml` descreve os **recursos do ambiente** que novos experimentos desse workspace podem reutilizar: caminhos para instalações e dados, bibliotecas e configurações específicas do local. Já o `environment.sh` é produzido **dentro de cada experimento** e deve ser carregado com `source ./environment.sh` antes dos comandos científicos.
+
+A pasta existir não significa que o ambiente científico esteja pronto. Antes de executar `experiment create --workspace "$WORKSPACE"`, confirme que o workspace dispõe de um `site.yaml` revisado e apropriado ao seu ambiente. Caso seja uma instalação nova, consulte `experiment site init --help`, verifique os caminhos descobertos e valide a configuração **antes da primeira submissão**. Consulte também [primeiro experimento na JACI](first-experiment.md).
+
+Os valores científicos da receita de referência (resolução, malha, número de processos, física e matriz B) são parâmetros de **um caso específico**, não valores universais do software.
+
+### 3.6. Perguntas frequentes
+
+**Preciso criar um workspace novo para cada experimento?** Não. Um mesmo workspace pode conter vários experimentos independentes, cada um com sua própria pasta.
+
+**Posso escolher outro nome ou outro local?** Sim, desde que a conta tenha acesso aos dados científicos necessários e permissão para gravar os resultados. O argumento `--workspace` aponta para a pasta-base, e o primeiro argumento de `experiment create` aponta para a pasta do experimento.
+
+**Preciso mover o repositório do software para dentro do workspace?** Não. A instalação e a área de resultados são independentes.
+
+**`mkdir -p` já roda o MONAN/MPAS/JEDI?** Não. Ele apenas cria uma pasta. A ciência só começa posteriormente, quando o usuário aprova o plano e executa `experiment run`.
+
+**Posso reutilizar o nome de um experimento antigo?** Não para criar um caso novo no mesmo destino. Preserve o histórico e escolha outro nome. Para continuar uma execução já existente, use sua pasta original e o estado persistido, observando as regras de retomada da seção 7.
 
 ## 4. Criar o primeiro experimento científico — dois ciclos
 
