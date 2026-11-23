@@ -1,6 +1,6 @@
 # Perfis computacionais independentes da máquina — contrato v1
 
-> **Estado:** primeira etapa da refatoração `refactor/machine-independent-site-config`. O parser, os exemplos e a validação do perfil existem; **a criação e a execução de experimentos ainda utilizam o caminho legado `site.yaml`**. Nenhuma etapa científica foi migrada. Este documento descreve o que já foi implementado e explicita o que falta.
+> **Estado:** integração opt-in implementada para perfis **PBS completos**. `experiment create --machine` traduz o perfil computacional para o contrato legado de PBS, preservando os geradores científicos. **Execução local/Slurm ainda não foi implementada**; a JACI continua sendo a referência científica validada.
 
 ## Objetivo
 
@@ -66,15 +66,32 @@ experiment machine validate --help
 - `WORKSPACE/site.yaml`: perfil persistente atualmente consumido por `experiment create`; continua sendo a fonte da execução JACI atual.
 - `CASE/science/site.yaml`: configuração derivada do caso para scripts científicos e PBS.
 
-**Não passe `machine.yaml` em `experiment create --site` neste estágio:** ele ainda espera a estrutura legada `site/stack/jedi/environment` e faria validação incompatível.
+**Não passe `machine.yaml` em `experiment create --site`:** esse argumento continua esperando o contrato legado `site/stack/jedi/environment`.
+
+### Criar um experimento usando o novo perfil PBS
+
+Após preencher **todos** os caminhos de `configs/sites/jaci/machine.yaml.example` com os locais reais, copie o arquivo para um local de configuração pessoal, e teste sem interferir nos experimentos em execução:
+
+```bash
+# Os exemplos devem ser configurados antes da verificação de existência.
+python -m monan_jedi_workflow.unified_cli experiment machine validate \
+  /caminho/para/meu-machine.yaml --check-paths
+
+python -m monan_jedi_workflow.unified_cli experiment create \
+  /caminho/para/novo-experimento   --machine /caminho/para/meu-machine.yaml   --start 2026-01-30T00:00:00Z
+```
+
+A execução exige que o manifesto MONAN-JEDI v2 e o setup de módulos selecionado correspondam ao perfil. A seleção de diretórios `mesh_root`/`bmatrix_root` **não muda o método científico nem escolhe automaticamente uma resolução**. Em vez de modificar `site.yaml` existente, o gerador grava `machine-profile-lock.yaml` no novo caso para registrar a configuração computacional resolvida.
+
+**Limitação:** enquanto os estágios científicos ainda gerarem PBS, o novo `--machine` aceita somente `execution.backend: pbs` com `environment.kind: modules` e os caminhos exigidos pelo runtime atual. Perfis `local` e `slurm` são válidos para inspeção, mas a tentativa de criar um caso científico com esses backends falha **antes de gerar arquivos**. Os recursos computacionais de WPS e Obs2IODA ainda possuem defaults PBS específicos da JACI no gerador legado; a externalização completa desses recursos faz parte da próxima etapa.
 
 ## Critérios para a próxima etapa
 
-1. Definir o adaptador do novo perfil ao contrato de runtime, sem substituir caminhos científicos nem alterar receitas.
-2. Introduzir `experiment create --machine` como seleção explícita, mantendo `--site` em compatibilidade.
-3. Gerar `environment.sh` e `science/site.yaml` a partir do perfil normalizado.
-4. Implementar a execução local científica apenas após separar a camada de execução PBS (hoje gerada em `experiment_start.py`).
-5. Validar no laptop sem PBS/Spack e **comparar a JACI com o baseline científico existente** (scripts PBS, links e outputs), evitando mudanças durante campanhas ativas.
-6. Registrar proveniência: perfil original, configuração resolvida, versão e hashes.
+1. **Feito no código (a validar em CI/JACI):** adaptar perfis PBS completos ao runtime legado sem alterar a ciência.
+2. **Feito:** permitir `experiment create --machine`, mantendo `--site` compatível.
+3. **Feito para PBS:** gerar `environment.sh`, `science/site.yaml` e `machine-profile-lock.yaml`; teste de equivalência YAML adicionado.
+4. **Pendente:** retirar filas e recursos WPS/Obs2IODA do criador científico, usando exclusivamente o perfil de execução.
+5. **Pendente:** implementar e testar backend `local` real para WPS/MPAS/JEDI/Obs2IODA, sem gerar PBS.
+6. **Pendente:** validar na JACI o caso completo contra o baseline, com hashes e resultados científicos; não modificar campanhas em execução.
 
 A introdução do parser não constitui homologação da portabilidade da execução científica.
