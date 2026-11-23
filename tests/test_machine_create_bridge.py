@@ -56,8 +56,24 @@ def machine_document(paths, setup):
             **paths,
             "work_root": str(Path(paths["installation_root"]).parent),
         },
-        "execution": {"backend": "pbs", "queue": "pesqmidi",
-                      "walltime": "01:00:00"},
+        "execution": {"backend": "pbs",
+                      "stages": {
+                          "jedi": {"queue": "pesqmini", "walltime": "00:30:00",
+                                   "select": 1, "ncpus": 128, "mpiprocs": 128,
+                                   "launcher": "/opt/cray/pals/1.6/bin/mpiexec"},
+                          "mpas": {"queue": "pesqmidi", "walltime": "01:00:00",
+                                   "select": 1, "ncpus": 128, "mpiprocs": 128,
+                                   "launcher": "/opt/cray/pals/1.6/bin/mpiexec"},
+                          "mpas_init": {"queue": "pesqmini", "walltime": "00:30:00",
+                                   "select": 1, "ncpus": 128, "mpiprocs": 128,
+                                   "launcher": "/opt/cray/pals/1.6/bin/mpiexec"},
+                          "wps": {"queue": "pesqmini", "walltime": "00:30:00",
+                                   "select": 1, "ncpus": 1, "mpiprocs": 1,
+                                   "launcher": "mpiexec"},
+                          "obs2ioda": {"queue": "pesqmidi", "walltime": "01:00:00",
+                                   "select": 1, "ncpus": 1, "mpiprocs": 1,
+                                   "launcher": "mpiexec"},
+                      }},
         "environment": {"kind": "modules", "setup": str(setup)},
     }
 
@@ -135,6 +151,44 @@ def test_cli_machine_pbs_creates_case(tmp_path, capsys):
                         "--start", "2026-01-30T00:00:00Z"]) == 0
     assert (case / "machine-profile-lock.yaml").is_file()
     assert yaml.safe_load((case / "science/site.yaml").read_text())["site"]["name"] == "test"
+
+
+def test_machine_stage_resources_override_jaci_recipe_defaults(tmp_path):
+    paths, setup = fake_runtime(tmp_path)
+    document = machine_document(paths, setup)
+    document["execution"]["stages"]["mpas"]["queue"] = "customqueue"
+    document["execution"]["stages"]["mpas"]["walltime"] = "03:00:00"
+    document["execution"]["stages"]["mpas"]["ncpus"] = 16
+    document["execution"]["stages"]["mpas"]["mpiprocs"] = 16
+    document["execution"]["stages"]["mpas"]["launcher"] = "/custom/mpi"
+    document["execution"]["stages"]["wps"]["queue"] = "wq"
+    document["execution"]["stages"]["obs2ioda"]["queue"] = "oq"
+    document["execution"]["stages"]["jedi"]["launcher"] = "/another/mpi"
+    profile = tmp_path / "machine.yaml"
+    profile.write_text(yaml.safe_dump(document))
+    case = tmp_path / "custom-case"
+    create_experiment(case, machine_profile=load_machine_profile(profile, require_existing=True))
+    for file_name in ("science/mpas.yaml", "science/initialization/mpas.yaml"):
+        pbs = yaml.safe_load((case / file_name).read_text())["mpas"]["pbs"]
+        assert (pbs["queue"], pbs["walltime"], pbs["ncpus"], pbs["mpiprocs"]) == (
+            "customqueue", "03:00:00", 16, 16)
+        assert pbs["launcher"] == "/custom/mpi"
+    assert yaml.safe_load((case / "science/jedi.yaml").read_text())["jedi"]["pbs"]["launcher"] == "/another/mpi"
+    assert yaml.safe_load((case / "science/initialization/wps.yaml").read_text())["wps"]["pbs"]["queue"] == "wq"
+    assert yaml.safe_load((case / "science/obs2ioda.yaml").read_text())["obs2ioda"]["pbs"]["queue"] == "oq"
+
+
+def test_missing_stage_policy_fails_before_creating_case(tmp_path):
+    paths, setup = fake_runtime(tmp_path)
+    document = machine_document(paths, setup)
+    del document["execution"]["stages"]["wps"]
+    profile_file = tmp_path / "machine.yaml"
+    profile_file.write_text(yaml.safe_dump(document))
+    machine = load_machine_profile(profile_file, require_existing=True)
+    case = tmp_path / "missing-stage"
+    with pytest.raises(MachineProfileError, match="wps"):
+        create_experiment(case, machine_profile=machine)
+    assert not case.exists()
 
 
 def test_missing_runtime_aborts_before_case_creation(tmp_path):
