@@ -115,6 +115,11 @@ def create_experiment(destination, *, pbs_queue=None, pbs_walltime=None, runtime
             raise ValueError("--machine cannot be combined with --site")
         if workspace is not None:
             raise ValueError("--machine cannot be combined with --workspace yet")
+        if pbs_queue is not None or pbs_walltime is not None:
+            raise ValueError(
+                "--machine defines all PBS resources; edit execution.stages "
+                "in machine.yaml instead of using --pbs-queue/--pbs-walltime"
+            )
         from .machine_profile import MachineProfile, machine_to_legacy_site
         if not isinstance(machine_profile, MachineProfile):
             raise TypeError("machine_profile must be a validated MachineProfile")
