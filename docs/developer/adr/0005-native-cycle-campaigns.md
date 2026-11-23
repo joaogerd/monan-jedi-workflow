@@ -2,7 +2,7 @@
 
 ## Estado
 
-Aceito para a nova interface de campanhas.
+**Proposta arquitetural aprovada como direção, mas NÃO implementada no exportador atual.** Verificação em 23/11/2026: `monan_jedi_workflow/platform_campaign.py` ainda expande `tasks` por ciclo com nomes `c00000`, `c00001` etc. O formato nativo com `cycle` e tamanho estrutural constante descrito abaixo é um **alvo futuro**, não um contrato operacional da beta. Para executar a versão atual consulte [tutorial](../../tutorial.md) e [configuração da campanha](../../configuration/campaign.md).
 
 ## Contexto
 
@@ -27,8 +27,8 @@ O `monan-jedi-workflow` gera um `workflow.yaml` de tamanho estrutural constante:
 
 Os ciclos do `simpleWorkflow` são sequenciais e restart-safe. A publicação do background seguinte pertence ao ciclo produtor; o próximo ciclo só começa depois da conclusão do anterior. Assim JEDI(t+6) não pode anteceder a produção determinística de background(t+6).
 
-## Consequências
+## Consequências esperadas (não implementadas)
 
-O período da campanha deixa de controlar a quantidade estrutural de tarefas. Campanhas de 3 dias, 7 dias, 30 dias e 365 dias possuem o mesmo conjunto de IDs de tarefas; variam somente os limites temporais e o número de instâncias persistidas no estado do executor.
+Após eventual implementação, o período da campanha deixará de controlar a quantidade estrutural de tarefas. Campanhas de 3 dias, 7 dias, 30 dias e 365 dias possuem o mesmo conjunto de IDs de tarefas; variam somente os limites temporais e o número de instâncias persistidas no estado do executor.
 
 A fase inicial exige uma condição inicial MPAS válida anterior ao primeiro horário de análise. Esse é um input científico/site-specific e deve ser validado no preflight; ele não pode ser substituído por um background do primeiro ciclo previamente calculado fora da campanha.
