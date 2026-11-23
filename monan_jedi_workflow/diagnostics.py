@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -118,10 +119,49 @@ def _filenames(root: Path) -> list[Path]:
     return found
 
 
+def _workflow_failure(root: Path, task: str | None = None) -> dict[str, Any] | None:
+    """Report a failed orchestration task without mutating the SQLite state."""
+    database = root / ".simpleworkflow" / "state.sqlite3"
+    if not database.is_file():
+        return None
+    try:
+        with sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True) as db:
+            rows = db.execute(
+                "SELECT task, status, reason, attempt_path FROM task_state "
+                "WHERE UPPER(status) IN ('FAILED', 'INVALID_OUTPUT', 'UNKNOWN') "
+                "ORDER BY updated_at DESC"
+            ).fetchall()
+    except (OSError, sqlite3.Error):
+        return None
+    for name, status, reason, attempt_path in rows:
+        if task and task.casefold() not in name.casefold():
+            continue
+        logs = sorted((root / ".simpleworkflow/runs").glob(
+            f"*/tasks/{name}-*/attempt-*/stderr.log"
+        ), reverse=True)
+        log = next((p for p in logs if p.is_file()), None)
+        raw = _tail(log) if log else ""
+        error = None
+        for line in reversed(raw.splitlines()):
+            try:
+                payload = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(payload, dict) and payload.get("error"):
+                error = str(payload["error"])
+                break
+        if raw and error is None:
+            error = "\n".join(raw.splitlines()[-12:])
+        return {"task": name, "status": status, "reason": reason,
+                "stderr_log": str(log) if log else None, "error": error}
+    return None
+
+
 def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> dict[str, Any]:
     root = root.expanduser().resolve()
     if not root.is_dir():
         raise FileNotFoundError(f"Diretório do experimento não existe: {root}")
+    workflow_failure = _workflow_failure(root, task=task)
     states: list[dict[str, Any]] = []
     for path in sorted(root.glob(".platform/**/state.json")):
         value = _json(path)
@@ -231,6 +271,8 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
     evidence = state_errors + "\n" + "\n".join(
         item.get("message") or "" for item in matches
     )
+    if workflow_failure and workflow_failure.get("error"):
+        evidence = str(workflow_failure["error"]) + "\n" + evidence
     code, title, action = ("unknown", "A causa não foi identificada automaticamente.",
                           "Consultar os logs indicados e o histórico PBS. Não ressubmeter antes de verificar o job anterior.")
     for key, expression, description, recommendation in _RULES:
@@ -282,6 +324,13 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
                 "o acesso à biblioteca no compute node. Não ressubmeta o job "
                 "anterior nem altere manualmente o manifesto."
             )
+    if workflow_failure and "Observation input belongs to a different cycle" in (workflow_failure.get("error") or ""):
+        code, title, action = (
+            "obs-cycle-path",
+            "O validador de observações confundiu a data do diretório com a data do arquivo.",
+            "Aplicar a correção do obs_cycle_inputs.py, testar e conferir as assinaturas "
+            "antes da retomada. Não apagar produtos nem repetir a inicialização.",
+        )
     failed_jobs = [j for j in jobs if j.get("exit_status") not in (None, 0)]
     if failed_jobs and code == "unknown":
         code, title, action = ("pbs-failed", "O PBS registrou um job encerrado com erro.",
@@ -290,7 +339,7 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
     if missing and code == "unknown":
         code, title, action = ("missing-output", "A etapa não produziu todos os arquivos exigidos.",
                                "Verificar o Exit_status PBS e os logs da etapa antes de revisar os nomes dos produtos.")
-    status = "failure" if (failed_jobs or reports or any(s["state"] in {"failed", "invalid"} for s in states)) else ("incomplete" if states else "no-failure-found")
+    status = "failure" if (workflow_failure or failed_jobs or reports or any(s["state"] in {"failed", "invalid"} for s in states)) else ("incomplete" if states else "no-failure-found")
     if status != "failure":
         code, title, action = (
             "pending-validation" if status == "incomplete" else "unknown",
@@ -300,6 +349,7 @@ def diagnose(root: Path, *, task: str | None = None, query_pbs: bool = True) -> 
     return {"experiment": str(root), "status": status,
             "diagnosis": {"code": code, "summary": title, "suggestion": action,
                           "confidence": "possible" if code not in ("pbs-failed",) else "confirmed-scheduler-failure"},
+            "workflow_failure": workflow_failure,
             "operations": states[:30], "validation": reports[:30],
             "pbs_jobs": jobs, "log_evidence": matches,
             "runtime_check": runtime_check,
@@ -318,6 +368,7 @@ def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
     failed = [j for j in report["pbs_jobs"]
               if j.get("exit_status") not in (None, 0)]
     first = operations[0] if operations else None
+    workflow_failure = report.get("workflow_failure")
     job = failed[0] if failed else None
     evidence = report["log_evidence"][0] if report["log_evidence"] else None
 
@@ -325,7 +376,8 @@ def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
     print("MONAN-JEDI  |  Diagnóstico da execução")
     print("-" * 62)
     if report["status"] == "failure":
-        target = first["operation"].replace("-", " ").upper() if first else "EXPERIMENTO"
+        target = (workflow_failure["task"] if workflow_failure else
+                  first["operation"].replace("-", " ").upper() if first else "EXPERIMENTO")
         cycle = first["cycle"] if first else ""
         print(f"[FALHA] {target}" + (f"  |  ciclo {cycle}" if cycle else ""))
     elif report["status"] == "incomplete":
@@ -339,6 +391,13 @@ def _display(report: dict[str, Any], *, verbose: bool = False) -> None:
     print("CAUSA IDENTIFICADA" if diagnosis["code"] != "unknown" else "RESULTADO")
     print("  " + diagnosis["summary"])
 
+    if workflow_failure and workflow_failure.get("error"):
+        print()
+        print("ERRO DA TAREFA")
+        for line in workflow_failure["error"].splitlines()[:10]:
+            print("  " + line)
+        if workflow_failure.get("stderr_log"):
+            print("  Log: " + workflow_failure["stderr_log"])
     if job:
         print(f"  Job PBS: {job['job_id']}  |  código de saída: {job['exit_status']}")
 
