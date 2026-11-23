@@ -376,11 +376,16 @@ def check_date_inputs(destination):
     if not campaign_file.is_file():
         raise FileNotFoundError(f'Campaign file missing: {campaign_file}')
     campaign = yaml.safe_load(campaign_file.read_text())
-    start = _utc_start(campaign['calendar']['start'])
-    last = _utc_start(campaign['calendar']['end'])
-    if last <= start or (last - start).total_seconds() % 21600:
-        raise ValueError('Reference input preflight requires a positive six-hour cycle range')
-    initial = _cycle(start - timedelta(hours=6))
+    interval = campaign['calendar']['interval']
+    if not re.fullmatch(r'PT[1-9][0-9]*H', interval):
+        raise ValueError('Unsupported calendar interval')
+    step_hours = int(interval[2:-1])
+    start = _utc_start(campaign['calendar']['start'], step_hours)
+    last = _utc_start(campaign['calendar']['end'], step_hours)
+    step_seconds = step_hours * 3600
+    if last <= start or (last - start).total_seconds() % step_seconds:
+        raise ValueError('Input preflight requires a positive aligned cycle range')
+    initial = _cycle(start - timedelta(hours=step_hours))
     wps = load_wps_run(root / 'science/initialization', initial)
     raw = resolve_path(
         wps.config['acquisition']['source'],
@@ -388,8 +393,8 @@ def check_date_inputs(destination):
         label='wps.acquisition.source',
     )
     required = [('GFS initialization ' + initial, raw)]
-    cycles = [start + timedelta(hours=6 * idx)
-              for idx in range(int((last - start).total_seconds() // 21600) + 1)]
+    cycles = [start + timedelta(hours=step_hours * idx)
+              for idx in range(int((last - start).total_seconds() // step_seconds) + 1)]
     for analysis in cycles:
         cycle = _cycle(analysis)
         obs = load_obs2ioda_run(root / 'science', cycle)
