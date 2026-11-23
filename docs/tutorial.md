@@ -159,7 +159,7 @@ O nome `primeiro-experimento` **não tem significado científico especial**. Pod
 
 O `site.yaml` descreve os **recursos do ambiente** que novos experimentos desse workspace podem reutilizar: caminhos para instalações e dados, bibliotecas e configurações específicas do local. Já o `environment.sh` é produzido **dentro de cada experimento** e deve ser carregado com `source ./environment.sh` antes dos comandos científicos.
 
-A pasta existir não significa que o ambiente científico esteja pronto. Antes de executar `experiment create --workspace "$WORKSPACE"`, confirme que o workspace dispõe de um `site.yaml` revisado e apropriado ao seu ambiente. Caso seja uma instalação nova, consulte `experiment site init --help`, verifique os caminhos descobertos e valide a configuração **antes da primeira submissão**. Consulte também [primeiro experimento na JACI](first-experiment.md).
+A pasta existir não significa que o ambiente científico esteja pronto. Antes de executar `experiment create --workspace "$WORKSPACE"`, confirme que o workspace dispõe de um `site.yaml` revisado e apropriado ao seu ambiente. Caso seja uma instalação nova, consulte `experiment site init --help`, verifique os caminhos descobertos e valide a configuração **antes da primeira submissão**. Consulte também [arquitetura de execução na JACI](developer/architecture.md).
 
 Os valores científicos da receita de referência (resolução, malha, número de processos, física e matriz B) são parâmetros de **um caso específico**, não valores universais do software.
 
@@ -303,7 +303,7 @@ Relatórios históricos e a validação pós-refatoração estão organizados no
 - [Primeiro experimento científico na JACI](first-experiment.md) — detalhes de inicialização, PBS nativo e migração de casos antigos.
 - [Diagnóstico de erros](diagnostics.md) — informações adicionais e JSON.
 - [Configuração de campanhas](configuration/campaign.md) — semântica de calendários e configurações.
-- [Testes beta](beta-testing.md) — fixture artificial e validação de contratos.
+- [Teste artificial de instalação](../examples/beta/manual.sh) — fixture artificial e validação de contratos.
 - [Campanhas M3 de 3/7 dias](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps) — preparador externo específico da receita.
 
 Antes de promover esta versão a release estável ainda é necessário: consolidar onboarding sem paths pessoais como dependência, testar instalação fora do checkout, validar generalidade das resoluções/meshes, garantir diagnósticos e retomada segura no `simpleWorkflow`, fixar revisões científicas e publicar os resultados das campanhas prolongadas.
