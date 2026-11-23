@@ -286,7 +286,8 @@ def machine_to_legacy_site(profile: MachineProfile) -> dict[str, Any]:
             + ", ".join(missing_stages)
         )
     for stage_name in sorted(_SCIENCE_STAGES):
-        missing_fields = _STAGE_RESOURCES - set(stages[stage_name])
+        required = _STAGE_RESOURCES if stage_name in {"jedi", "mpas", "mpas_init"} else (_STAGE_RESOURCES - {"launcher"})
+        missing_fields = required - set(stages[stage_name])
         if missing_fields:
             raise MachineProfileError(
                 f"execution.stages.{stage_name} missing fields: "
