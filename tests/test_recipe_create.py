@@ -141,23 +141,16 @@ def test_covariance_override_is_explicit_and_preserved():
     assert settings["profile"]["bmatrix"] != path
 
 
-def test_namespace_traversable_requires_one_joinpath_component(monkeypatch):
-    """Regression for Python 3.11 MultiplexedPath.joinpath(single child)."""
+def test_builtin_resources_follow_loaded_source_and_not_namespace_search_path():
+    """Editable installs may resolve importlib.resources into stale site-packages.
+
+    The descriptors and science tree must belong to the code actually imported.
+    """
     import monan_jedi_workflow.recipe_config as module
 
-    class SingleComponentTraversable:
-        def __init__(self, directory):
-            self.directory = directory
-
-        def joinpath(self, *parts):
-            assert len(parts) == 1, "MultiplexedPath accepts exactly one component"
-            return SingleComponentTraversable(self.directory / parts[0])
-
-        def __str__(self):
-            return str(self.directory)
-
-    package_root = Path(module.__file__).resolve().parent
-    monkeypatch.setattr(module, "files", lambda name: SingleComponentTraversable(package_root))
+    root = Path(module.__file__).resolve().parent
+    assert module.recipe_directory("mpas-jedi-3dvar") == root / "recipes" / "mpas-jedi-3dvar"
     science, descriptor = module.load_recipe("mpas-jedi-3dvar")
+    assert science == root / "catalog" / "reference-20250901"
+    assert (root / "recipes" / "mpas-jedi-3dvar" / "recipe.yaml").is_file()
     assert descriptor["name"] == "mpas-jedi-3dvar"
-    assert (science / "jedi.yaml").is_file()
