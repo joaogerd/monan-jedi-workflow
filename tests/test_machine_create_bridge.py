@@ -89,7 +89,11 @@ def test_machine_pbs_generates_equivalent_legacy_science(tmp_path):
     ):
         before = (legacy / relative).read_text().replace(str(legacy), "@CASE@")
         after = (generated / relative).read_text().replace(str(generated), "@CASE@")
-        assert before == after, relative
+        # YAML mapping key order is not part of the scientific/runtime
+        # contract. The legacy profile is dumped with sorted keys, while
+        # machine_to_legacy_site() retains its declaration order. Compare
+        # complete parsed structures, preserving lists and every value.
+        assert yaml.safe_load(before) == yaml.safe_load(after), relative
     assert (generated / "machine-profile-lock.yaml").is_file()
     assert not (legacy / "machine-profile-lock.yaml").exists()
     assert adapted["site"]["name"] == "test"
