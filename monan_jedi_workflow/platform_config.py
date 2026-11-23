@@ -3,7 +3,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
-from importlib.resources import files
 from pathlib import Path
 import json
 import os
@@ -42,7 +41,12 @@ def reference(value, base):
         name = value[8:]
         if ".." in Path(name).parts or Path(name).is_absolute():
             raise ValueError("catalog path must stay inside installed catalog")
-        return Path(str(files("monan_jedi_workflow").joinpath("catalog", name)))
+        if name == "reference-20250901" or name.startswith("reference-20250901/"):
+            # Compatibility alias: old references resolve to the single
+            # authoritative recipe without retaining a second science tree.
+            suffix = Path(name).relative_to("reference-20250901")
+            return Path(__file__).resolve().parent / "recipes" / "mpas-jedi-3dvar" / "science" / suffix
+        return Path(__file__).resolve().parent / "catalog" / name
     path = Path(expand(value)).expanduser()
     return path if path.is_absolute() else (base / path).resolve()
 
