@@ -69,10 +69,10 @@ def machine_document(paths, setup):
                                    "launcher": "/opt/cray/pals/1.6/bin/mpiexec"},
                           "wps": {"queue": "pesqmini", "walltime": "00:30:00",
                                    "select": 1, "ncpus": 1, "mpiprocs": 1,
-                                   "launcher": "mpiexec"},
+                                  },
                           "obs2ioda": {"queue": "pesqmidi", "walltime": "01:00:00",
                                    "select": 1, "ncpus": 1, "mpiprocs": 1,
-                                   "launcher": "mpiexec"},
+                                  },
                       }},
         "environment": {"kind": "modules", "setup": str(setup)},
     }
