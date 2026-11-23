@@ -6,8 +6,9 @@ conversion, JEDI 3DVar/FGAT analysis and MPAS forecasts.
 
 The recipe is self-contained: its scientific YAMLs, templates, runners and
 runtime skeleton live in `science/`, next to `recipe.yaml` and this README.
-The original `catalog/reference-20250901` is kept temporarily for backward
-compatibility with older APIs; **new experiments do not read it**.
+The legacy `catalog:reference-20250901/...` lookup remains supported as a
+compatibility alias, but the duplicate scientific files are no longer stored
+under `catalog/`. All new experiments use this recipe directory.
 The descriptor in `recipe.yaml` defines the supported defaults and profiles.
 It is not a claim that arbitrary meshes work automatically.
 
