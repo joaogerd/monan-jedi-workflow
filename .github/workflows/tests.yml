@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - feat/platform-domain-apps
+      - refactor/machine-independent-site-config
       - develop
       - main
 
