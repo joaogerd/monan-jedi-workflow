@@ -82,6 +82,10 @@ def resolve_settings(recipe: dict, *, config: Path | None = None, overrides: dic
     profile = profiles[res]
     if not isinstance(profile, dict):
         raise ValueError("Resolution profile must be a mapping")
+    supplied = set(user) | set(explicit)
+    for key in ("levels", "cycle", "duration", "observations", "timestep"):
+        if key not in supplied and key in profile:
+            settings[key] = deepcopy(profile[key])
     for key in ("mesh", "bmatrix"):
         if not profile.get(key) and not settings.get(key):
             raise ValueError(f"Resolution {res}: missing required {key} mapping")
@@ -95,10 +99,10 @@ def resolve_settings(recipe: dict, *, config: Path | None = None, overrides: dic
         raise ValueError("Warm start científico não implementado; requer restart validado")
     if not isinstance(settings.get("observations"), list) or not settings["observations"]:
         raise ValueError("observations must be a nonempty list")
-    supported = {"conv", "gpsro"}
+    supported = set(recipe.get("available_observations", ["conv", "gpsro"]))
     if not set(settings["observations"]).issubset(supported):
-        raise ValueError("Current Obs2IODA reference supports conv,gpsro only; "
-                         "other observation types need a compatible converter/operator recipe")
+        raise ValueError("Selected observations are not declared by the recipe; "
+                         "a compatible converter and UFO configuration is required")
     # Strict contract: do not silently reinterpret the tested 240 km science
     # files as another mesh or change its numerical/observation assumptions.
     if res != "240km":
