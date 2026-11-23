@@ -188,7 +188,7 @@ cd "$CASE"
 source ./environment.sh
 ```
 
-O destino deve ser **novo**. O criador recusa sobrescrever um diretório existente. Por padrão, usa `cold start`; `warm start` científico não está implementado.
+O destino deve ser **novo**. O criador recusa sobrescrever um diretório existente. Por padrão, usa `cold start`; `warm start` científico não está implementado. O criador agora aceita `--recipe`, `--config` e sobrescritas explícitas de parâmetros (consulte a seção 4.1).
 
 Arquivos principais:
 
@@ -204,14 +204,55 @@ Arquivos principais:
 
 `experiment create` gera configurações e links de background, **não submete jobs nem produz análises**. Na receita de referência, a primeira análise ocorre às 00Z, a segunda às 06Z e a inicialização às 18Z do dia anterior.
 
+### 4.1. Receitas, parâmetros e campanhas de duração variável
+
+As receitas documentadas podem ser listadas e inspecionadas:
+
+```bash
+experiment recipes list
+experiment recipes show mpas-jedi-3dvar
+experiment create --help
+```
+
+A receita embutida `mpas-jedi-3dvar` preserva a configuração científica
+de referência de 240 km e 55 níveis. Quando nenhum override é informado,
+`experiment create` mantém o caso curto de **duas análises**, com intervalo
+de 6 h. Opções fornecidas explicitamente têm prioridade sobre o
+`--config` YAML, que por sua vez tem prioridade sobre os defaults da receita.
+
+Para criar **um caso independente de sete dias**, mantendo os demais
+parâmetros da receita:
+
+```bash
+experiment create "$WORKSPACE/experiments/teste-7dias" \\
+  --workspace "$WORKSPACE" \\
+  --recipe mpas-jedi-3dvar \\
+  --start 2026-01-30T00:00:00Z \\
+  --duration P7D
+```
+
+Isso produz 29 análises (fim inclusivo) e cria os vínculos de background
+para os 29 horários, sem alterar o experimento original. A verificação
+`experiment check-inputs .` passa a examinar as observações de **todos**
+os ciclos dessa campanha, além do GFS de inicialização. A execução ainda
+exige insumos reais, executáveis científicos e recursos PBS suficientes.
+
+A troca nominal de resolução **não** reutiliza a configuração de 240 km:
+`--resolution 60km` somente é admitido quando a receita possui um
+perfil de resolução com seus próprios arquivos científicos completos.
+Na distribuição atual, apenas 240 km tem um perfil embutido. As alterações
+de intervalo temporal, níveis verticais, matriz B, passo de tempo e seleção
+de observações também dependem de receitas científicas compatíveis; as
+alterações ainda não suportadas falham explicitamente durante o `create`.
+Consulte [o README da receita](../monan_jedi_workflow/recipes/mpas-jedi-3dvar/README.md).
+
 ## 5. Verificar os dados antes de gastar horas de JACI
 
 ```bash
 cd "$CASE"
 source ./environment.sh
 
-# Este comando da versão atual verifica o GFS inicial
-# e as observações dos DOIS ciclos da receita curta.
+# Verifica o GFS inicial e observações de todos os ciclos da campanha.
 experiment check-inputs .
 
 experiment check campaign.yaml
@@ -273,7 +314,7 @@ A correção restringiu a interpretação temporal ao **nome do arquivo observac
 
 ## 8. Campanhas longas: 3 e 7 dias (avançado)
 
-A interface `experiment create` da beta **cria somente dois ciclos e seus backgrounds**. **Não basta editar o `calendar.end`**: para uma execução longa também devem existir os vínculos de trajetória/estado para cada análise adicional. Há um preparador **específico da receita MPAS atual** no [repositório institucional](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps), que estende o calendário e cria links para os backgrounds futuros **em um experimento novo, ainda não exportado**. Ele não é um recurso genérico da API nem foi projetado para modificar uma campanha em andamento.
+A interface `experiment create` agora aceita `--duration P3D` e `--duration P7D`, gerando os backgrounds correspondentes para cada ciclo de 6 h. **Não basta editar manualmente `calendar.end`** de um experimento já criado. Há também um preparador histórico **específico da receita MPAS atual** no [repositório institucional](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps), que estende o calendário e cria links para os backgrounds futuros **em um experimento novo, ainda não exportado**. Ele não é um recurso genérico da API nem foi projetado para modificar uma campanha em andamento.
 
 Exemplo de planejamento para 30/01/2026 00Z, horário final **inclusivo**:
 
@@ -282,7 +323,7 @@ Exemplo de planejamento para 30/01/2026 00Z, horário final **inclusivo**:
 | 3 dias (72 h) | 02/02/2026 00Z | 13 | 12 |
 | 7 dias (168 h) | 06/02/2026 00Z | 29 | 28 |
 
-Cada campanha precisa de diretório, `campaign.yaml`, `workflow.yaml` e `.simpleworkflow/` **independentes**; não aumente a duração de um experimento já executado. O preparador verifica PREPBUFR/GNSS-RO de todos os horários, mas isso não substitui o preflight integral de GFS, recursos científicos e scheduler. **`experiment check-inputs .` continua limitado aos primeiros dois ciclos.**
+Cada campanha precisa de diretório, `campaign.yaml`, `workflow.yaml` e `.simpleworkflow/` **independentes**; não aumente a duração de um experimento já executado. O preparador verifica PREPBUFR/GNSS-RO de todos os horários, mas isso não substitui o preflight integral de GFS, recursos científicos e scheduler. **`experiment check-inputs .` verifica todos os ciclos declarados na campanha, mas não substitui a validação científica e dos recursos computacionais.**
 
 Passo a passo específico, com comandos completos e condições de segurança: [campanhas M3 de 3/7 dias na JACI](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/experiments/M3/platform-domain-apps/README.md).
 
