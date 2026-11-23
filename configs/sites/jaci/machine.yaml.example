@@ -17,8 +17,50 @@ paths:
   libfabric_root: /opt/cray/libfabric/1.22.0/lib64
 execution:
   backend: pbs
-  queue: pesqmidi
-  walltime: '01:00:00'
+  # Queue limits in minutes are site policy, not scientific code.
+  # Recheck against live PBS configuration before submitting jobs.
+  queue_limits:
+    pesqmini: 30
+    pesqmidi: 120
+    pesqhigh: 360
+    pesqextra: 480
+    oper: 480
+    preoper: 480
+  # Resources are selected independently for each scientific stage.
+  stages:
+    jedi:
+      queue: pesqmini
+      walltime: '00:30:00'
+      select: 1
+      ncpus: 128
+      mpiprocs: 128
+      launcher: /opt/cray/pals/1.6/bin/mpiexec
+    mpas:
+      queue: pesqmidi
+      walltime: '01:00:00'
+      select: 1
+      ncpus: 128
+      mpiprocs: 128
+      launcher: /opt/cray/pals/1.6/bin/mpiexec
+    mpas_init:
+      queue: pesqmini
+      walltime: '00:30:00'
+      select: 1
+      ncpus: 128
+      mpiprocs: 128
+      launcher: /opt/cray/pals/1.6/bin/mpiexec
+    wps:
+      queue: pesqmini
+      walltime: '00:30:00'
+      select: 1
+      ncpus: 1
+      mpiprocs: 1
+    obs2ioda:
+      queue: pesqmidi
+      walltime: '01:00:00'
+      select: 1
+      ncpus: 1
+      mpiprocs: 1
 environment:
   kind: modules
   setup: /p/projetos/SEU_GRUPO/SEU_USUARIO/work/spack-stack/configs/sites/tier2/jaci/setup.sh
