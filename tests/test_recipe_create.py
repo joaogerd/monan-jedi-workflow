@@ -28,7 +28,7 @@ def test_user_yaml_and_cli_precedence(tmp_path):
 @pytest.mark.parametrize("overrides", [
     {"resolution": "60km"}, {"levels": 72}, {"cycle": "PT3H"},
     {"mode": "warm"}, {"observations": ["conv"]},
-    {"bmatrix": "/invalid/b.nc"}, {"timestep": 100},
+    {"timestep": 100},
 ])
 def test_unsupported_science_changes_fail_closed(overrides):
     _, desc = load_recipe("mpas-jedi-3dvar")
@@ -131,3 +131,11 @@ def test_external_resolution_and_three_hour_contract(tmp_path, monkeypatch):
     trajectory = (case / "work/background/20260130T030000Z/trajectory.nc")
     assert trajectory.is_symlink()
     assert "2026-01-30_02.00.00.nc" in str(trajectory.readlink())
+
+
+def test_covariance_override_is_explicit_and_preserved():
+    _, desc = load_recipe("mpas-jedi-3dvar")
+    path = "/shared/experiment-specific-B"
+    settings = resolve_settings(desc, overrides={"bmatrix": path})
+    assert settings["bmatrix"] == path
+    assert settings["profile"]["bmatrix"] != path
