@@ -1,7 +1,7 @@
 schema_version: 1
 name: mpas-jedi-3dvar
 description: MPAS-JEDI 3DVar/FGAT scientific reference, 240 km baseline
-science_source: reference-20250901
+science_source: science
 defaults:
   resolution: 240km
   levels: 55
