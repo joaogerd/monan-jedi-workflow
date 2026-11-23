@@ -224,6 +224,19 @@ def _write_machine(tmp_path, document):
     return p
 
 
+def test_machine_disallows_unvalidated_pbs_cli_overrides(tmp_path, capsys):
+    paths, setup = fake_runtime(tmp_path)
+    profile = _write_machine(tmp_path, machine_document(paths, setup))
+    case = tmp_path / "override-case"
+    code = _experiment([
+        "create", str(case), "--machine", str(profile),
+        "--pbs-queue", "anotherqueue",
+    ])
+    assert code == 2
+    assert "do not combine" in capsys.readouterr().err
+    assert not case.exists()
+
+
 def test_missing_runtime_aborts_before_case_creation(tmp_path):
     paths, setup = fake_runtime(tmp_path)
     document = machine_document(paths, setup)
