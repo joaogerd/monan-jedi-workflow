@@ -25,7 +25,7 @@ def _read(path: Path) -> dict:
 def recipe_directory(recipe: str | Path) -> Path:
     value = str(recipe)
     if value == BUILTIN:
-        return Path(str(files("monan_jedi_workflow").joinpath("recipes", BUILTIN)))
+        return Path(str(files("monan_jedi_workflow").joinpath("recipes").joinpath(BUILTIN)))
     path = Path(value).expanduser().resolve()
     if not path.is_dir():
         raise ValueError(f"Unknown recipe {recipe!r}; use '{BUILTIN}' or an existing directory")
@@ -44,7 +44,7 @@ def load_recipe(recipe: str | Path = BUILTIN) -> tuple[Path, dict]:
         raise ValueError(f"Every recipe must have a README.md: {directory}")
     source = data.get("science_source")
     if source == BUNDLED:
-        science = Path(str(files("monan_jedi_workflow").joinpath("catalog", BUNDLED)))
+        science = Path(str(files("monan_jedi_workflow").joinpath("catalog").joinpath(BUNDLED)))
     elif isinstance(source, str) and source:
         science = (directory / source).resolve()
         if not science.is_relative_to(directory.resolve()):
