@@ -115,6 +115,12 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         path = science / relative
         doc = yaml.safe_load(path.read_text()); cfg = doc[key]
         cfg['variables'] = {'experiment_root': str(root), 'configuration_root': str(path.parent), **cfg.get('variables', {})}
+        # Scientific resources come from the resolved resolution profile, not
+        # the installation's implicit 240 km site defaults.
+        if key in {'jedi', 'mpas', 'mpas_init'} and settings.get('mesh'):
+            cfg['variables']['mesh_root'] = settings['mesh']
+        if key == 'jedi' and settings.get('bmatrix'):
+            cfg['variables']['bmatrix_root'] = settings['bmatrix']
         initial = relative.startswith('initialization/')
         if key == 'jedi':
             # The first-cycle switch controls initial vs cycling background
