@@ -1,232 +1,217 @@
-# Tutorial oficial candidato — MONAN-JEDI por aplicativos (branch feat/platform-domain-apps)
+# Tutorial — primeiro experimento MONAN-JEDI e campanhas na JACI
 
-> **Status:** roteiro operacional da beta 0.3.0b1. O teste de instalação usa dados artificiais. Uma campanha científica real na JACI só estará homologada após executar e validar os produtos do baseline, incluindo o acoplamento entre ciclos. Não confundir a interface atual com a interface legada `monan-jedi-workflow campaign create/run`.
+> **Escopo:** branch `feat/platform-domain-apps`, pacote beta `0.3.0b1`. Este é o caminho de entrada para **usuários novos**, a partir da instalação. A implementação atual da receita científica usa **MPAS-JEDI** com 3DVar/FGAT; o nome da plataforma MONAN-JEDI **não** significa que o executável do núcleo MONAN já esteja sendo usado. Não confundir com a interface antiga `monan-jedi-workflow campaign create/run`.
+>
+> **Estado da validação:** já foi demonstrado um caso científico de duas análises consecutivas (00Z e 06Z, 30/01/2026) na JACI. As campanhas independentes de 3 e 7 dias do branch refatorado estão sob avaliação; sucesso de tarefas não equivale, por si só, à homologação científica. As campanhas históricas de 2018 e 2025 pertencem a outros estados do software.
 
-## 0. Como a plataforma funciona
+## 1. Entender a sequência antes de instalar
 
-O usuário configura **um experimento científico** (`experiment.yaml`, arquivos JEDI/MPAS/observações e site) e **uma campanha** (`campaign.yaml`, datas, operações e output). Cada aplicativo processa um domínio para um único horário:
+O usuário cria um **experimento** (receita científica, ambiente, arquivos de configuração) e uma **campanha** (datas e operações). O `experiment export` converte a campanha em `workflow.yaml`; `experiment run` delega a execução ao `simpleWorkflow`.
 
-- `obs acquire`: aquisição dos dados;
-- `obs convert`: conversão para IODA;
-- `jedi`: análise;
-- `mpas init`: inicialização, quando configurada, feita **uma vez**, fora do ciclo;
-- `mpas`: previsão para alimentar o próximo horário;
-- `diagnostics`: diagnósticos da execução;
-- `campaign`: inspeciona, verifica e **exporta** a sequência para o **simpleWorkflow**, que executa e retoma tarefas.
-
-Não é necessário escrever manualmente o grafo nem scripts de repetição. A versão beta ainda exporta uma tarefa por estágio e timestamp; não foi homologada para gerar/gerenciar um ano de tarefas na JACI.
-
-## 1. Instalação em ambiente novo
-
-```bash
-git clone --branch feat/platform-domain-apps https://github.com/joaogerd/monan-jedi-workflow.git
-cd monan-jedi-workflow
-python -m pip install -e '.[dev,orchestration]'
-obs --help
-jedi --help
-mpas --help
-diagnostics --help
-campaign --help
-swf --help
+```text
+NÓ DE LOGIN (controlador Python; simpleWorkflow)
+  experiment create
+       |
+       v
+  environment.sh + science/*.yaml + campaign.yaml
+       |
+       v
+  experiment check -> experiment export -> experiment validate -> experiment plan
+       |
+       v
+  experiment run (simpleWorkflow, tarefas locais de controle)
+       |
+       +-- Inicialização, uma vez:
+       |     WPS prepare -> WPS run/validate -> MPAS Init -> MPAS 6 h
+       |
+       +-- Para cada análise de 6 h:
+             OBS convert -> JEDI (análise) -> MPAS (previsão 6 h)
+                    ^                          |
+                    +----- background seguinte-+
 ```
 
-Python >=3.10. Essa instalação **não** compila MONAN/MPAS, MPAS-JEDI, WPS ou Obs2IODA. Para execução científica, confirme previamente as instalações, bibliotecas, ambiente de site e dados. No JACI, os caminhos, o ambiente MPI/PBS e os recursos do caso não podem ser inferidos do exemplo artificial.
+Cada etapa de controle tem `prepare`, `run` e `validate`. Quando a ciência exige recursos da JACI, o aplicativo submete um **script PBS nativo** via `qsub` e acompanha o job. **Não se executa Python/Conda do workflow nos nós de computação.** O Conda do controlador pode residir no diretório pessoal, mas entradas, executáveis, bibliotecas e produtos científicos devem ser acessíveis aos compute nodes.
 
-## 2. Teste rápido: um único ciclo **artificial**
+As interfaces independentes continuam disponíveis: `obs acquire`, `obs convert`, `jedi`, `mpas init`, `mpas`, `diagnostics`, `campaign`, `wps` e `diagnose`. O primeiro experimento não exige chamar cada aplicativo manualmente.
 
-Use este teste exclusivamente para confirmar a instalação e os contratos dos cinco aplicativos. Ele não prova que MONAN, JEDI ou Obs2IODA reais funcionaram.
+## 2. Instalar uma única vez
+
+**Pré-requisitos:** Python >= 3.10; acesso à JACI, ambiente PBS e instalação científica de WPS, MPAS/MPAS-JEDI e Obs2IODA; malha, tabelas de física e matriz B adequadas ao caso. Instalar o pacote Python **não** instala ou compila os modelos científicos.
 
 ```bash
+git clone --branch feat/platform-domain-apps \
+  https://github.com/joaogerd/monan-jedi-workflow.git
+
+cd monan-jedi-workflow
+python -m pip install -e '.[dev,orchestration]'
+
+experiment --help
+campaign --help
+swf --help
+diagnose --help
+```
+
+O `simpleWorkflow` é dependência do pacote, atualmente fixada num commit em `pyproject.toml`. Instalação editável é útil no desenvolvimento, **não** autoriza atualizar o checkout enquanto uma campanha está executando. Fixe o commit antes do experimento e registre `git rev-parse HEAD`.
+
+### 2.1. Alternativa: testar sem dados científicos (opcional)
+
+Este teste artificial verifica apenas contratos de entrada e saída dos aplicativos. Não use os produtos como evidência meteorológica.
+
+```bash
+# A partir da raiz do checkout:
 mkdir -p /p/projetos/SEU_GRUPO/SEU_USUARIO/testes
 cp -r examples/beta /p/projetos/SEU_GRUPO/SEU_USUARIO/testes/beta-ciclo
 cd /p/projetos/SEU_GRUPO/SEU_USUARIO/testes/beta-ciclo
 bash manual.sh experiment.yaml 2025-09-01T00:00:00Z
 ```
 
-O script mostra uma linha `[OK]` para cada uma das cinco verificações (aquisição, conversão IODA, JEDI, MPAS e diagnósticos). Em cada etapa, exige que `prepare`, `run` e `validate` terminem sem erro e que `status --json` confirme `state: validated`. Somente quando **todas** passam imprime `TODOS OS 5 TESTES PASSARAM`. Se alguma falhar, encerra imediatamente com código diferente de zero, indica a operação e mostra as últimas linhas do log.
+O script registra `manual-test.log` e só imprime `TODOS OS 5 TESTES PASSARAM` se os cinco aplicativos artificiais passarem em `prepare/run/validate/status`. Não reaproveite esse diretório para ciência.
 
-Exemplo de saída **esperada, não resultado de execução na JACI**:
+## 3. Preparar um workspace científico
 
-```text
-MONAN-JEDI | teste de instalacao (dados artificiais)
-Ciclo: 2025-09-01T00:00:00Z
-
-[OK] OBS — aquisicao — prepare / run / validate / status
-[OK] OBS — conversao IODA — prepare / run / validate / status
-[OK] JEDI — assimilacao — prepare / run / validate / status
-[OK] MPAS — previsao — prepare / run / validate / status
-[OK] DIAGNOSTICS — diagnosticos — prepare / run / validate / status
-
-===========================================
- TODOS OS 5 TESTES PASSARAM
- Instalacao e contratos basicos: OK
- ATENCAO: produtos artificiais; NAO
-          valida execucao cientifica real.
- Log completo: .../manual-test.log
-===========================================
-```
-
-Substitua o caminho pelo destino autorizado do usuário. O log completo fica em `manual-test.log` no diretório do teste. Use uma cópia nova de `examples/beta` para evitar misturar resultados antigos. Os produtos deste fixture são **artificiais**, mesmo quando o comando termina com sucesso. Não reaproveite esse diretório para teste científico.
-
-## 3. Primeiro experimento científico na JACI: Python apenas no login
-
-O **simpleWorkflow não envia Python ao PBS**. Ele executa as 24 tarefas
-`executor: local` no nó de login e invoca os aplicativos científicos. Cada
-aplicativo prepara, submete com `qsub` (quando necessário), aguarda seu job
-nativo e valida os produtos. O Conda pode ficar em `$HOME`; somente binários,
-bibliotecas, scripts shell e dados científicos precisam estar disponíveis nos
-compute nodes, normalmente via `/p`.
-
-A receita de referência instalada em `catalog/reference-20250901` prepara
-WPS e MPAS iniciais em 31/08/2025 18Z; Obs2IODA/JEDI/MPAS em 01/09 00Z; e
-Obs2IODA/JEDI em 01/09 06Z. O pré-configurador cria as configurações,
-`campaign.yaml` e `environment.sh`, mas não executa ciência ou qsub.
-
-### Para um experimento novo
+Os exemplos a seguir são **variáveis a configurar no seu ambiente**, não caminhos obrigatórios do software:
 
 ```bash
-export NEW_CASE=/p/projetos/monan_das/joao.gerd/work/first-experiment-20250901-login
-python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
-cd "$NEW_CASE"
+# Edite conforme seu grupo e usuário; diretórios em /p são exemplos JACI.
+export WORKSPACE=/p/projetos/SEU_GRUPO/SEU_USUARIO/monan-jedi
+export CASE="$WORKSPACE/experiments/primeiro-experimento"
+
+mkdir -p "$WORKSPACE/experiments"
+```
+
+O workspace precisa dispor do `site.yaml` validado com o ambiente científico e as variáveis que apontam para os recursos compartilhados. No onboarding já configurado, `experiment create --workspace` reutiliza esse perfil. Em uma instalação sem perfil, consulte `experiment site init --help` e valide o `site.yaml` gerado **antes de criar o caso**. Consulte também [primeiro experimento na JACI](first-experiment.md) e [configuração do ambiente](configuration/campaign.md).
+
+A receita científica de referência utiliza resolução, malha, partição e parâmetros declarados nos YAML gerados. Eles são **exemplos específicos da receita**, não valores embutidos que devam ser copiados para outras resoluções.
+
+## 4. Criar o primeiro experimento científico — dois ciclos
+
+Escolha uma data realmente coberta por observações e pelo GFS de inicialização. A data abaixo é a do caso que serviu aos testes operacionais; **não é um default obrigatório**.
+
+```bash
+experiment create "$CASE" \
+  --workspace "$WORKSPACE" \
+  --start 2026-01-30T00:00:00Z
+
+cd "$CASE"
 source ./environment.sh
-campaign check campaign.yaml
-campaign export campaign.yaml --engine simpleworkflow
-swf validate workflow.yaml
-swf plan workflow.yaml
 ```
 
-Verifique os arquivos científicos reais além dos diretórios: GFS, PREPBUFR,
-GNSS-RO, mesh, física, matriz B e executáveis. Nenhum arquivo científico é
-baixado pelo gerador.
+O destino deve ser **novo**. O criador recusa sobrescrever um diretório existente. Por padrão, usa `cold start`; `warm start` científico não está implementado.
 
-### Para o experimento existente criado antes dessa correção
+Arquivos principais:
 
-**Não execute o `workflow.yaml` antigo:** ele contém tarefas Python do
-simpleWorkflow com `executor: pbs`. Crie uma campanha nova sem sobrescrever
-nenhum arquivo antigo:
+| Arquivo/diretório | Para que serve |
+| --- | --- |
+| `environment.sh` | carrega e verifica as variáveis do caso |
+| `science/` | configurações específicas de WPS, MPAS, JEDI, Obs2IODA, templates e perfil |
+| `experiment.yaml` | aponta para as configurações científicas dos ciclos |
+| `init.yaml` / `initialization.yaml` | inicialização WPS/MPAS anterior à primeira análise |
+| `campaign.yaml` | declara calendário, operações e `workflow.yaml` de saída |
+| `work/` | produtos científicos, manifests e logs, após execução |
+| `.simpleworkflow/` | histórico e estado do orquestrador, após execução |
+
+`experiment create` gera configurações e links de background, **não submete jobs nem produz análises**. Na receita de referência, a primeira análise ocorre às 00Z, a segunda às 06Z e a inicialização às 18Z do dia anterior.
+
+## 5. Verificar os dados antes de gastar horas de JACI
 
 ```bash
-cd /p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow
-git pull --ff-only
-cd "$NEW_CASE"
+cd "$CASE"
 source ./environment.sh
-python -m monan_jedi_workflow.experiment_start "$NEW_CASE" --upgrade-existing
-campaign check campaign-login.yaml
-campaign export campaign-login.yaml --engine simpleworkflow
-swf validate workflow-login.yaml
-swf plan workflow-login.yaml
+
+# Este comando da versão atual verifica o GFS inicial
+# e as observações dos DOIS ciclos da receita curta.
+experiment check-inputs .
+
+experiment check campaign.yaml
+experiment export campaign.yaml
+experiment validate workflow.yaml
+experiment plan workflow.yaml
+
+# Inspeção do plano: não executa tarefas científicas.
+swf run workflow.yaml --dry-run --ui plain
 ```
 
-O upgrade conserva `workflow.yaml` e `campaign.yaml`, configura WPS para
-submeter UNGRIB nativo via PBS e gera `campaign-login.yaml`.
-Confirme que todas as tarefas são **locais no controlador**:
+**Verifique também:** disponibilidade real da malha/partições, física, matriz B, executáveis, bibliotecas do stack, permissões de escrita e limites das filas PBS. `source environment.sh` prova que os diretórios básicos existem, não que todos os arquivos científicos estão corretos.
+
+O GFS pode ser **obtido automaticamente** por `wps prepare` quando a receita declara `wps.acquisition` com um provedor HTTPS válido e cache gravável. A opção habilitada, sozinha, **não garante** que a URL exista ou que o download funcione. PREPBUFR/GNSS-RO também precisam de entradas datadas válidas. Nunca reutilize silenciosamente dados de outro horário.
+
+## 6. Executar, acompanhar e verificar o primeiro experimento
+
+Somente após aprovar as verificações:
 
 ```bash
-python - <<'PY'
-import yaml
-wf = yaml.safe_load(open('workflow-login.yaml'))
-tasks = wf['initialization']['tasks'] + wf['tasks']
-wrong = [t['name'] for t in tasks if t.get('executor') != 'local' or 'pbs' in t]
-assert not wrong, f"Encontrei tarefas indevidas no PBS: {wrong}"
-print(f"[OK] {len(tasks)} tarefas de aplicativos Python no login; PBS nativo controlado pelos apps")
-PY
+cd "$CASE"
+source ./environment.sh
+set -o pipefail
+
+experiment run workflow.yaml --ui plain 2>&1 | tee run.log
+experiment status workflow.yaml
 ```
 
-O `swf run` só deve ser iniciado depois de conferir entradas, horários e
-recursos. Veja a **[receita operacional e instruções completas](first-experiment.md)**.
-A validação científica de equivalência ainda está pendente.
+A receita curta tem **9 tarefas de inicialização e 15 tarefas cíclicas**: OBS/JEDI/MPAS no primeiro ciclo, OBS/JEDI no segundo. Resultado esperado: **duas análises JEDI e uma previsão MPAS entre elas**, além da previsão de inicialização. A validação deve confirmar produtos NetCDF, horários, observações e convergência — não apenas a palavra `SUCCESS` no orquestrador.
 
-## 4. Campanha de **um dia** no simpleWorkflow
+Durante a campanha, use outro terminal com `qstat -u "$USER"`; não lance outro `run` enquanto o controlador estiver ativo.
 
-Depois de fechar o experimento científico, crie um `campaign.yaml` ao lado do principal:
-
-```yaml
-schema_version: 1
-name: monan-jedi-1dia
-experiment: ./experiment.yaml
-calendar:
-  start: '2025-09-01T00:00:00Z'
-  end: '2025-09-02T00:00:00Z'
-  interval: PT6H
-  end_inclusive: false
-operations: [obs.acquire, obs.convert, jedi, mpas, diagnostics]
-last_cycle:
-  forecast: true
-output: ./workflow-1dia.yaml
-```
-
-Datas são ilustrativas: escolha uma janela real coberta pelos dados. `cycle.interval`, se declarado em `experiment.yaml`, deve coincidir com `calendar.interval`. O exemplo gera **4 análises**: 00, 06, 12 e 18 UTC. `end_inclusive: false` é essencial: sem isso, a beta inclui também 00 UTC do segundo dia. `last_cycle.forecast: true` mantém a previsão do último ciclo, necessária quando seu produto faz parte da verificação final.
-
-Se for necessário inicializar o MPAS, configure a lista `initialization` separadamente, com referência a um experimento de inicialização válido. Exemplo estrutural (não é receita científica pronta):
-
-```yaml
-initialization:
-  - operation: mpas.init
-    cycle: '2025-08-31T18:00:00Z'
-    experiment: ./initialization-experiment.yaml
-  - operation: mpas
-    cycle: '2025-08-31T18:00:00Z'
-    experiment: ./initialization-experiment.yaml
-```
-
-A inicialização não faz parte da lista `operations` dos ciclos repetidos. A receita deve produzir explicitamente o estado exigido pelo primeiro JEDI.
-
-### 4.1 Verifique, exporte, valide o plano e execute
+## 7. Se falhar: um comando de diagnóstico
 
 ```bash
-campaign inspect campaign.yaml
-campaign check campaign.yaml
-campaign export campaign.yaml --engine simpleworkflow
-swf validate workflow-1dia.yaml
-swf plan workflow-1dia.yaml
-swf run workflow-1dia.yaml --ui plain
+cd "$CASE"
+diagnose . --no-pbs
 ```
 
-O comando `campaign export` **não executa** a campanha; somente escreve o grafo. `swf run` é o executor. O arquivo de output deve **não existir** antes da exportação; para um novo teste escolha outro output e outro `experiment.destination`, preservando o resultado anterior.
+O comando **não altera arquivos nem ressubmete jobs**. Ele mostra a tarefa de origem do erro e o `stderr` relevante, em vez de listar centenas de dependentes `BLOCKED`.
 
-A campanha de quatro horários e cinco operações gera até **60 tarefas de ciclo** (5 operações × prepare/run/validate × 4 horários), além das tarefas opcionais de inicialização. Isso é contagem do plano, **não** evidência de sucesso científico.
+Para detalhes:
 
-## 5. Aprovação científica: o que conferir
+```bash
+diagnose . --verbose
+diagnose . --json
+swf explain workflow.yaml
+```
 
-Para cada horário, preserve como evidências:
+Para consultar o PBS use `diagnose .` (sem `--no-pbs`). `swf explain --task` tem uma limitação na versão atual: selecionar uma tarefa de inicialização pode produzir `Unknown selected task(s)` ao tentar usar a seleção também na fase cíclica. Use `swf explain workflow.yaml` sem `--task` até a correção.
 
-- produtos de aquisição e conversão IODA completos e válidos;
-- execução e validação JEDI, análises e seus tempos NetCDF;
-- forecast MPAS validado, inclusive o estado que alimenta o próximo ciclo;
-- diagnósticos: função custo e departures quando disponíveis e configurados;
-- logs PBS/simpleWorkflow, número de tarefas concluídas, erros e tempo de parede;
-- continuidade de background, análise e forecast, sem reutilização de arquivos de outro experimento;
-- comportamento de retomada após falha controlada, sem sobrescrever resultados válidos.
+**Regra para retomada:** nunca apague `.simpleworkflow/`, manifests, scripts PBS ou produtos validados apenas para forçar nova execução. Não use `--force` ou `reset` e **não reinstale** o pacote durante a campanha. As assinaturas do `simpleWorkflow` incluem metadados do executável e hashes do ambiente (`PATH`, `PYTHONPATH` etc.); mudar o controlador pode provocar uma tentativa indevida de repetir tarefas científicas. `status SUCCESS` e `explain SUCCESS` não substituem a comparação das assinaturas. Ver [guia de diagnóstico](diagnostics.md).
 
-`check`, `swf validate` e o fixture artificial **não** substituem essa aprovação. Uma falha de validação interrompe a progressão do experimento. Um job PBS concluído não prova que o NetCDF ou a análise estejam corretos.
+### Caso real: observações do quinto ciclo
 
-## 6. Ampliação: 3, 7, 30 e 365 dias
+Na campanha de sete dias iniciada em 30/01/2026, a inicialização e quatro ciclos 00/06/12/18Z foram concluídos, mas `c00004_obs_convert_prepare` falhou. O erro era **do resolvedor de caminhos**: interpretava a data `20260130` do diretório `m3-7dias-20260130` como data do PREPBUFR e chegava a tentar mudar o diretório do script `run_prepbufr.sh`. Os arquivos reais de 31/01 00Z existiam.
 
-Use **o mesmo conjunto de arquivos científicos** e crie **uma campanha e um destino independentes para cada período**. Mantenha a data inicial, os parâmetros científicos e o intervalo, alterando somente o `calendar.end`, o nome e o `output`. Para início em 2025-09-01T00:00:00Z, intervalo PT6H, `end_inclusive: false`:
+A correção restringiu a interpretação temporal ao **nome do arquivo observacional** e excluiu scripts da verificação. O diagnóstico agora mostra essa causa diretamente. O teste da correção e a retomada segura da campanha longa na JACI são verificações distintas; não declarar os 29 ciclos concluídos antes dos respectivos resultados.
 
-| Duração | end exclusivo (UTC) | Ciclos de 6h | Tarefas cíclicas máximas* |
+## 8. Campanhas longas: 3 e 7 dias (avançado)
+
+A interface `experiment create` da beta **cria somente dois ciclos e seus backgrounds**. **Não basta editar o `calendar.end`**: para uma execução longa também devem existir os vínculos de trajetória/estado para cada análise adicional. Há um preparador **específico da receita MPAS atual** no [repositório institucional](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps), que estende o calendário e cria links para os backgrounds futuros **em um experimento novo, ainda não exportado**. Ele não é um recurso genérico da API nem foi projetado para modificar uma campanha em andamento.
+
+Exemplo de planejamento para 30/01/2026 00Z, horário final **inclusivo**:
+
+| Período | Final UTC inclusivo | Análises | Previsões MPAS entre ciclos |
 | --- | --- | ---: | ---: |
-| 1 dia | 2025-09-02T00:00:00Z | 4 | 60 |
-| 3 dias | 2025-09-04T00:00:00Z | 12 | 180 |
-| 7 dias | 2025-09-08T00:00:00Z | 28 | 420 |
-| 30 dias | 2025-10-01T00:00:00Z | 120 | 1.800 |
-| 365 dias | 2026-09-01T00:00:00Z | 1.460 | 21.900 |
+| 3 dias (72 h) | 02/02/2026 00Z | 13 | 12 |
+| 7 dias (168 h) | 06/02/2026 00Z | 29 | 28 |
 
-*Cinco operações × três tarefas por operação, com previsão no último ciclo; não contam inicialização. Datas e números ilustram exclusivamente a cadência.
+Cada campanha precisa de diretório, `campaign.yaml`, `workflow.yaml` e `.simpleworkflow/` **independentes**; não aumente a duração de um experimento já executado. O preparador verifica PREPBUFR/GNSS-RO de todos os horários, mas isso não substitui o preflight integral de GFS, recursos científicos e scheduler. **`experiment check-inputs .` continua limitado aos primeiros dois ciclos.**
 
-**Portão de promoção:** só iniciar 7 dias após aprovar 3 dias; 30 após aprovar 7; ano após aprovar 30. Verificar exportação, capacidade do scheduler, logs, retomada, uso de armazenamento e operações de longa duração antes da campanha anual. A beta exporta um grafo estático proporcional ao período: o ano exige ensaio de escalabilidade e, possivelmente, geração por janelas ou expansão dinâmica, sem mudança de ciência.
+Passo a passo específico, com comandos completos e condições de segurança: [campanhas M3 de 3/7 dias na JACI](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/experiments/M3/platform-domain-apps/README.md).
 
-## 7. Limpeza e release
+O formato genérico `campaign.yaml` também permite definir `calendar.end` e `end_inclusive`. Use **final inclusivo** se quiser a análise às 00Z do último dia (13 ou 29 análises); use **final exclusivo** para 12 ou 28 análises, respectivamente. Essas convenções produzem contagens diferentes e não devem ser confundidas na comparação de campanhas.
 
-Antes de marcar a versão estável:
+Não iniciar 7 dias antes de avaliar a campanha de 3 dias; não iniciar 30 dias/1 ano antes de demonstrar estabilidade, controle de armazenamento, assinaturas e estratégia de restart em horizontes menores. O grafo estático cresce com o período e precisa de testes de escalabilidade para campanhas anuais.
 
-- [ ] Eleger **somente um** tutorial e uma interface pública; isolar a documentação legada;
-- [ ] Distribuir uma receita científica real, versionada e sem paths pessoais, usando placeholders explícitos somente onde indispensáveis;
-- [ ] Testar a instalação **fora** do checkout e o carregamento de `catalog:`;
-- [ ] Fixar versões de `monan-jedi-workflow`, simpleWorkflow, MONAN/MPAS, MPAS-JEDI, Obs2IODA e stack;
-- [ ] Validar mensagens de erro, contratos, restart, PBS e diagnósticos na JACI;
-- [ ] Conferir que exemplo/fixture artificial e resultados reais estejam claramente separados;
-- [ ] Consolidar documentação e executar testes automatizados e um ciclo científico real;
-- [ ] Só então promover a branch para a primeira release estável, com tag, changelog e procedimento de migração.
+## 9. Critérios de validação científica e documentação
 
-Referência dos comandos da beta: [docs/beta-testing.md](beta-testing.md).
+Para cada ciclo, preservar: timestamp e estado da tarefa, ID PBS e logs nativos, validação IODA, análise JEDI, valores de função custo por iteração, O-B/O-A e QC quando disponíveis, estado completo e tempo dos outputs MPAS, continuidade do background, versão Git, YAML efetivamente usados e identificadores digitais (hashes).
+
+Critérios para relatórios longos: quantidade de análises e previsões esperadas, ausência de lacunas, porcentagem de ciclos aceitos, convergência, integridade/tempos NetCDF, O-B/O-A por variável/observador, comportamento temporal e registros de restart. Resultados de O-A próximos das observações assimiladas são **consistência do ajuste**, não validação independente de previsão.
+
+Relatórios históricos e a validação pós-refatoração estão organizados no [projeto institucional](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026). Uma nova execução só será considerada concluída quando seus próprios logs, métricas e relatórios estiverem disponíveis.
+
+## 10. Referências e restrições da beta
+
+- [Primeiro experimento científico na JACI](first-experiment.md) — detalhes de inicialização, PBS nativo e migração de casos antigos.
+- [Diagnóstico de erros](diagnostics.md) — informações adicionais e JSON.
+- [Configuração de campanhas](configuration/campaign.md) — semântica de calendários e configurações.
+- [Testes beta](beta-testing.md) — fixture artificial e validação de contratos.
+- [Campanhas M3 de 3/7 dias](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps) — preparador externo específico da receita.
+
+Antes de promover esta versão a release estável ainda é necessário: consolidar onboarding sem paths pessoais como dependência, testar instalação fora do checkout, validar generalidade das resoluções/meshes, garantir diagnósticos e retomada segura no `simpleWorkflow`, fixar revisões científicas e publicar os resultados das campanhas prolongadas.
