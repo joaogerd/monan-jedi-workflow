@@ -15,6 +15,7 @@ Para consultas específicas:
 - [Referência arquitetural para desenvolvedores](docs/developer/architecture.md): fronteiras entre aplicativos, orquestrador e execução científica.
 - [Contribuição ao projeto](CONTRIBUTING.md): testes, mudanças e revisão.
 - [Registros de decisões](docs/developer/adr/README.md) e [evidências de validação](docs/validation/): histórico técnico, **não** instruções alternativas de execução.
+- [Auditoria da documentação](docs/DOCUMENTATION_AUDIT.md): decisões de limpeza, incompatibilidades removidas e portões antes do merge.
 
 ## Instalação
 
