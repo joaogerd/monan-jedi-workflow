@@ -163,6 +163,11 @@ def _experiment(argv: list[str]) -> int:
             if opt.machine is not None:
                 if opt.site is not None or opt.workspace is not None:
                     raise ValueError("--machine cannot be combined with --site or --workspace")
+                if opt.pbs_queue is not None or opt.pbs_walltime is not None:
+                    raise ValueError(
+                        "--machine defines PBS resources by stage; "
+                        "do not combine it with --pbs-queue or --pbs-walltime"
+                    )
                 from .machine_profile import load_machine_profile, machine_to_legacy_site
                 machine_profile = load_machine_profile(opt.machine, require_existing=True)
                 # Fail before creating the destination for unsupported backends.
