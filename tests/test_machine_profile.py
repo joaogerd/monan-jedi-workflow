@@ -101,3 +101,22 @@ def test_existing_v0_jaci_site_profile_not_misrepresented_as_v1(tmp_path):
     path.write_text("site:\n  name: jaci\nstack:\n  load: true\n")
     with pytest.raises(MachineProfileError, match="schema_version"):
         load_machine_profile(path)
+
+
+def test_cli_machine_validate_and_show_without_scheduler(tmp_path, capsys):
+    from monan_jedi_workflow.unified_cli import _experiment
+    (tmp_path / "workspace").mkdir()
+    filename = write_profile(tmp_path)
+    assert _experiment(["machine", "validate", str(filename), "--check-paths"]) == 0
+    assert "[OK]" in capsys.readouterr().out
+    assert _experiment(["machine", "show", str(filename)]) == 0
+    normalized = yaml.safe_load(capsys.readouterr().out)
+    assert normalized["machine"]["name"] == "local"
+    assert normalized["execution"]["backend"] == "local"
+
+
+def test_cli_machine_rejects_bad_profile(tmp_path, capsys):
+    from monan_jedi_workflow.unified_cli import _experiment
+    filename = write_profile(tmp_path, execution={"backend": "invalid"})
+    assert _experiment(["machine", "validate", str(filename)]) == 2
+    assert "execution.backend" in capsys.readouterr().err
