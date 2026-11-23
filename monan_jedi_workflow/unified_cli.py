@@ -105,24 +105,12 @@ def _experiment(argv: list[str]) -> int:
             science, descriptor = load_recipe(opt.recipe)
             if opt.end is not None and opt.duration is not None:
                 raise ValueError("--end and --duration are mutually exclusive")
-            chosen_duration = opt.duration
-            if opt.end is not None:
-                from .experiment_start import _utc_start
-                from datetime import timedelta
-                begin = _utc_start(opt.start)
-                finish = _utc_start(opt.end)
-                if finish <= begin:
-                    raise ValueError("--end must be later than --start")
-                span = finish - begin
-                if span.total_seconds() % 3600:
-                    raise ValueError("--end must represent a whole number of hours")
-                chosen_duration = "PT" + str(int(span.total_seconds() // 3600)) + "H"
             settings = resolve_settings(
                 descriptor, config=opt.config, overrides={
                     "resolution": opt.resolution,
                     "levels": opt.levels,
                     "cycle": opt.cycle,
-                    "duration": chosen_duration,
+                    "duration": opt.duration,
                     "mode": opt.mode,
                     "observations": opt.observations.split(",") if opt.observations is not None else None,
                     "mesh": opt.mesh,
@@ -130,6 +118,17 @@ def _experiment(argv: list[str]) -> int:
                     "timestep": opt.timestep,
                 }
             )
+            if opt.end is not None:
+                from .experiment_start import _utc_start, _duration
+                step_hours = int(settings["cycle"][2:-1])
+                begin = _utc_start(opt.start, step_hours=step_hours)
+                finish = _utc_start(opt.end, step_hours=step_hours)
+                if finish <= begin:
+                    raise ValueError("--end must be later than --start")
+                span = finish - begin
+                hours = int(span.total_seconds() // 3600)
+                _duration("PT" + str(hours) + "H", step_hours)
+                settings["duration"] = "PT" + str(hours) + "H"
             settings["recipe"] = descriptor["name"]
             science = select_science(opt.recipe, settings, science)
             create_experiment(
