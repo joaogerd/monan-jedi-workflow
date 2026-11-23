@@ -183,3 +183,76 @@ def load_machine_profile(
         source=source, name=name, backend=backend, environment_kind=kind,
         paths=paths, execution=dict(execution), environment=dict(environment),
     )
+
+
+# Transitional adapter: the scientific PBS stages still consume the legacy
+# site/stack/jedi/environment structure. Do not put scientific choices here.
+_PBS_LEGACY_PATHS = {
+    "installation_root": "MONAN_JEDI_INSTALL_ROOT",
+    "stack_root": "STACK_ROOT",
+    "mesh_root": "MONAN_MESH_ROOT",
+    "physics_root": "MONAN_PHYSICS_ROOT",
+    "bmatrix_root": "MONAN_BMATRIX_ROOT",
+    "observations_root": "MONAN_INPUT_ROOT",
+    "gfs_root": "MONAN_GFS_ROOT",
+    "libfabric_root": "MONAN_LIBFABRIC_ROOT",
+}
+
+
+def machine_to_legacy_site(profile: MachineProfile) -> dict[str, Any]:
+    """Translate a *complete PBS* machine profile to the existing site API.
+
+    Strictly reject incomplete/local/slurm profiles: the current scientific
+    stages are PBS-only and silently generating PBS from a local profile would
+    violate the user's selected computing environment.
+    """
+    if profile.backend != "pbs":
+        raise MachineProfileError(
+            f"Machine backend {profile.backend!r} cannot create a scientific case yet: "
+            "current MPAS/JEDI/WPS/Obs2IODA stages require native PBS. "
+            "Machine profiles can still be validated with experiment machine validate."
+        )
+    if profile.environment_kind != "modules":
+        raise MachineProfileError(
+            "Scientific PBS case currently requires environment.kind: modules"
+        )
+    missing = sorted(set(_PBS_LEGACY_PATHS) - set(profile.paths))
+    if missing:
+        raise MachineProfileError(
+            "Complete PBS machine profile required for scientific case; "
+            "missing paths: " + ", ".join(missing)
+        )
+    # The existing installed v2 manifest, not the machine profile, determines
+    # which stack module/site setup to load inside the scientific PBS script.
+    from .site import runtime_contract_context
+    install = profile.paths["installation_root"]
+    stack = profile.paths["stack_root"]
+    contract = runtime_contract_context(install, stack)
+    setup = Path(contract["stack_site_setup"])
+    if not setup.is_absolute():
+        setup = stack / setup
+    declared_setup = Path(str(profile.environment["setup"]))
+    if declared_setup.resolve() != setup.resolve():
+        raise MachineProfileError(
+            "environment.setup differs from the installed MONAN-JEDI "
+            f"runtime v2 contract: configured {declared_setup}, installed {setup}"
+        )
+    module_root = Path(contract["stack_module_root"])
+    if not module_root.is_absolute():
+        module_root = stack / module_root
+    if not setup.is_file() or not module_root.is_dir():
+        raise MachineProfileError(
+            f"Scientific stack runtime is incomplete: setup={setup}, modules={module_root}"
+        )
+
+    return {
+        "site": {"name": profile.name},
+        "stack": {"load": True, "root": str(stack)},
+        "jedi": {"install_root": str(install)},
+        "environment": {
+            env_name: str(profile.paths[path_name])
+            for path_name, env_name in _PBS_LEGACY_PATHS.items()
+            if path_name not in {"installation_root", "stack_root"}
+        },
+        "runtime": {"unload_anaconda": True, "validate_python": False},
+    }
