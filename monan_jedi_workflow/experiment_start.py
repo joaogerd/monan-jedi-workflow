@@ -90,7 +90,7 @@ def create_experiment(destination, *, pbs_queue=None, pbs_walltime=None, runtime
                         'pesqextra': 480, 'oper': 480, 'preoper': 480}
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]*', pbs_queue):
             raise ValueError('PBS queue must be a simple queue name')
-        match = re.fullmatch(r'(\\d{1,3}):([0-5]\\d):([0-5]\\d)', pbs_walltime)
+        match = re.fullmatch(r'(\d{1,3}):([0-5]\d):([0-5]\d)', pbs_walltime)
         if not match:
             raise ValueError('PBS walltime must use HH:MM:SS')
         minutes = int(match[1]) * 60 + int(match[2]) + int(match[3]) / 60
