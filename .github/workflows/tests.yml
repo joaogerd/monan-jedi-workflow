@@ -65,7 +65,9 @@ jobs:
           required = {
               "monan_jedi_workflow/recipes/mpas-jedi-3dvar/recipe.yaml",
               "monan_jedi_workflow/recipes/mpas-jedi-3dvar/README.md",
-              "monan_jedi_workflow/catalog/reference-20250901/jedi.yaml",
+              "monan_jedi_workflow/recipes/mpas-jedi-3dvar/science/jedi.yaml",
+              "monan_jedi_workflow/recipes/mpas-jedi-3dvar/science/initialization/mpas.yaml",
+              "monan_jedi_workflow/recipes/mpas-jedi-3dvar/science/templates/variational.yaml",
           }
           missing = required - paths
           assert not missing, f"Wheel missing scientific resources: {sorted(missing)}"
