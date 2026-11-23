@@ -18,3 +18,7 @@ resolution_profiles:
     bmatrix: "${MONAN_BMATRIX_ROOT}"
     mesh_id: x1.10242
     mpi_ranks: 128
+    levels: 55
+    cycle: PT6H
+    background_offset_hours: 3
+    observations: [conv, gpsro]
