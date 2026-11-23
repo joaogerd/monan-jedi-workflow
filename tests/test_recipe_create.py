@@ -139,3 +139,25 @@ def test_covariance_override_is_explicit_and_preserved():
     settings = resolve_settings(desc, overrides={"bmatrix": path})
     assert settings["bmatrix"] == path
     assert settings["profile"]["bmatrix"] != path
+
+
+def test_namespace_traversable_requires_one_joinpath_component(monkeypatch):
+    """Regression for Python 3.11 MultiplexedPath.joinpath(single child)."""
+    import monan_jedi_workflow.recipe_config as module
+
+    class SingleComponentTraversable:
+        def __init__(self, directory):
+            self.directory = directory
+
+        def joinpath(self, *parts):
+            assert len(parts) == 1, "MultiplexedPath accepts exactly one component"
+            return SingleComponentTraversable(self.directory / parts[0])
+
+        def __str__(self):
+            return str(self.directory)
+
+    package_root = Path(module.__file__).resolve().parent
+    monkeypatch.setattr(module, "files", lambda name: SingleComponentTraversable(package_root))
+    science, descriptor = module.load_recipe("mpas-jedi-3dvar")
+    assert descriptor["name"] == "mpas-jedi-3dvar"
+    assert (science / "jedi.yaml").is_file()
