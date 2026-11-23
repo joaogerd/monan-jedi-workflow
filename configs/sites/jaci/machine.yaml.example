@@ -14,6 +14,7 @@ paths:
   physics_root: /p/projetos/SEU_GRUPO/share/MONAN-JEDI-Data/physics
   observations_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/external-inputs
   gfs_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/data/gfs
+  libfabric_root: /opt/cray/libfabric/1.22.0/lib64
 execution:
   backend: pbs
   queue: pesqmidi
