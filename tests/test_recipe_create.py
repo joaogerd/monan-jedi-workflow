@@ -170,3 +170,13 @@ def test_builtin_recipe_is_self_contained():
     assert (source / "runtime-skeleton").is_dir()
     assert (source / "runners").is_dir()
     assert (source / "templates" / "variational.yaml").is_file()
+
+
+def test_legacy_catalog_alias_uses_canonical_science_tree():
+    """Compatibility without storing duplicate copies of science files."""
+    from monan_jedi_workflow.platform_config import reference
+    from monan_jedi_workflow.recipe_config import load_recipe
+    source, _ = load_recipe("mpas-jedi-3dvar")
+    assert reference("catalog:reference-20250901/jedi.yaml", Path.cwd()) == source / "jedi.yaml"
+    assert reference("catalog:reference-20250901", Path.cwd()) == source
+    assert not (source.parents[2] / "catalog" / "reference-20250901").exists()
