@@ -78,6 +78,17 @@ def test_machine_pbs_generates_equivalent_legacy_science(tmp_path):
         generated, machine_profile=machine, start="2026-01-30T00:00:00Z"
     )
 
+    def normalize_paths(value, case_root):
+        """Normalize case-specific strings *after* parsing valid YAML."""
+        if isinstance(value, dict):
+            return {key: normalize_paths(item, case_root)
+                    for key, item in value.items()}
+        if isinstance(value, list):
+            return [normalize_paths(item, case_root) for item in value]
+        if isinstance(value, str):
+            return value.replace(str(case_root), "@CASE@")
+        return value
+
     for relative in (
         "science/site.yaml",
         "science/jedi.yaml",
@@ -87,13 +98,11 @@ def test_machine_pbs_generates_equivalent_legacy_science(tmp_path):
         "science/initialization/mpas.yaml",
         "science/initialization/mpas_init.yaml",
     ):
-        before = (legacy / relative).read_text().replace(str(legacy), "@CASE@")
-        after = (generated / relative).read_text().replace(str(generated), "@CASE@")
-        # YAML mapping key order is not part of the scientific/runtime
-        # contract. The legacy profile is dumped with sorted keys, while
-        # machine_to_legacy_site() retains its declaration order. Compare
-        # complete parsed structures, preserving lists and every value.
-        assert yaml.safe_load(before) == yaml.safe_load(after), relative
+        before = yaml.safe_load((legacy / relative).read_text())
+        after = yaml.safe_load((generated / relative).read_text())
+        # Compare all values and lists, ignoring only mapping order and
+        # the expected experiment-root difference between independent cases.
+        assert normalize_paths(before, legacy) == normalize_paths(after, generated), relative
     assert (generated / "machine-profile-lock.yaml").is_file()
     assert not (legacy / "machine-profile-lock.yaml").exists()
     assert adapted["site"]["name"] == "test"
