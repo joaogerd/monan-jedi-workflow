@@ -1,8 +1,9 @@
 # MONAN-JEDI experiment recipes
 
 The bundled recipe is [MPAS-JEDI 3DVar/FGAT](../monan_jedi_workflow/recipes/mpas-jedi-3dvar/README.md).
-It is installed with the Python package and has a self-contained README and
-machine-readable recipe descriptor.
+It is installed with the Python package as a complete recipe with README,
+`recipe.yaml`, and its own `science/` tree. The legacy `catalog/` reference is
+retained temporarily for older integrations only.
 
 Recipes specify scientific defaults. An explicitly supplied create parameter
 overrides the corresponding recipe default; omitted values do not override it.
