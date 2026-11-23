@@ -55,4 +55,4 @@ quando aplicável.
 
 O YAML variacional referenciado em `templates` contém as escolhas detalhadas
 de DA: geometry, variáveis de estado/controle, B, observers, operadores, QC,
-erros de observação e minimização. A receita instalada em `monan_jedi_workflow/catalog/reference-20250901/jedi.yaml` fornece **um exemplo histórico específico** dessas escolhas; o workflow não inventa defaults científicos. Confirme malha, matriz B, sensores, janelas, estados e executáveis antes de reutilizá-la.
+erros de observação e minimização. A receita instalada em `monan_jedi_workflow/recipes/mpas-jedi-3dvar/science/jedi.yaml` fornece **um exemplo histórico específico** dessas escolhas; o workflow não inventa defaults científicos. Confirme malha, matriz B, sensores, janelas, estados e executáveis antes de reutilizá-la.
