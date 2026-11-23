@@ -14,7 +14,7 @@ import sys
 def _usage() -> int:
     print(
         "experiment — MONAN-JEDI campaign management\n\n"
-        "  experiment create DEST --recipe NAME [--start UTC] [--duration P7D] [--resolution 240km] [--config YAML]\n"
+        "  experiment create DEST --recipe NAME [--machine YAML | --site YAML] [--start UTC] [--duration P7D] [--resolution 240km] [--config YAML]\n"
         "  experiment recipes list|show NAME_OR_PATH\n"
         "  experiment check|export campaign.yaml\n"
         "  experiment validate|plan|run|status workflow.yaml\n"
@@ -117,10 +117,12 @@ def _experiment(argv: list[str]) -> int:
                             default="2025-09-01T00:00:00Z")
         parser.add_argument("--site", type=Path,
                             help="Persistent site YAML; otherwise read workspace/site.yaml")
+        parser.add_argument("--machine", type=Path,
+                            help="Explicit machine.yaml v1; PBS backend supported for scientific case creation")
         parser.add_argument("--workspace", type=Path,
                             help="Existing isolated site-profile directory; HPC paths remain unchanged")
-        parser.add_argument("--pbs-queue", default="pesqmidi")
-        parser.add_argument("--pbs-walltime", default="01:00:00")
+        parser.add_argument("--pbs-queue", default=None)
+        parser.add_argument("--pbs-walltime", default=None)
         parser.add_argument("--runtime-bin", type=Path)
         # The mode flag is intentionally omitted while scientific warm start
         # is unimplemented. Never silently interpret a warm request as cold.
@@ -157,12 +159,28 @@ def _experiment(argv: list[str]) -> int:
                 settings["duration"] = "PT" + str(hours) + "H"
             settings["recipe"] = descriptor["name"]
             science = select_science(opt.recipe, settings, science)
+            machine_profile = None
+            if opt.machine is not None:
+                if opt.site is not None or opt.workspace is not None:
+                    raise ValueError("--machine cannot be combined with --site or --workspace")
+                from .machine_profile import load_machine_profile, machine_to_legacy_site
+                machine_profile = load_machine_profile(opt.machine, require_existing=True)
+                # Fail before creating the destination for unsupported backends.
+                machine_to_legacy_site(machine_profile)
+            queue = opt.pbs_queue
+            walltime = opt.pbs_walltime
+            if machine_profile is not None:
+                if queue is None:
+                    queue = machine_profile.execution.get("queue", "pesqmidi")
+                if walltime is None:
+                    walltime = machine_profile.execution.get("walltime", "01:00:00")
             create_experiment(
                 opt.destination, start=opt.start,
-                pbs_queue=opt.pbs_queue, pbs_walltime=opt.pbs_walltime,
+                pbs_queue=queue or "pesqmidi",
+                pbs_walltime=walltime or "01:00:00",
                 runtime_bin=opt.runtime_bin, site_config=opt.site,
                 workspace=opt.workspace, recipe_source=science,
-                settings=settings,
+                settings=settings, machine_profile=machine_profile,
             )
         except (ValueError, OSError) as error:
             print(f"[ERRO] Experimento não criado: {error}", file=sys.stderr)
