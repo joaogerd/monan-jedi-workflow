@@ -300,7 +300,7 @@ Relatórios históricos e a validação pós-refatoração estão organizados no
 
 ## 10. Referências e restrições da beta
 
-- [Primeiro experimento científico na JACI](first-experiment.md) — detalhes de inicialização, PBS nativo e migração de casos antigos.
+- [Primeiro experimento científico na JACI](developer/architecture.md) — detalhes de inicialização, PBS nativo e migração de casos antigos.
 - [Diagnóstico de erros](diagnostics.md) — informações adicionais e JSON.
 - [Configuração de campanhas](configuration/campaign.md) — semântica de calendários e configurações.
 - [Teste artificial de instalação](../examples/beta/manual.sh) — fixture artificial e validação de contratos.
