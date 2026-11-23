@@ -65,6 +65,9 @@ def _duration(value):
 def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None, recipe_source=None, settings=None):
     first_analysis = _utc_start(start)
     settings = settings or {}
+    mesh_id = settings.get('profile', {}).get('mesh_id', 'x1.10242')
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+', mesh_id):
+        raise ValueError('Invalid mesh_id in recipe profile')
     span = _duration(settings.get('duration', 'PT6H'))
     final_analysis = first_analysis + span
     second_analysis = first_analysis + timedelta(hours=6)
@@ -122,7 +125,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
             if initial:
                 for link in cfg['links']:
                     if 'initialization/work/mpas-init/' in link['source']:
-                        link['source'] = str(root / 'work/mpas-init/{cycle_id}/x1.10242.init.{mpas_file_time}.nc')
+                        link['source'] = str(root / f'work/mpas-init/{{cycle_id}}/{mesh_id}.init.{{mpas_file_time}}.nc')
                 for template in cfg['templates']:
                     template['source'] = str(science / 'templates' / Path(template['source']).name)
         elif key == 'mpas_init':
