@@ -159,7 +159,7 @@ O nome `primeiro-experimento` **não tem significado científico especial**. Pod
 
 O `site.yaml` descreve os **recursos do ambiente** que novos experimentos desse workspace podem reutilizar: caminhos para instalações e dados, bibliotecas e configurações específicas do local. Já o `environment.sh` é produzido **dentro de cada experimento** e deve ser carregado com `source ./environment.sh` antes dos comandos científicos.
 
-A pasta existir não significa que o ambiente científico esteja pronto. Antes de executar `experiment create --workspace "$WORKSPACE"`, confirme que o workspace dispõe de um `site.yaml` revisado e apropriado ao seu ambiente. Caso seja uma instalação nova, consulte `experiment site init --help`, verifique os caminhos descobertos e valide a configuração **antes da primeira submissão**. Consulte também [arquitetura de execução na JACI](developer/architecture.md).
+A pasta existir não significa que o ambiente científico esteja pronto. Antes de executar `experiment create --workspace "$WORKSPACE"`, confirme que o workspace dispõe de um `site.yaml` revisado e apropriado ao seu ambiente. Caso seja uma instalação nova, consulte `experiment site init --help`, verifique os caminhos descobertos e valide a configuração **antes da primeira submissão**. Para detalhes de descoberta do perfil, consulte [ambiente persistente do site](persistent-site-environment.md) e [arquitetura de execução na JACI](developer/architecture.md).
 
 Os valores científicos da receita de referência (resolução, malha, número de processos, física e matriz B) são parâmetros de **um caso específico**, não valores universais do software.
 
@@ -300,7 +300,7 @@ Relatórios históricos e a validação pós-refatoração estão organizados no
 
 ## 10. Referências e restrições da beta
 
-- [Primeiro experimento científico na JACI](developer/architecture.md) — detalhes de inicialização, PBS nativo e migração de casos antigos.
+- [Arquitetura de execução na JACI](developer/architecture.md) — fronteiras entre controlador, PBS nativo e etapas científicas.
 - [Diagnóstico de erros](diagnostics.md) — informações adicionais e JSON.
 - [Configuração de campanhas](configuration/campaign.md) — semântica de calendários e configurações.
 - [Teste artificial de instalação](../examples/beta/manual.sh) — fixture artificial e validação de contratos.
