@@ -15,7 +15,8 @@ def _usage() -> int:
     print(
         "experiment — MONAN-JEDI campaign management\n\n"
         "  experiment create DEST --recipe NAME [--start UTC] [--duration P7D] [--resolution 240km] [--config YAML]\n"
-        "  experiment recipes list|show NAME_OR_PATH\n"\n        "  experiment check|export campaign.yaml\n"
+        "  experiment recipes list|show NAME_OR_PATH\n"
+        "  experiment check|export campaign.yaml\n"
         "  experiment validate|plan|run|status workflow.yaml\n"
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
         "  experiment check-inputs CASE\n"
