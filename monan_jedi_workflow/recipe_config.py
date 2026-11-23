@@ -125,8 +125,11 @@ def resolve_settings(recipe: dict, *, config: Path | None = None, overrides: dic
         raise ValueError("Requested observations require matching converter/UFO templates in the profile")
     if settings.get("mesh") != profile["mesh"]:
         raise ValueError("Custom mesh requires a matching resolution profile and MPAS/JEDI templates")
-    if settings.get("bmatrix") != profile["bmatrix"]:
-        raise ValueError("Custom B requires a matching resolution profile and variational templates")
+    # The covariance directory is a JEDI runtime input; users may select a
+    # different B for the SAME mesh/level contract. Its existence/contents are
+    # checked during preflight and scientific validation, not inferred here.
+    if not isinstance(settings.get("bmatrix"), str) or not settings["bmatrix"].strip():
+        raise ValueError("bmatrix must be a nonempty covariance directory path")
     if settings.get("timestep") is not None and settings["timestep"] != profile.get("timestep"):
         raise ValueError("Model timestep override requires a matching profile/namelist")
     return settings
