@@ -79,6 +79,7 @@ def _experiment(argv: list[str]) -> int:
         parser.add_argument("--levels", type=int, default=None)
         parser.add_argument("--cycle", default=None)
         parser.add_argument("--duration", default=None)
+        parser.add_argument("--end", default=None, help="Inclusive final analysis UTC; conflicts with --duration")
         parser.add_argument("--observations", default=None,
                             help="Comma-separated observation groups, e.g. conv,gpsro")
         parser.add_argument("--mesh", default=None)
@@ -102,12 +103,26 @@ def _experiment(argv: list[str]) -> int:
         from .recipe_config import load_recipe, resolve_settings, select_science
         try:
             science, descriptor = load_recipe(opt.recipe)
+            if opt.end is not None and opt.duration is not None:
+                raise ValueError("--end and --duration are mutually exclusive")
+            chosen_duration = opt.duration
+            if opt.end is not None:
+                from .experiment_start import _utc_start
+                from datetime import timedelta
+                begin = _utc_start(opt.start)
+                finish = _utc_start(opt.end)
+                if finish <= begin:
+                    raise ValueError("--end must be later than --start")
+                span = finish - begin
+                if span.total_seconds() % 3600:
+                    raise ValueError("--end must represent a whole number of hours")
+                chosen_duration = "PT" + str(int(span.total_seconds() // 3600)) + "H"
             settings = resolve_settings(
                 descriptor, config=opt.config, overrides={
                     "resolution": opt.resolution,
                     "levels": opt.levels,
                     "cycle": opt.cycle,
-                    "duration": opt.duration,
+                    "duration": chosen_duration,
                     "mode": opt.mode,
                     "observations": opt.observations.split(",") if opt.observations is not None else None,
                     "mesh": opt.mesh,
