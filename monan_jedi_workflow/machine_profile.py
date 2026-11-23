@@ -198,7 +198,7 @@ def load_machine_profile(
                     )
             if "walltime" in stage and (
                 not isinstance(stage["walltime"], str)
-                or not re.fullmatch(r"\\d{1,3}:[0-5]\\d:[0-5]\\d", stage["walltime"])
+                or not re.fullmatch(r"\d{1,3}:[0-5]\d:[0-5]\d", stage["walltime"])
                 or not any(c != "0" and c != ":" for c in stage["walltime"])
             ):
                 raise MachineProfileError(
