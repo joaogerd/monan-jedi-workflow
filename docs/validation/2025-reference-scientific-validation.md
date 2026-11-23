@@ -65,8 +65,7 @@ O JEDI 06Z deve consumir a trajetória MPAS 00Z válida às 03Z e o estado compl
 válido às 06Z, produzidos pelo candidato. Reutilizar esses dois arquivos do
 caso histórico esconderia uma falha no encadeamento. Conferir novamente os
 arquivos renderizados antes de submeter. O gerador do piloto agora materializa o experimento principal, a campanha e
-um shell PBS explícito. Seguir `run-short-pilot.md`; a verificação da instalação
-e dos dados completos continua sendo feita na JACI antes da submissão.
+um shell PBS explícito. O antigo roteiro de piloto (`run-short-pilot.md`) foi retirado da documentação ativa por descrever um empacotamento e uma forma de execução substituídos. Esse registro é histórico; para novas execuções use o [tutorial atual](../tutorial.md). A verificação dos dados completos continua sendo necessária na JACI antes de qualquer submissão.
 
 ## Critérios de aceite
 
