@@ -1,0 +1,23 @@
+# Computational profile v1 — example, NOT an operational JACI setup.
+# Change paths and verify against the installed scientific runtime.
+# The existing site.yaml.example is a legacy native-PBS site profile.
+schema_version: 1
+machine:
+  name: jaci
+paths:
+  work_root: /p/projetos/SEU_GRUPO/SEU_USUARIO
+  scratch_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/scratch
+  installation_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/build/monan-jedi
+  stack_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/work/spack-stack
+  mesh_root: /p/projetos/SEU_GRUPO/share/MONAN-JEDI-Data/meshes
+  bmatrix_root: /p/projetos/SEU_GRUPO/share/MONAN-JEDI-Data/covariance
+  physics_root: /p/projetos/SEU_GRUPO/share/MONAN-JEDI-Data/physics
+  observations_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/external-inputs
+  gfs_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/data/gfs
+execution:
+  backend: pbs
+  queue: pesqmidi
+  walltime: '01:00:00'
+environment:
+  kind: modules
+  setup: /p/projetos/SEU_GRUPO/SEU_USUARIO/work/spack-stack/configs/sites/tier2/jaci/setup.sh
