@@ -3,6 +3,7 @@
 This is case creation only. Scientific execution remains in the domain apps.
 """
 import argparse
+import json
 from datetime import datetime, timedelta, timezone
 from importlib.resources import files
 from pathlib import Path
@@ -50,8 +51,22 @@ def _mpas_file_time(dt):
     return dt.strftime('%Y-%m-%d_%H.%M.%S')
 
 
-def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None):
+def _duration(value):
+    """Parse whole-hour ISO duration, either PTnH or PnD."""
+    match = re.fullmatch(r'P([1-9][0-9]*)D|PT([1-9][0-9]*)H', str(value))
+    if not match:
+        raise ValueError('duration must be PnD or PTnH, e.g. P7D or PT6H')
+    hours = int(match[1]) * 24 if match[1] else int(match[2])
+    if hours % 6:
+        raise ValueError('Reference six-hour recipe requires duration in multiples of six hours')
+    return timedelta(hours=hours)
+
+
+def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None, recipe_source=None, settings=None):
     first_analysis = _utc_start(start)
+    settings = settings or {}
+    span = _duration(settings.get('duration', 'PT6H'))
+    final_analysis = first_analysis + span
     second_analysis = first_analysis + timedelta(hours=6)
     initialization_time = first_analysis - timedelta(hours=6)
     # Site policy documented in mpas-bmatrix-global/docs/jaci-operational-guide.md.
@@ -78,7 +93,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     site_source, site_profile = load_project_site(
         root, site_config=site_config, configuration_workspace=workspace
     )
-    recipe = Path(str(files('monan_jedi_workflow').joinpath('catalog/reference-20250901')))
+    recipe = Path(recipe_source) if recipe_source is not None else Path(str(files('monan_jedi_workflow').joinpath('catalog/reference-20250901')))
     shutil.copytree(recipe, root / 'science')
     science = root / 'science'
     for relative, key in [('jedi.yaml','jedi'), ('mpas.yaml','mpas'), ('obs2ioda.yaml','obs2ioda'),
@@ -185,10 +200,11 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     # Each first analysis consumes the 3 h and 6 h outputs of the
     # initialization forecast; the second consumes the cycling forecast.
     # Derive all dates, including month/year/leap transitions, from --start.
-    for analysis, forecast_start, forecast_dir in (
-        (first_analysis, initialization_time, 'work/initialization/mpas'),
-        (second_analysis, first_analysis, 'work/mpas'),
-    ):
+    analyses = [first_analysis + timedelta(hours=6 * index)
+                for index in range(int(span.total_seconds() // 21600) + 1)]
+    for index, analysis in enumerate(analyses):
+        forecast_start = initialization_time if index == 0 else analyses[index - 1]
+        forecast_dir = 'work/initialization/mpas' if index == 0 else 'work/mpas'
         folder = root / 'work/background' / _cycle_id(analysis)
         folder.mkdir(parents=True)
         forecast = root / forecast_dir / _cycle_id(forecast_start)
@@ -245,10 +261,10 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     # by each declared scientific run task, never by the full experiment.
     initialization_cycle = _cycle(initialization_time)
     first_cycle = _cycle(first_analysis)
-    last_cycle = _cycle(second_analysis)
+    last_cycle = _cycle(final_analysis)
     campaign = {
         'schema_version': 1,
-        'name': 'reference-' + first_analysis.strftime('%Y%m%d%H') + '-two-analyses',
+        'name': 'reference-' + first_analysis.strftime('%Y%m%d%H') + '-' + str(len(analyses)) + '-analyses',
         'experiment': './experiment.yaml',
         'calendar': {
             'start': first_cycle, 'end': last_cycle,
@@ -265,6 +281,11 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         'output': './workflow.yaml',
     }
     write(root / 'campaign.yaml', campaign)
+    # Reproducibility: snapshot settings into the new case.
+    (root / 'recipe-lock.json').write_text(json.dumps(
+        {'recipe': settings.get('recipe', 'legacy-reference'),
+         'resolved': settings, 'source': str(recipe)}, indent=2, sort_keys=True
+    ) + '\\n')
 
 
 def suggest_available_dates(*, input_root, gfs_root, exclude='2025-09-01T00:00:00Z', limit=6):
