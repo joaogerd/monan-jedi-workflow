@@ -63,7 +63,7 @@ def _duration(value, step_hours=6):
     return timedelta(hours=hours)
 
 
-def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None, recipe_source=None, settings=None):
+def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None, recipe_source=None, settings=None, machine_profile=None):
     settings = settings or {}
     interval = settings.get('cycle', 'PT6H')
     if not re.fullmatch(r'PT[1-9][0-9]*H', interval):
@@ -102,9 +102,21 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     root = Path(destination).resolve()
     if root.exists():
         raise FileExistsError(f'Choose a new experiment directory: {root}')
-    site_source, site_profile = load_project_site(
-        root, site_config=site_config, configuration_workspace=workspace
-    )
+    if machine_profile is None:
+        # Preserve the verified JACI onboarding and existing --site behavior.
+        site_source, site_profile = load_project_site(
+            root, site_config=site_config, configuration_workspace=workspace
+        )
+    else:
+        if site_config is not None:
+            raise ValueError("--machine cannot be combined with --site")
+        if workspace is not None:
+            raise ValueError("--machine cannot be combined with --workspace yet")
+        from .machine_profile import MachineProfile, machine_to_legacy_site
+        if not isinstance(machine_profile, MachineProfile):
+            raise TypeError("machine_profile must be a validated MachineProfile")
+        site_source = machine_profile.source
+        site_profile = machine_to_legacy_site(machine_profile)
     recipe = Path(recipe_source) if recipe_source is not None else Path(__file__).resolve().parent / 'recipes/mpas-jedi-3dvar/science'
     shutil.copytree(recipe, root / 'science')
     science = root / 'science'
@@ -313,6 +325,12 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     }
     write(root / 'campaign.yaml', campaign)
     # Reproducibility: snapshot settings into the new case.
+    if machine_profile is not None:
+        # Record the exact computing profile used to generate the case.
+        # The profile is a snapshot; no changes to scientific recipe values.
+        (root / 'machine-profile-lock.yaml').write_text(
+            yaml.safe_dump(machine_profile.describe(), sort_keys=False)
+        )
     (root / 'recipe-lock.json').write_text(json.dumps(
         {'recipe': settings.get('recipe', 'legacy-reference'),
          'resolved': settings, 'source': str(recipe)}, indent=2, sort_keys=True
