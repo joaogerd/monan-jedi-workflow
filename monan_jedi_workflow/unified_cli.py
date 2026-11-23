@@ -167,17 +167,10 @@ def _experiment(argv: list[str]) -> int:
                 machine_profile = load_machine_profile(opt.machine, require_existing=True)
                 # Fail before creating the destination for unsupported backends.
                 machine_to_legacy_site(machine_profile)
-            queue = opt.pbs_queue
-            walltime = opt.pbs_walltime
-            if machine_profile is not None:
-                if queue is None:
-                    queue = machine_profile.execution.get("queue", "pesqmidi")
-                if walltime is None:
-                    walltime = machine_profile.execution.get("walltime", "01:00:00")
             create_experiment(
                 opt.destination, start=opt.start,
-                pbs_queue=queue or "pesqmidi",
-                pbs_walltime=walltime or "01:00:00",
+                pbs_queue=opt.pbs_queue,
+                pbs_walltime=opt.pbs_walltime,
                 runtime_bin=opt.runtime_bin, site_config=opt.site,
                 workspace=opt.workspace, recipe_source=science,
                 settings=settings, machine_profile=machine_profile,
