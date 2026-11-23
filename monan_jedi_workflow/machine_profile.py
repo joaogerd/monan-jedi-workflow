@@ -293,6 +293,18 @@ def machine_to_legacy_site(profile: MachineProfile) -> dict[str, Any]:
                 f"execution.stages.{stage_name} missing fields: "
                 + ", ".join(sorted(missing_fields))
             )
+    limits = profile.execution.get("queue_limits", {})
+    for stage_name, resources in stages.items():
+        queue = resources["queue"]
+        if queue in limits:
+            hours, minutes, seconds = map(int, resources["walltime"].split(":"))
+            requested_minutes = hours * 60 + minutes + seconds / 60
+            if requested_minutes > limits[queue]:
+                raise MachineProfileError(
+                    f"execution.stages.{stage_name}.walltime exceeds "
+                    f"execution.queue_limits.{queue}: "
+                    f"{resources['walltime']} > {limits[queue]} minutes"
+                )
     # The existing installed v2 manifest, not the machine profile, determines
     # which stack module/site setup to load inside the scientific PBS script.
     from .site import runtime_contract_context
