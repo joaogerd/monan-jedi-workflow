@@ -49,4 +49,4 @@ executável MONAN/MPAS, invariant, partição etc.
 quais NetCDF são produtos válidos.
 
 Malha, níveis, timestep, física, partição e recursos não possuem valores
-científicos universais no motor. O catálogo `monan_jedi_workflow/catalog/reference-20250901/mpas.yaml` já apresenta parâmetros de uma receita de referência específica. Não os interprete como defaults universais: confira compatibilidade entre malha, partição, timestep, física, estados e biblioteca MPI.
+científicos universais no motor. O catálogo `monan_jedi_workflow/recipes/mpas-jedi-3dvar/science/mpas.yaml` já apresenta parâmetros de uma receita de referência específica. Não os interprete como defaults universais: confira compatibilidade entre malha, partição, timestep, física, estados e biblioteca MPI.
