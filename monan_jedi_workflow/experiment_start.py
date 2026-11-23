@@ -352,8 +352,8 @@ def check_date_inputs(destination):
     campaign = yaml.safe_load(campaign_file.read_text())
     start = _utc_start(campaign['calendar']['start'])
     last = _utc_start(campaign['calendar']['end'])
-    if last != start + timedelta(hours=6):
-        raise ValueError('This first-experiment input preflight expects two 6-hour analyses')
+    if last <= start or (last - start).total_seconds() % 21600:
+        raise ValueError('Reference input preflight requires a positive six-hour cycle range')
     initial = _cycle(start - timedelta(hours=6))
     wps = load_wps_run(root / 'science/initialization', initial)
     raw = resolve_path(
@@ -362,7 +362,9 @@ def check_date_inputs(destination):
         label='wps.acquisition.source',
     )
     required = [('GFS initialization ' + initial, raw)]
-    for analysis in (start, last):
+    cycles = [start + timedelta(hours=6 * idx)
+              for idx in range(int((last - start).total_seconds() // 21600) + 1)]
+    for analysis in cycles:
         cycle = _cycle(analysis)
         obs = load_obs2ioda_run(root / 'science', cycle)
         for converter in _build_plan(obs)['converters']:
