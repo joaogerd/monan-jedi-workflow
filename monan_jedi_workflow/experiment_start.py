@@ -317,7 +317,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     (root / 'recipe-lock.json').write_text(json.dumps(
         {'recipe': settings.get('recipe', 'legacy-reference'),
          'resolved': settings, 'source': str(recipe)}, indent=2, sort_keys=True
-    ) + '\\n')
+    ) + '\n')
 
 
 def suggest_available_dates(*, input_root, gfs_root, exclude='2025-09-01T00:00:00Z', limit=6):
