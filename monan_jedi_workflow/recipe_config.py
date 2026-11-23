@@ -11,7 +11,6 @@ import re
 import yaml
 
 BUILTIN = "mpas-jedi-3dvar"
-BUNDLED = "reference-20250901"
 
 
 def _read(path: Path) -> dict:
@@ -42,14 +41,11 @@ def load_recipe(recipe: str | Path = BUILTIN) -> tuple[Path, dict]:
     if not (directory / "README.md").is_file():
         raise ValueError(f"Every recipe must have a README.md: {directory}")
     source = data.get("science_source")
-    if source == BUNDLED:
-        science = (Path(__file__).resolve().parent / "catalog" / BUNDLED)
-    elif isinstance(source, str) and source:
-        science = (directory / source).resolve()
-        if not science.is_relative_to(directory.resolve()):
-            raise ValueError("science_source must remain within the external recipe")
-    else:
+    if not isinstance(source, str) or not source:
         raise ValueError("recipe science_source must name a directory")
+    science = (directory / source).resolve()
+    if not science.is_relative_to(directory.resolve()):
+        raise ValueError("science_source must remain within the selected recipe")
     if not science.is_dir():
         raise ValueError(f"Recipe science directory does not exist: {science}")
     return science, data
