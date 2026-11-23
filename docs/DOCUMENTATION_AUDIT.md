@@ -71,14 +71,14 @@ As decisões científicas e de arquitetura que ainda têm relevância foram pres
 | Evidência científica de versões/datas específicas | `validation/2025-reference-scientific-validation.md` e auditoria de regressão |
 | Políticas de colaboração | [CONTRIBUTING](../CONTRIBUTING.md) e `developer/documentation-policy.md` |
 
-Os arquivos em `examples/` e `monan_jedi_workflow/catalog/` integram os artefatos de referência, mas **não** devem ser confundidos com defaults científicos universais. Os exemplos com `EDITAR` são templates incompletos.
+Os arquivos em `examples/`, `monan_jedi_workflow/catalog/smoke/` e `monan_jedi_workflow/recipes/` integram os artefatos de referência, mas **não** devem ser confundidos com defaults científicos universais. Os exemplos com `EDITAR` são templates incompletos.
 
 ## Portões ainda abertos antes do merge
 
 - [ ] Executar `python scripts/check_docs_links.py` num checkout limpo do branch e corrigir qualquer quebra encontrada.
 - [ ] Executar `python -m pytest -q` com o ambiente de dependências instalado e registrar versões/resultados.
 - [ ] Conferir cada comando do tutorial com `--help` dos entrypoints da distribuição instalada.
-- [ ] Confirmar instalação limpa **fora do checkout** e carregamento de `catalog:`.
+- [ ] Confirmar instalação limpa **fora do checkout** e carregamento de `catalog:smoke` e do alias legado `catalog:reference-20250901`.
 - [ ] Completar e avaliar campanhas independentes de 3 e 7 dias na JACI, sem reexecução destrutiva de etapas validadas.
 - [ ] Verificar a retomada segura do `simpleWorkflow` quando `PATH`, `PYTHONPATH` ou atributos do executável mudam.
 - [ ] Corrigir a seleção `swf explain --task` na fase de inicialização, se esse comportamento continuar reproduzível.
