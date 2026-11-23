@@ -191,6 +191,39 @@ def test_missing_stage_policy_fails_before_creating_case(tmp_path):
     assert not case.exists()
 
 
+def test_machine_queue_limit_is_checked_before_case_creation(tmp_path):
+    paths, setup = fake_runtime(tmp_path)
+    document = machine_document(paths, setup)
+    document["execution"]["queue_limits"] = {"pesqmidi": 30}
+    profile_file = tmp_path / "machine.yaml"
+    profile_file.write_text(yaml.safe_dump(document))
+    machine = load_machine_profile(profile_file, require_existing=True)
+    case = tmp_path / "bad-walltime-case"
+    with pytest.raises(MachineProfileError, match="queue_limits.pesqmidi"):
+        create_experiment(case, machine_profile=machine)
+    assert not case.exists()
+
+
+def test_legacy_create_still_has_its_documented_default_pbs_values(tmp_path):
+    paths, setup = fake_runtime(tmp_path)
+    adapted = machine_to_legacy_site(load_machine_profile(
+        _write_machine(tmp_path, machine_document(paths, setup)),
+        require_existing=True,
+    ))
+    legacy_file = tmp_path / "legacy-site.yaml"
+    legacy_file.write_text(yaml.safe_dump(adapted))
+    case = tmp_path / "legacy-default-case"
+    create_experiment(case, site_config=legacy_file)
+    assert yaml.safe_load((case / "science/mpas.yaml").read_text())["mpas"]["pbs"]["queue"] == "pesqmidi"
+    assert yaml.safe_load((case / "science/initialization/wps.yaml").read_text())["wps"]["pbs"]["queue"] == "pesqmini"
+
+
+def _write_machine(tmp_path, document):
+    p = tmp_path / "machine.yaml"
+    p.write_text(yaml.safe_dump(document))
+    return p
+
+
 def test_missing_runtime_aborts_before_case_creation(tmp_path):
     paths, setup = fake_runtime(tmp_path)
     document = machine_document(paths, setup)
