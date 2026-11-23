@@ -102,21 +102,42 @@ def resolve_settings(recipe: dict, *, config: Path | None = None, overrides: dic
     # Strict contract: do not silently reinterpret the tested 240 km science
     # files as another mesh or change its numerical/observation assumptions.
     if res != "240km":
-        raise ValueError(
-            f"Resolution {res} is not yet materializable by the MPAS reference "
-            "templates. A compatible mesh/partition, B, field dimensions and "
-            "MPAS/JEDI templates must be provided in the recipe."
-        )
-    if settings.get("levels") != 55:
-        raise ValueError("Reference 3DVar/FGAT science templates currently require 55 levels")
+        # New scientific resolutions are supported through a complete
+        # per-resolution science directory; nominal resolution alone is unsafe.
+        if not profile.get("science_source") or not profile.get("mesh_id"):
+            raise ValueError(
+                f"Resolution {res} needs a complete science_source and mesh_id "
+                "in its recipe resolution profile; refusing 240 km reuse"
+            )
+    if settings.get("levels") != profile.get("levels", 55):
+        raise ValueError("Requested levels require a matching profile with compatible science templates")
     if settings.get("cycle") != "PT6H":
         raise ValueError("Reference MPAS/FGAT requires PT6H; other cycle intervals are not yet supported")
-    if set(settings["observations"]) != {"conv", "gpsro"}:
-        raise ValueError("Reference JEDI variational configuration requires conv,gpsro together")
-    if settings.get("mesh") not in (None, profile["mesh"]):
-        raise ValueError("Custom mesh requires a recipe with compatible MPAS/JEDI templates")
-    if settings.get("bmatrix") not in (None, profile["bmatrix"]):
-        raise ValueError("Custom B requires a recipe with validated variational configuration")
+    if set(settings["observations"]) != set(profile.get("observations", ["conv", "gpsro"])):
+        raise ValueError("Requested observations require matching converter/UFO templates in the profile")
+    if settings.get("mesh") != profile["mesh"]:
+        raise ValueError("Custom mesh requires a matching resolution profile and MPAS/JEDI templates")
+    if settings.get("bmatrix") != profile["bmatrix"]:
+        raise ValueError("Custom B requires a matching resolution profile and variational templates")
     if settings.get("timestep") is not None:
         raise ValueError("Model timestep override requires a validated namelist recipe")
     return settings
+
+
+def select_science(recipe: str | Path, settings: dict, base: Path) -> Path:
+    """Use complete per-resolution science assets, never partial 240 km overlays."""
+    profile = settings["profile"]
+    source = profile.get("science_source")
+    if not source:
+        return base
+    directory = recipe_directory(recipe)
+    root = (directory / source).resolve()
+    if not root.is_relative_to(directory.resolve()) or not root.is_dir():
+        raise ValueError(f"Invalid resolution science_source: {source!r}")
+    required = ("jedi.yaml", "mpas.yaml", "obs2ioda.yaml",
+                "initialization/mpas.yaml", "initialization/mpas_init.yaml",
+                "initialization/wps.yaml")
+    for name in required:
+        if not (root / name).is_file():
+            raise ValueError(f"Resolution science profile missing {name}: {root}")
+    return root
