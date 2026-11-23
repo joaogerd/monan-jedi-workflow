@@ -46,3 +46,30 @@ the 240 km reference data. The create command must fail closed until the
 corresponding resource contract is supplied and validated.
 
 The packaged reference is a regression baseline, not a universal model setup.
+
+### Adding a new resolution to this recipe
+
+Do not change the 240 km reference files. Supply a complete, tested
+resolution-specific scientific configuration tree, for example
+`profiles/60km/science/`, with its own MPAS initialization, partition,
+invariant, JEDI, B-matrix and Obs2IODA contracts. Add an entry to
+`resolution_profiles`:
+
+```yaml
+60km:
+  mesh: /shared/mesh-60km
+  bmatrix: /shared/covariance-60km
+  mesh_id: x1.CELLS
+  levels: 55
+  observations: [conv, gpsro]
+  science_source: profiles/60km/science
+```
+
+Paths and identifiers here are **placeholders**, not verified JACI resources.
+The source must contain the same mandatory scientific entrypoint YAML files as
+the reference. A profile selects the whole science configuration tree; it does
+not apply blind string substitutions to 240 km files.
+
+A profile is an explicit declaration of compatibility, not a substitute for
+a scientific validation run. The default distributed recipe includes only
+the validated-reference 240 km descriptor.
