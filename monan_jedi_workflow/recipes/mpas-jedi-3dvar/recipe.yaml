@@ -1,0 +1,20 @@
+schema_version: 1
+name: mpas-jedi-3dvar
+description: MPAS-JEDI 3DVar/FGAT scientific reference, 240 km baseline
+science_source: reference-20250901
+defaults:
+  resolution: 240km
+  levels: 55
+  cycle: PT6H
+  duration: PT6H
+  mode: cold
+  observations: [conv, gpsro]
+  mesh: null
+  bmatrix: null
+  timestep: null
+resolution_profiles:
+  240km:
+    mesh: "${MONAN_MESH_ROOT}"
+    bmatrix: "${MONAN_BMATRIX_ROOT}"
+    mesh_id: x1.10242
+    mpi_ranks: 128
