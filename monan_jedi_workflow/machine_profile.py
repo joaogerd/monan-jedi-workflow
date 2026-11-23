@@ -26,6 +26,11 @@ _PATH_KEYS = frozenset({
 })
 _ENV_KINDS = frozenset({"native", "modules"})
 _BACKENDS = frozenset({"local", "pbs", "slurm"})
+_SCIENCE_STAGES = frozenset({"jedi", "mpas", "mpas_init", "wps", "obs2ioda"})
+_STAGE_RESOURCES = frozenset({
+    "queue", "walltime", "select", "ncpus", "mpiprocs", "launcher",
+})
+
 _ENV_VAR = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 
@@ -130,7 +135,7 @@ def load_machine_profile(
     backend = execution.get("backend")
     if backend not in _BACKENDS:
         raise MachineProfileError("execution.backend must be local, pbs or slurm")
-    if set(execution) - {"backend", "queue", "max_cores", "walltime"}:
+    if set(execution) - {"backend", "queue", "max_cores", "walltime", "stages", "queue_limits"}:
         raise MachineProfileError("Unsupported execution fields")
     if backend == "local" and ("queue" in execution or "walltime" in execution):
         raise MachineProfileError(
@@ -148,6 +153,57 @@ def load_machine_profile(
         or not re.fullmatch(r"\d{1,3}:[0-5]\d:[0-5]\d", execution["walltime"])
     ):
         raise MachineProfileError("execution.walltime must be HH:MM:SS")
+
+    if "queue_limits" in execution:
+        limits = _mapping(execution["queue_limits"], "execution.queue_limits")
+        for queue, duration in limits.items():
+            if (not isinstance(queue, str) or not _NAME.fullmatch(queue)
+                    or type(duration) is not int or duration <= 0):
+                raise MachineProfileError(
+                    "execution.queue_limits must map queue names to positive minute limits"
+                )
+    if "stages" in execution:
+        stages = _mapping(execution["stages"], "execution.stages")
+        unknown_stages = set(stages) - _SCIENCE_STAGES
+        if unknown_stages:
+            raise MachineProfileError(
+                "Unsupported execution stages: " + ", ".join(sorted(unknown_stages))
+            )
+        if backend != "pbs":
+            raise MachineProfileError("execution.stages currently requires backend: pbs")
+        for stage_name, raw_stage in stages.items():
+            stage = _mapping(raw_stage, f"execution.stages.{stage_name}")
+            unknown_stage_fields = set(stage) - _STAGE_RESOURCES
+            if unknown_stage_fields:
+                raise MachineProfileError(
+                    f"Unsupported execution.stages.{stage_name} fields: "
+                    + ", ".join(sorted(unknown_stage_fields))
+                )
+            for key in ("select", "ncpus", "mpiprocs"):
+                if key in stage and (type(stage[key]) is not int or stage[key] <= 0):
+                    raise MachineProfileError(
+                        f"execution.stages.{stage_name}.{key} must be positive integer"
+                    )
+            if ("mpiprocs" in stage and "ncpus" in stage
+                    and stage["mpiprocs"] > stage["ncpus"]):
+                raise MachineProfileError(
+                    f"execution.stages.{stage_name}.mpiprocs exceeds ncpus"
+                )
+            for key in ("queue", "launcher"):
+                if key in stage and (
+                    not isinstance(stage[key], str) or not stage[key].strip()
+                ):
+                    raise MachineProfileError(
+                        f"execution.stages.{stage_name}.{key} must be nonempty"
+                    )
+            if "walltime" in stage and (
+                not isinstance(stage["walltime"], str)
+                or not re.fullmatch(r"\\d{1,3}:[0-5]\\d:[0-5]\\d", stage["walltime"])
+                or not any(c != "0" and c != ":" for c in stage["walltime"])
+            ):
+                raise MachineProfileError(
+                    f"execution.stages.{stage_name}.walltime must be positive HH:MM:SS"
+                )
 
     environment = _mapping(root.get("environment"), "environment")
     kind = environment.get("kind")
@@ -222,6 +278,20 @@ def machine_to_legacy_site(profile: MachineProfile) -> dict[str, Any]:
             "Complete PBS machine profile required for scientific case; "
             "missing paths: " + ", ".join(missing)
         )
+    stages = profile.execution.get("stages", {})
+    missing_stages = sorted(_SCIENCE_STAGES - set(stages))
+    if missing_stages:
+        raise MachineProfileError(
+            "A PBS scientific case requires explicit execution.stages for: "
+            + ", ".join(missing_stages)
+        )
+    for stage_name in sorted(_SCIENCE_STAGES):
+        missing_fields = _STAGE_RESOURCES - set(stages[stage_name])
+        if missing_fields:
+            raise MachineProfileError(
+                f"execution.stages.{stage_name} missing fields: "
+                + ", ".join(sorted(missing_fields))
+            )
     # The existing installed v2 manifest, not the machine profile, determines
     # which stack module/site setup to load inside the scientific PBS script.
     from .site import runtime_contract_context
