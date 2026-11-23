@@ -102,14 +102,22 @@ def load_machine_profile(
     except yaml.YAMLError as exc:
         raise MachineProfileError(f"Invalid YAML at {source}: {exc}") from exc
     root = _mapping(payload, "machine profile")
+    # Distinguish the existing JACI site.yaml contract from machine.yaml v1
+    # before reporting unrelated unknown keys.
+    if root.get("schema_version") != 1 or isinstance(root.get("schema_version"), bool):
+        if "site" in root and "stack" in root:
+            raise MachineProfileError(
+                "Legacy site.yaml is not a machine profile: "
+                "machine profile schema_version must be 1. "
+                "Continue using experiment create --site for legacy profiles."
+            )
+        raise MachineProfileError("machine profile schema_version must be 1")
     allowed = {"schema_version", "machine", "paths", "execution", "environment"}
     unknown = set(root) - allowed
     if unknown:
         raise MachineProfileError(
             f"Unsupported machine profile keys: {', '.join(sorted(unknown))}"
         )
-    if root.get("schema_version") != 1 or isinstance(root.get("schema_version"), bool):
-        raise MachineProfileError("machine profile schema_version must be 1")
 
     machine = _mapping(root.get("machine"), "machine")
     if set(machine) != {"name"}:
