@@ -53,7 +53,7 @@ jobs:
 
       - name: Verify packaged recipe in built wheel
         run: |
-          python -m pip wheel --no-deps --no-build-isolation -w /tmp/monan-jedi-wheels .
+          python -m pip wheel --no-deps -w /tmp/monan-jedi-wheels .
           python - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
