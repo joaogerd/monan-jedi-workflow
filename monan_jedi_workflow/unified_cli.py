@@ -15,7 +15,7 @@ def _usage() -> int:
     print(
         "experiment — MONAN-JEDI campaign management\n\n"
         "  experiment create DEST --recipe NAME [--start UTC] [--duration P7D] [--resolution 240km] [--config YAML]\n"
-        "  experiment check|export campaign.yaml\n"
+        "  experiment recipes list|show NAME_OR_PATH\n"\n        "  experiment check|export campaign.yaml\n"
         "  experiment validate|plan|run|status workflow.yaml\n"
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
         "  experiment check-inputs CASE\n"
@@ -30,6 +30,18 @@ def _experiment(argv: list[str]) -> int:
     if not argv or argv[0] in {"-h", "--help"}:
         return _usage()
     action, *args = argv
+    if action == "recipes":
+        from .recipe_config import BUILTIN, load_recipe
+        if len(args) == 1 and args[0] == "list":
+            print(BUILTIN)
+            return 0
+        if len(args) == 2 and args[0] == "show":
+            import yaml
+            _, descriptor = load_recipe(args[1])
+            print(yaml.safe_dump(descriptor, sort_keys=False), end="")
+            return 0
+        print("Usage: experiment recipes list | show NAME_OR_PATH", file=sys.stderr)
+        return 2
     if action == "site":
         from .experiment_environment import save_project_site, initialize_site
         parser = argparse.ArgumentParser(prog="experiment site")
