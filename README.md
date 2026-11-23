@@ -1,85 +1,98 @@
 # MONAN-JEDI Workflow
 
-Plataforma de execução de experimentos MONAN/MPAS + JEDI, integrada ao **simpleWorkflow**.
+Plataforma para criar, executar e diagnosticar experimentos de assimilação de dados com **MPAS-JEDI**, com orquestração por **simpleWorkflow** na JACI. O nome MONAN-JEDI identifica o projeto; a receita de referência atual ainda usa o núcleo MPAS, e a integração com o núcleo MONAN exige validação própria.
 
-> **Branch candidata à primeira release:** `feat/platform-domain-apps` — beta `0.3.0b1`. A execução científica na JACI e as campanhas longas ainda precisam de homologação; exemplos `examples/beta` usam produtos artificiais.
+> **Branch em consolidação:** `feat/platform-domain-apps`. Versão beta `0.3.0b1`. Não confundir resultados históricos com as campanhas pós-refatoração ainda em validação.
 
-## Comece aqui
+## Por onde começar
 
-1. **[Tutorial operacional — 1 ciclo, 1 dia e campanhas de 3/7/30/365 dias](docs/tutorial.md)** — caminho recomendado para novos usuários.
-2. [Referência da beta, comandos dos aplicativos e suas limitações](docs/beta-testing.md).
-3. [Solução de problemas e retomada](docs/troubleshooting.md) — observar que partes da documentação legada ainda serão consolidadas.
+**[Tutorial oficial — instalação, primeiro experimento, execução e diagnóstico](docs/tutorial.md)** é a referência de uso. Ele explica o significado de cada diretório, os comandos, as entradas, os produtos, como identificar problemas e como não perder uma execução.
 
-## Aplicativos
+Para consultas específicas:
 
-| Comando | Responsabilidade |
-| --- | --- |
-| `obs acquire` / `obs convert` | Aquisição de observações e conversão IODA |
-| `jedi` | Assimilação e produção da análise |
-| `mpas init` / `mpas` | Inicialização opcional e previsão |
-| `diagnostics` | Validação e diagnósticos |
-| `campaign` | Verificação e exportação do grafo para simpleWorkflow |
+- [Configuração da campanha](docs/configuration/campaign.md): sintaxe **atual** de `campaign.yaml`, datas inclusivas/exclusivas e exportação.
+- [Diagnóstico de falhas](docs/diagnostics.md): `diagnose`, causa raiz, logs, PBS e limites da retomada.
+- [Referência arquitetural para desenvolvedores](docs/developer/architecture.md): fronteiras entre aplicativos, orquestrador e execução científica.
+- [Contribuição ao projeto](CONTRIBUTING.md): testes, mudanças e revisão.
+- [Registros de decisões](docs/developer/adr/README.md) e [evidências de validação](docs/validation/): histórico técnico, **não** instruções alternativas de execução.
 
-O app `campaign` **não submete nem executa tarefas**; o simpleWorkflow é o executor. Cada operação de domínio segue `inspect/check/prepare/run/validate/status` (conforme o comando). O app `campaign` oferece `inspect/check/export`.
+## Instalação
 
-## Instalação da branch candidata
+Requer Python 3.10 ou superior. A instalação do pacote **não compila nem instala** MPAS, MPAS-JEDI, WPS, conversores Obs2IODA ou o stack científico da JACI.
 
 ```bash
-git clone --branch feat/platform-domain-apps https://github.com/joaogerd/monan-jedi-workflow.git
+git clone --branch feat/platform-domain-apps \
+  https://github.com/joaogerd/monan-jedi-workflow.git
 cd monan-jedi-workflow
 python -m pip install -e '.[dev,orchestration]'
-campaign --help
+experiment --help
+diagnose --help
 swf --help
 ```
 
-Python >=3.10. A instalação do pacote **não** compila MPAS/MONAN, MPAS-JEDI ou Obs2IODA. Para uma campanha real é indispensável o runtime científico instalado e a receita validada do grupo.
+A instalação acima é apropriada ao **desenvolvimento**. Antes de uma campanha científica, fixe as versões do checkout e do ambiente e siga o tutorial para configurar um workspace e os recursos científicos existentes. **Não atualize o pacote nem os executáveis durante uma campanha.**
 
-## Execução pelo caminho novo
+## Como os componentes se relacionam
 
-O **simpleWorkflow roda somente os aplicativos Python no login**. Cada app
-prepara sua operação, submete o script PBS nativo pelo `qsub` quando necessário,
-aguarda o job e valida os resultados. **Nenhuma CLI Python é executada no
-compute node.** O Conda pode permanecer em `$HOME`.
+```text
+experiment create -> campaign.yaml + configurações científicas
+         |
+         v
+experiment check -> experiment export -> workflow.yaml
+         |
+         v
+experiment validate -> experiment plan -> experiment run
+                                             |
+                                      simpleWorkflow (login)
+                                             |
+                         +-------------------+-------------------+
+                         |                                       |
+                 WPS/MPAS inicialização                  Ciclos de 6 h
+                                                      Obs2IODA -> JEDI -> MPAS
+                         |                                       |
+                         +-------------- PBS nativo ------------+
+```
 
-Para criar o primeiro caso científico de referência:
+O controlador Python roda no nó de login, de onde os aplicativos submetem e acompanham **jobs PBS nativos** quando necessário. Os nós de computação executam programas e scripts científicos, não o controlador Python.
+
+Os comandos públicos do fluxo novo são `experiment create/check/export/validate/plan/run/status` e `diagnose`. Os aplicativos `obs`, `jedi`, `mpas`, `wps`, `diagnostic(s)` e `campaign` permanecem acessíveis para operações de domínio ou compatibilidade. Não comece pela antiga interface `monan-jedi-workflow campaign create/run`.
+
+## Primeiro experimento científico
+
+O destino deve ser novo. **Substitua os exemplos pelos caminhos autorizados da sua conta** e garanta que o workspace tenha um perfil de site verificado, como explica o tutorial.
 
 ```bash
-export NEW_CASE=/p/projetos/monan_das/$USER/work/first-experiment-20250901-login
-python -m monan_jedi_workflow.experiment_start "$NEW_CASE"
-cd "$NEW_CASE"
+export WORKSPACE=/p/projetos/SEU_GRUPO/SEU_USUARIO/monan-jedi
+export CASE="$WORKSPACE/experiments/primeiro-experimento"
+mkdir -p "$WORKSPACE/experiments"
+
+experiment create "$CASE" --workspace "$WORKSPACE" \
+  --start 2026-01-30T00:00:00Z
+
+cd "$CASE"
 source ./environment.sh
-campaign check campaign.yaml
-campaign export campaign.yaml --engine simpleworkflow
-swf validate workflow.yaml
-swf plan workflow.yaml
+experiment check-inputs .
+experiment check campaign.yaml
+experiment export campaign.yaml
+experiment validate workflow.yaml
+experiment plan workflow.yaml
+# Apenas após conferir dados científicos e recursos PBS:
+experiment run workflow.yaml --ui plain
 ```
 
-Para um caso **já exportado na arquitetura antiga**, siga
-[Atualização segura do primeiro experimento](docs/first-experiment.md) e use
-`--upgrade-existing` para criar `campaign-login.yaml` e
-`workflow-login.yaml` sem substituir os arquivos anteriores.
+O `experiment check-inputs .` da versão atual verifica **apenas a receita curta de dois ciclos**; não é suficiente para campanhas longas. O teste artificial em `examples/beta` verifica apenas contratos de software, não meteorologia.
 
-Só execute `swf run` após verificar entradas científicas, ambiente de módulos,
-programas, recursos, tempos e scripts PBS. O `simpleWorkflow` tem executor
-PBS próprio para outros usos, mas **não é empregado nesta integração**:
-seus tasks ficam todos como `executor: local`; a submissão científica
-pertence aos aplicativos MONAN-JEDI.
+## Quando ocorrer uma falha
 
-## Identificar falhas sem analisar logs manualmente
-
-Se uma execução parar, entre no diretório do experimento e use:
+No diretório do experimento:
 
 ```bash
-monan-jedi-workflow diagnose
+diagnose . --no-pbs     # somente logs locais, sem contato com PBS
+diagnose .              # inclui consulta ao PBS quando disponível
 ```
 
-O diagnóstico consulta o PBS, lê os relatórios das operações e agrupa
-mensagens repetidas de MPI para exibir uma causa provável e orientar a
-correção. O comando **não altera arquivos nem ressubmete jobs**.
-Veja o [guia de diagnóstico](docs/diagnostics.md) para uso e exemplos.
+O diagnóstico é somente leitura. **Não apague** `.simpleworkflow/`, manifests ou produtos científicos para forçar uma reexecução. O estado `SUCCESS` sozinho não prova que uma retomada manterá a mesma assinatura dos executáveis e do ambiente.
 
-## Critérios para release estável
+## Critérios para a integração
 
-Validar um ciclo científico real, um dia completo e depois 3, 7 e 30 dias, com inspeção de produtos, dependências entre ciclos, restart e recursos na JACI. Somente depois iniciar a operação anual. A duração não pode exigir alterações no código nem em escolhas científicas.
-
-As interfaces legadas `monan-jedi-workflow campaign create/run` permanecem disponíveis durante a transição, mas **não** são o caminho recomendado para novos usuários desta branch.
+Antes do merge em `develop` e, posteriormente, `main`: testar a instalação limpa, conferir documentação contra o código, executar testes automatizados, demonstrar idempotência e retomada segura, validar campanhas científicas independentes de 3/7 dias e registrar métricas, logs, proveniência e limitações. **Documentação atualizada não substitui testes reais na JACI.**
