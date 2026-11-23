@@ -99,7 +99,7 @@ def _experiment(argv: list[str]) -> int:
         # is unimplemented. Never silently interpret a warm request as cold.
         opt = parser.parse_args(args)
         from .experiment_start import create_experiment
-        from .recipe_config import load_recipe, resolve_settings
+        from .recipe_config import load_recipe, resolve_settings, select_science
         try:
             science, descriptor = load_recipe(opt.recipe)
             settings = resolve_settings(
@@ -116,6 +116,7 @@ def _experiment(argv: list[str]) -> int:
                 }
             )
             settings["recipe"] = descriptor["name"]
+            science = select_science(opt.recipe, settings, science)
             create_experiment(
                 opt.destination, start=opt.start,
                 pbs_queue=opt.pbs_queue, pbs_walltime=opt.pbs_walltime,
