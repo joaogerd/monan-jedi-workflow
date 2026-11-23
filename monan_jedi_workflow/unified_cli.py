@@ -21,7 +21,9 @@ def _usage() -> int:
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
         "  experiment check-inputs CASE\n"
         "  experiment site init [--stack PATH] [--install PATH]\n"
-        "  experiment site save     # preserve a proven environment\n"\n        "  experiment machine validate PROFILE [--check-paths]\n"\n        "  experiment machine show PROFILE\n\n"
+        "  experiment site save     # preserve a proven environment\n"
+        "  experiment machine validate PROFILE [--check-paths]\n"
+        "  experiment machine show PROFILE\n\n"
         "Other independent commands: wps, obs, mpas, jedi, diagnostic, diagnose.\n"
         "Each command is installed by the monan-jedi-workflow package."
     )
