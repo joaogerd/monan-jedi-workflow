@@ -21,7 +21,7 @@ def _usage() -> int:
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
         "  experiment check-inputs CASE\n"
         "  experiment site init [--stack PATH] [--install PATH]\n"
-        "  experiment site save     # preserve a proven environment\n\n"
+        "  experiment site save     # preserve a proven environment\n"\n        "  experiment machine validate PROFILE [--check-paths]\n"\n        "  experiment machine show PROFILE\n\n"
         "Other independent commands: wps, obs, mpas, jedi, diagnostic, diagnose.\n"
         "Each command is installed by the monan-jedi-workflow package."
     )
@@ -31,6 +31,30 @@ def _experiment(argv: list[str]) -> int:
     if not argv or argv[0] in {"-h", "--help"}:
         return _usage()
     action, *args = argv
+    if action == "machine":
+        parser = argparse.ArgumentParser(prog="experiment machine")
+        actions = parser.add_subparsers(dest="machine_action", required=True)
+        validate = actions.add_parser("validate", help="validate a computational profile")
+        validate.add_argument("profile", type=Path)
+        validate.add_argument("--check-paths", action="store_true",
+                              help="verify declared directories and module setup exist")
+        show = actions.add_parser("show", help="print normalized computational profile")
+        show.add_argument("profile", type=Path)
+        try:
+            opt = parser.parse_args(args)
+            from .machine_profile import load_machine_profile
+            profile = load_machine_profile(
+                opt.profile, require_existing=bool(getattr(opt, "check_paths", False))
+            )
+        except (ValueError, OSError) as error:
+            print(f"[ERRO] Perfil computacional invalido: {error}", file=sys.stderr)
+            return 2
+        if opt.machine_action == "show":
+            import yaml
+            print(yaml.safe_dump(profile.describe(), sort_keys=False), end="")
+        else:
+            print(f"[OK] Perfil computacional valido: {profile.name} ({profile.backend})")
+        return 0
     if action == "recipes":
         from .recipe_config import BUILTIN, load_recipe
         if len(args) == 1 and args[0] == "list":
