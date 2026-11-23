@@ -111,16 +111,20 @@ def resolve_settings(recipe: dict, *, config: Path | None = None, overrides: dic
             )
     if settings.get("levels") != profile.get("levels", 55):
         raise ValueError("Requested levels require a matching profile with compatible science templates")
-    if settings.get("cycle") != "PT6H":
-        raise ValueError("Reference MPAS/FGAT requires PT6H; other cycle intervals are not yet supported")
+    if settings.get("cycle") != profile.get("cycle", "PT6H"):
+        raise ValueError("Requested cycle requires a matching scientific profile and MPAS/JEDI timing contract")
+    offset = profile.get("background_offset_hours", 3)
+    interval_hours = int(settings["cycle"][2:-1])
+    if not isinstance(offset, int) or not (0 < offset < interval_hours):
+        raise ValueError("background_offset_hours must be an integer strictly inside the cycle")
     if set(settings["observations"]) != set(profile.get("observations", ["conv", "gpsro"])):
         raise ValueError("Requested observations require matching converter/UFO templates in the profile")
     if settings.get("mesh") != profile["mesh"]:
         raise ValueError("Custom mesh requires a matching resolution profile and MPAS/JEDI templates")
     if settings.get("bmatrix") != profile["bmatrix"]:
         raise ValueError("Custom B requires a matching resolution profile and variational templates")
-    if settings.get("timestep") is not None:
-        raise ValueError("Model timestep override requires a validated namelist recipe")
+    if settings.get("timestep") is not None and settings["timestep"] != profile.get("timestep"):
+        raise ValueError("Model timestep override requires a matching profile/namelist")
     return settings
 
 
