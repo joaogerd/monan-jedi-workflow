@@ -4,10 +4,12 @@ This is the **240 km / 55-level reference case** (two 6-hour analyses).
 It uses WPS, MPAS initialization, Obs2IODA conventional and GNSS-RO
 conversion, JEDI 3DVar/FGAT analysis and MPAS forecasts.
 
-The scientific files are currently retained unchanged in
-`monan_jedi_workflow/catalog/reference-20250901` to preserve the tested baseline.
-The descriptor in `recipe.yaml` contains defaults and supported resolution
-profiles. It is not a claim that any arbitrary mesh is currently supported.
+The recipe is self-contained: its scientific YAMLs, templates, runners and
+runtime skeleton live in `science/`, next to `recipe.yaml` and this README.
+The original `catalog/reference-20250901` is kept temporarily for backward
+compatibility with older APIs; **new experiments do not read it**.
+The descriptor in `recipe.yaml` defines the supported defaults and profiles.
+It is not a claim that arbitrary meshes work automatically.
 
 ## First run
 
