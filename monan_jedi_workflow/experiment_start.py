@@ -5,7 +5,6 @@ This is case creation only. Scientific execution remains in the domain apps.
 import argparse
 import json
 from datetime import datetime, timedelta, timezone
-from importlib.resources import files
 from pathlib import Path
 import shlex
 import shutil
@@ -106,7 +105,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     site_source, site_profile = load_project_site(
         root, site_config=site_config, configuration_workspace=workspace
     )
-    recipe = Path(recipe_source) if recipe_source is not None else Path(str(files('monan_jedi_workflow').joinpath('catalog/reference-20250901')))
+    recipe = Path(recipe_source) if recipe_source is not None else Path(__file__).resolve().parent / 'recipes/mpas-jedi-3dvar/science'
     shutil.copytree(recipe, root / 'science')
     science = root / 'science'
     for relative, key in [('jedi.yaml','jedi'), ('mpas.yaml','mpas'), ('obs2ioda.yaml','obs2ioda'),
