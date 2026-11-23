@@ -16,6 +16,9 @@ def experiment() -> int:
 def wps() -> int:
     from .cli_frontend import main
     args = list(sys.argv[1:])
+    if args and args[0] in {"-h", "--help"}:
+        print("Usage: wps {prepare|run|validate} CONFIG_DIR --cycle UTC")
+        return 0
     if not args or args[0] not in {"prepare", "run", "validate"}:
         print("Usage: wps {prepare|run|validate} CONFIG_DIR --cycle UTC", file=sys.stderr)
         return 2
