@@ -99,4 +99,24 @@ def resolve_settings(recipe: dict, *, config: Path | None = None, overrides: dic
     if not set(settings["observations"]).issubset(supported):
         raise ValueError("Current Obs2IODA reference supports conv,gpsro only; "
                          "other observation types need a compatible converter/operator recipe")
+    # Strict contract: do not silently reinterpret the tested 240 km science
+    # files as another mesh or change its numerical/observation assumptions.
+    if res != "240km":
+        raise ValueError(
+            f"Resolution {res} is not yet materializable by the MPAS reference "
+            "templates. A compatible mesh/partition, B, field dimensions and "
+            "MPAS/JEDI templates must be provided in the recipe."
+        )
+    if settings.get("levels") != 55:
+        raise ValueError("Reference 3DVar/FGAT science templates currently require 55 levels")
+    if settings.get("cycle") != "PT6H":
+        raise ValueError("Reference MPAS/FGAT requires PT6H; other cycle intervals are not yet supported")
+    if set(settings["observations"]) != {"conv", "gpsro"}:
+        raise ValueError("Reference JEDI variational configuration requires conv,gpsro together")
+    if settings.get("mesh") not in (None, profile["mesh"]):
+        raise ValueError("Custom mesh requires a recipe with compatible MPAS/JEDI templates")
+    if settings.get("bmatrix") not in (None, profile["bmatrix"]):
+        raise ValueError("Custom B requires a recipe with validated variational configuration")
+    if settings.get("timestep") is not None:
+        raise ValueError("Model timestep override requires a validated namelist recipe")
     return settings
