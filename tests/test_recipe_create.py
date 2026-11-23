@@ -151,6 +151,22 @@ def test_builtin_resources_follow_loaded_source_and_not_namespace_search_path():
     root = Path(module.__file__).resolve().parent
     assert module.recipe_directory("mpas-jedi-3dvar") == root / "recipes" / "mpas-jedi-3dvar"
     science, descriptor = module.load_recipe("mpas-jedi-3dvar")
-    assert science == root / "catalog" / "reference-20250901"
+    assert science == root / "recipes" / "mpas-jedi-3dvar" / "science"
+    assert (science / "initialization" / "wps.yaml").is_file()
     assert (root / "recipes" / "mpas-jedi-3dvar" / "recipe.yaml").is_file()
     assert descriptor["name"] == "mpas-jedi-3dvar"
+
+
+def test_builtin_recipe_is_self_contained():
+    """A recipe must not depend on legacy catalog/reference-20250901."""
+    import monan_jedi_workflow.recipe_config as module
+    source, descriptor = module.load_recipe("mpas-jedi-3dvar")
+    root = module.recipe_directory("mpas-jedi-3dvar")
+    assert descriptor["science_source"] == "science"
+    assert source.parent == root
+    assert (source / "jedi.yaml").is_file()
+    assert (source / "mpas.yaml").is_file()
+    assert (source / "obs2ioda.yaml").is_file()
+    assert (source / "runtime-skeleton").is_dir()
+    assert (source / "runners").is_dir()
+    assert (source / "templates" / "variational.yaml").is_file()
