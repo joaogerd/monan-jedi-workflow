@@ -92,7 +92,7 @@ def resolve_settings(recipe: dict, *, config: Path | None = None, overrides: dic
     if not re.fullmatch(r"PT[1-9][0-9]*H", str(settings.get("cycle"))):
         raise ValueError("cycle must be an ISO-8601 whole-hour interval such as PT6H")
     if settings.get("mode") != "cold":
-        raise ValueError("Scientific warm start is not implemented")
+        raise ValueError("Warm start científico não implementado; requer restart validado")
     if not isinstance(settings.get("observations"), list) or not settings["observations"]:
         raise ValueError("observations must be a nonempty list")
     supported = {"conv", "gpsro"}
