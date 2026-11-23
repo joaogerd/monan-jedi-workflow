@@ -63,7 +63,7 @@ def _duration(value, step_hours=6):
     return timedelta(hours=hours)
 
 
-def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None, recipe_source=None, settings=None, machine_profile=None):
+def create_experiment(destination, *, pbs_queue=None, pbs_walltime=None, runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None, recipe_source=None, settings=None, machine_profile=None):
     settings = settings or {}
     interval = settings.get('cycle', 'PT6H')
     if not re.fullmatch(r'PT[1-9][0-9]*H', interval):
@@ -81,21 +81,24 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     final_analysis = first_analysis + span
     second_analysis = first_analysis + timedelta(hours=step_hours)
     initialization_time = first_analysis - timedelta(hours=step_hours)
-    # Site policy documented in mpas-bmatrix-global/docs/jaci-operational-guide.md.
-    # User should recheck the scheduler's live limits before submitting.
-    queue_limits = {'pesqmini': 30, 'pesqmidi': 120, 'pesqhigh': 360,
-                    'pesqextra': 480, 'oper': 480, 'preoper': 480}
-    if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]*', pbs_queue):
-        raise ValueError('PBS queue must be a simple queue name')
-    match = re.fullmatch(r'(\d{1,3}):([0-5]\d):([0-5]\d)', pbs_walltime)
-    if not match:
-        raise ValueError('PBS walltime must use HH:MM:SS')
-    minutes = int(match[1]) * 60 + int(match[2]) + int(match[3]) / 60
-    if minutes <= 0:
-        raise ValueError('PBS walltime must be positive')
-    if pbs_queue in queue_limits and minutes > queue_limits[pbs_queue]:
-        raise ValueError(f'PBS queue {pbs_queue} has a documented walltime limit of '
-                         f'{queue_limits[pbs_queue]} minutes on JACI; requested {pbs_walltime}')
+    # The old CLI retains its JACI policy for backward compatibility.
+    # The new --machine route obtains all stage resources from machine.yaml.
+    if machine_profile is None:
+        pbs_queue = pbs_queue or 'pesqmidi'
+        pbs_walltime = pbs_walltime or '01:00:00'
+        queue_limits = {'pesqmini': 30, 'pesqmidi': 120, 'pesqhigh': 360,
+                        'pesqextra': 480, 'oper': 480, 'preoper': 480}
+        if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]*', pbs_queue):
+            raise ValueError('PBS queue must be a simple queue name')
+        match = re.fullmatch(r'(\\d{1,3}):([0-5]\\d):([0-5]\\d)', pbs_walltime)
+        if not match:
+            raise ValueError('PBS walltime must use HH:MM:SS')
+        minutes = int(match[1]) * 60 + int(match[2]) + int(match[3]) / 60
+        if minutes <= 0:
+            raise ValueError('PBS walltime must be positive')
+        if pbs_queue in queue_limits and minutes > queue_limits[pbs_queue]:
+            raise ValueError(f'PBS queue {pbs_queue} has a documented walltime limit of '
+                             f'{queue_limits[pbs_queue]} minutes on JACI; requested {pbs_walltime}')
     runtime_bin = Path(runtime_bin or sysconfig.get_path('scripts')).expanduser().resolve()
     # Python runs on the login node. A HOME Conda runtime is valid for the
     # controller; compute nodes receive only native scientific PBS scripts.
@@ -146,8 +149,9 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
                 if link['source'].startswith('work/obs/'):
                     link['source'] = str(root / link['source'])
         elif key == 'mpas':
-            cfg['pbs']['queue'] = pbs_queue
-            cfg['pbs']['walltime'] = pbs_walltime
+            if machine_profile is None:
+                cfg['pbs']['queue'] = pbs_queue
+                cfg['pbs']['walltime'] = pbs_walltime
             cfg['run_dir'] = str(root / ('work/initialization/mpas/{cycle_id}' if initial else 'work/mpas/{cycle_id}'))
             if initial:
                 for link in cfg['links']:
@@ -168,6 +172,22 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
             cfg['work_dir'] = str(root / 'work/obs/{cycle_yyyymmddhh}')
             for name, runner in [('prepbufr_runner','run_prepbufr.sh'),('gpsro_runner','run_gpsro.sh')]:
                 cfg['variables'][name] = str(science / 'runners' / runner)
+        if machine_profile is not None:
+            # Apply computing resources only, without editing scientific
+            # cycle, observations, namelists, mesh or background settings.
+            stage_name = 'mpas_init' if key == 'mpas_init' else key
+            if stage_name == 'wps':
+                # The WPS PBS block is set below, after stage templating.
+                pass
+            elif stage_name == 'obs2ioda':
+                pass
+            else:
+                resources = machine_profile.execution['stages'][stage_name]
+                cfg['pbs'].update(resources)
+                if stage_name == 'mpas' and pbs_queue is not None:
+                    cfg['pbs']['queue'] = pbs_queue
+                if stage_name == 'mpas' and pbs_walltime is not None:
+                    cfg['pbs']['walltime'] = pbs_walltime
         write(path, doc)
     # Validate scientific timing before modifying the copied configs.
     jedi_contract = yaml.safe_load((science / 'jedi.yaml').read_text())['jedi']['cycle']
@@ -216,20 +236,24 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     # a native-only PBS job containing link_grib/ungrib.
     wps_file = science / 'initialization/wps.yaml'
     wps_doc = yaml.safe_load(wps_file.read_text())
-    wps_doc['wps']['pbs'] = {
-        'queue': 'pesqmini', 'select': 1, 'ncpus': 1,
-        'mpiprocs': 1, 'walltime': '00:30:00',
-        'site_config': str(site_file),
-    }
+    wps_resources = (
+        machine_profile.execution['stages']['wps']
+        if machine_profile is not None else
+        {'queue': 'pesqmini', 'select': 1, 'ncpus': 1,
+         'mpiprocs': 1, 'walltime': '00:30:00'}
+    )
+    wps_doc['wps']['pbs'] = {**wps_resources, 'site_config': str(site_file)}
     write(wps_file, wps_doc)
     # Obs2IODA is also an HPC operation; execute conversion in its own PBS job.
     obs_file = science / 'obs2ioda.yaml'
     obs_doc = yaml.safe_load(obs_file.read_text())
-    obs_doc['obs2ioda']['pbs'] = {
-        'queue': 'pesqmidi', 'select': 1, 'ncpus': 1,
-        'mpiprocs': 1, 'walltime': '01:00:00',
-        'site_config': str(site_file),
-    }
+    obs_resources = (
+        machine_profile.execution['stages']['obs2ioda']
+        if machine_profile is not None else
+        {'queue': 'pesqmidi', 'select': 1, 'ncpus': 1,
+         'mpiprocs': 1, 'walltime': '01:00:00'}
+    )
+    obs_doc['obs2ioda']['pbs'] = {**obs_resources, 'site_config': str(site_file)}
     write(obs_file, obs_doc)
     site = {'execution': {'mode': 'pbs'}}
     principal = {'schema_version': 1, 'experiment': {'name': 'first-' + first_analysis.strftime('%Y%m%d%H'), 'destination': str(root)},
