@@ -19,8 +19,8 @@ def write(path, data):
     path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 
-def _utc_start(value):
-    """Validate the first analysis UTC; the reference workflow uses 6 h cycles."""
+def _utc_start(value, step_hours=6):
+    """Validate an aligned UTC analysis time for the selected hourly interval."""
     if isinstance(value, datetime):
         start = value
     elif isinstance(value, str):
@@ -34,8 +34,10 @@ def _utc_start(value):
         raise ValueError('--start must be a UTC date/time string')
     if start.tzinfo is None or start.utcoffset() != timedelta(0):
         raise ValueError('--start must have UTC timezone')
-    if start.hour not in (0, 6, 12, 18) or start.minute or start.second or start.microsecond:
-        raise ValueError('--start must use a 6-hourly cycle (00, 06, 12 or 18 UTC)')
+    if not isinstance(step_hours, int) or step_hours < 1 or 24 % step_hours:
+        raise ValueError('cycle hours must be a positive divisor of 24')
+    if start.hour % step_hours or start.minute or start.second or start.microsecond:
+        raise ValueError(f'--start must align to PT{step_hours}H UTC cycles')
     return start
 
 
@@ -51,27 +53,35 @@ def _mpas_file_time(dt):
     return dt.strftime('%Y-%m-%d_%H.%M.%S')
 
 
-def _duration(value):
+def _duration(value, step_hours=6):
     """Parse whole-hour ISO duration, either PTnH or PnD."""
     match = re.fullmatch(r'P([1-9][0-9]*)D|PT([1-9][0-9]*)H', str(value))
     if not match:
         raise ValueError('duration must be PnD or PTnH, e.g. P7D or PT6H')
     hours = int(match[1]) * 24 if match[1] else int(match[2])
-    if hours % 6:
-        raise ValueError('Reference six-hour recipe requires duration in multiples of six hours')
+    if hours % step_hours:
+        raise ValueError(f'PT{step_hours}H recipe requires duration in multiples of {step_hours} hours')
     return timedelta(hours=hours)
 
 
 def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:00', runtime_bin=None, start='2025-09-01T00:00:00Z', site_config=None, workspace=None, recipe_source=None, settings=None):
-    first_analysis = _utc_start(start)
     settings = settings or {}
-    mesh_id = settings.get('profile', {}).get('mesh_id', 'x1.10242')
+    interval = settings.get('cycle', 'PT6H')
+    if not re.fullmatch(r'PT[1-9][0-9]*H', interval):
+        raise ValueError('Invalid hourly cycle interval')
+    step_hours = int(interval[2:-1])
+    first_analysis = _utc_start(start, step_hours=step_hours)
+    profile = settings.get('profile', {})
+    offset_hours = profile.get('background_offset_hours', 3)
+    if not isinstance(offset_hours, int) or not (0 < offset_hours < step_hours):
+        raise ValueError('Invalid background_offset_hours in recipe')
+    mesh_id = profile.get('mesh_id', 'x1.10242')
     if not re.fullmatch(r'[A-Za-z0-9_.-]+', mesh_id):
         raise ValueError('Invalid mesh_id in recipe profile')
-    span = _duration(settings.get('duration', 'PT6H'))
+    span = _duration(settings.get('duration', interval), step_hours=step_hours)
     final_analysis = first_analysis + span
-    second_analysis = first_analysis + timedelta(hours=6)
-    initialization_time = first_analysis - timedelta(hours=6)
+    second_analysis = first_analysis + timedelta(hours=step_hours)
+    initialization_time = first_analysis - timedelta(hours=step_hours)
     # Site policy documented in mpas-bmatrix-global/docs/jaci-operational-guide.md.
     # User should recheck the scheduler's live limits before submitting.
     queue_limits = {'pesqmini': 30, 'pesqmidi': 120, 'pesqhigh': 360,
@@ -142,6 +152,18 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
             for name, runner in [('prepbufr_runner','run_prepbufr.sh'),('gpsro_runner','run_gpsro.sh')]:
                 cfg['variables'][name] = str(science / 'runners' / runner)
         write(path, doc)
+    # Validate scientific timing before modifying the copied configs.
+    jedi_contract = yaml.safe_load((science / 'jedi.yaml').read_text())['jedi']['cycle']
+    if (jedi_contract.get('step_hours') != step_hours
+            or jedi_contract.get('background_offset_hours') != -offset_hours
+            or jedi_contract.get('window_hours') != step_hours):
+        raise ValueError('JEDI scientific timing does not match selected recipe cycle')
+    for mpas_file in (science / 'mpas.yaml', science / 'initialization/mpas.yaml'):
+        mpas_contract = yaml.safe_load(mpas_file.read_text())['mpas']
+        if (mpas_contract.get('lead_hours') != step_hours
+                or mpas_contract['forecast_contract'].get('run_hours') != step_hours
+                or mpas_contract['forecast_contract'].get('da_state_interval_hours') != offset_hours):
+            raise ValueError(f'MPAS forecast timing contract mismatch: {mpas_file}')
     # Restore the working main-branch site/runtime contract to all native PBS
     # stages. The original site's Python ABI check is disabled: no Python
     # interpreter is needed on compute nodes.
@@ -195,7 +217,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     site = {'execution': {'mode': 'pbs'}}
     principal = {'schema_version': 1, 'experiment': {'name': 'first-' + first_analysis.strftime('%Y%m%d%H'), 'destination': str(root)},
                  'site': site, 'jedi': './science/jedi.yaml', 'mpas': './science/mpas.yaml',
-                 'observations': './science/obs2ioda.yaml', 'cycle': {'interval':'PT6H'}}
+                 'observations': './science/obs2ioda.yaml', 'cycle': {'interval':interval}}
     write(root / 'experiment.yaml', principal)
     write(root / 'initialization.yaml', {**principal, 'mpas': './science/initialization/mpas.yaml'})
     # init has its own principal, because native mpas/init and forecast configurations are distinct.
@@ -203,8 +225,9 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
     # Each first analysis consumes the 3 h and 6 h outputs of the
     # initialization forecast; the second consumes the cycling forecast.
     # Derive all dates, including month/year/leap transitions, from --start.
-    analyses = [first_analysis + timedelta(hours=6 * index)
-                for index in range(int(span.total_seconds() // 21600) + 1)]
+    step_seconds = step_hours * 3600
+    analyses = [first_analysis + timedelta(hours=step_hours * index)
+                for index in range(int(span.total_seconds() // step_seconds) + 1)]
     for index, analysis in enumerate(analyses):
         forecast_start = initialization_time if index == 0 else analyses[index - 1]
         forecast_dir = 'work/initialization/mpas' if index == 0 else 'work/mpas'
@@ -212,7 +235,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         folder.mkdir(parents=True)
         forecast = root / forecast_dir / _cycle_id(forecast_start)
         (folder / 'trajectory.nc').symlink_to(
-            forecast / ('mpasout.' + _mpas_file_time(analysis - timedelta(hours=3)) + '.nc')
+            forecast / ('mpasout.' + _mpas_file_time(analysis - timedelta(hours=offset_hours)) + '.nc')
         )
         (folder / 'state.nc').symlink_to(
             forecast / ('mpasout.' + _mpas_file_time(analysis) + '.nc')
@@ -271,7 +294,7 @@ def create_experiment(destination, *, pbs_queue='pesqmidi', pbs_walltime='01:00:
         'experiment': './experiment.yaml',
         'calendar': {
             'start': first_cycle, 'end': last_cycle,
-            'interval': 'PT6H', 'end_inclusive': True,
+            'interval': interval, 'end_inclusive': True,
         },
         'initialization': [
             {'operation': 'wps', 'cycle': initialization_cycle, 'experiment': './init.yaml'},
