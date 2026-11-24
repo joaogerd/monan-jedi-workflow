@@ -1,6 +1,6 @@
 # Tutorial — primeiro experimento MONAN-JEDI e campanhas na JACI
 
-> **Escopo:** branch `feat/platform-domain-apps`, pacote beta `0.3.0b1`. Este é o caminho de entrada para **usuários novos**, a partir da instalação. A implementação atual da receita científica usa **MPAS-JEDI** com 3DVar/FGAT; o nome da plataforma MONAN-JEDI **não** significa que o executável do núcleo MONAN já esteja sendo usado. Não confundir com a interface antiga `monan-jedi-workflow campaign create/run`.
+> **Escopo:** branch `develop`, pacote beta `0.3.0b1`. Este é o caminho de entrada para **usuários novos**, a partir da instalação. A implementação atual da receita científica usa **MPAS-JEDI** com 3DVar/FGAT; o nome da plataforma MONAN-JEDI **não** significa que o executável do núcleo MONAN já esteja sendo usado. Não confundir com a interface antiga `monan-jedi-workflow campaign create/run`.
 >
 > **Estado da validação:** já foi demonstrado um caso científico de duas análises consecutivas (00Z e 06Z, 30/01/2026) na JACI. A campanha independente de sete dias de 30/01–06/02/2026 foi executada e diagnosticada na JACI (29 análises, 267 tarefas). Isso valida continuidade operacional e consistência interna para a receita de 240 km, não habilidade preditiva independente ou outras resoluções. As campanhas históricas de 2018 e 2025 pertencem a outros estados do software.
 
@@ -39,7 +39,7 @@ As interfaces independentes continuam disponíveis: `obs acquire`, `obs convert`
 **Pré-requisitos:** Python >= 3.10; acesso à JACI, ambiente PBS e instalação científica de WPS, MPAS/MPAS-JEDI e Obs2IODA; malha, tabelas de física e matriz B adequadas ao caso. Instalar o pacote Python **não** instala ou compila os modelos científicos.
 
 ```bash
-git clone --branch feat/platform-domain-apps \
+git clone --branch develop \
   https://github.com/joaogerd/monan-jedi-workflow.git
 
 cd monan-jedi-workflow
