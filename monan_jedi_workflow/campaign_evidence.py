@@ -158,49 +158,97 @@ def render_evidence(evidence: dict, output: Path) -> list[str]:
           "monotonic", "log", "log_sha256"], evidence["convergence"])
     _csv(output / "jedi_cost_iterations.csv",
          ["cycle", "iteration", "J", "J_normalized"], evidence["cost_iterations"])
+    from .plot_style import GREEN, INK, GRID, MUTED, dates, heading, save, style, time_axis
     names: list[str] = []
-    if evidence["campaign_complete"]:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(figsize=(12, 3.2))
-        dates = [datetime.strptime(r["cycle"], "%Y%m%dT%H%M%SZ").replace(
-            tzinfo=timezone.utc) for r in evidence["continuity"]]
-        ax.plot(dates, [1]*len(dates), color="#18864b", lw=1.6)
-        ax.scatter(dates, [1]*len(dates), color="#18864b", s=65, zorder=3)
-        ax.set_yticks([1], labels=["Validado"])
-        ax.set_ylim(.65, 1.35)
-        ax.grid(axis="x", alpha=.2)
-        ax.set_title(f"Continuidade da campanha — {len(dates)} ciclos validados")
-        fig.autofmt_xdate()
-        fig.tight_layout()
-        fig.savefig(output / "campaign_completion.png", dpi=170)
-        plt.close(fig)
-        names.append("campaign_completion.png")
-    if evidence["convergence"]:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        from matplotlib.colors import Normalize
-        from matplotlib.cm import ScalarMappable
-        by_cycle: dict[str, list[dict]] = {}
-        for record in evidence["cost_iterations"]:
-            by_cycle.setdefault(record["cycle"], []).append(record)
-        names_order = sorted(by_cycle)
-        fig, ax = plt.subplots(figsize=(11, 6))
-        norm = Normalize(vmin=0, vmax=max(1, len(names_order)-1))
-        for i, cycle in enumerate(names_order):
-            rows = sorted(by_cycle[cycle], key=lambda r: r["iteration"])
-            ax.plot([r["iteration"] for r in rows], [r["J_normalized"] for r in rows],
-                    color=plt.cm.viridis(norm(i)), alpha=.8, linewidth=1.2)
-        ax.axhline(1, ls="--", color="gray", linewidth=.8)
-        ax.set(xlabel="Iteração DRPCG", ylabel="J/J₀",
-               title=f"Convergência da função custo — {len(names_order)}/{evidence['cycles_expected']} ciclos")
-        ax.grid(alpha=.2)
-        fig.colorbar(ScalarMappable(norm=norm, cmap="viridis"), ax=ax,
-                     label="Índice cronológico do ciclo")
-        fig.tight_layout()
-        fig.savefig(output / "jedi_cost_convergence.png", dpi=170)
-        plt.close(fig)
-        names.append("jedi_cost_convergence.png")
+    with style() as plt:
+        if evidence["campaign_complete"]:
+            import matplotlib.dates as mdates
+            from datetime import timedelta
+            fig, ax = plt.subplots(figsize=(12.2, 3.8))
+            fig.subplots_adjust(left=.045, right=.985, bottom=.23, top=.78)
+            cycles = [r["cycle"] for r in evidence["continuity"]]
+            times = dates(cycles)
+            count = len(times)
+            workflow = evidence["workflow"]
+            completed = workflow["tasks_success"]
+            total = workflow["tasks_total"]
+            duration = (times[-1] - times[0]).total_seconds()/3600
+            heading(fig, "Continuidade da campanha MONAN-JEDI 3DVar/FGAT",
+                    f"{duration:g} horas • {count}/{count} ciclos validados"
+                    f" • {completed}/{total} tarefas concluídas", left=.045)
+            day = times[0].replace(hour=0, minute=0, second=0, microsecond=0)
+            end_day = times[-1]
+            number = 0
+            while day <= end_day:
+                if number % 2 == 0:
+                    ax.axvspan(day, day+timedelta(days=1), color="#f3f4f6",
+                               alpha=.85, zorder=0)
+                label_time = min(day+timedelta(hours=12), end_day)
+                ax.text(label_time, .35, day.strftime("%d/%m"),
+                        ha="center", color=MUTED, fontsize=9)
+                day += timedelta(days=1)
+                number += 1
+            ax.plot(times, [0]*count, color="#9ca3af", lw=1.8)
+            ax.scatter(times, [0]*count, s=190, color=GREEN,
+                       edgecolor="white", linewidth=1.8, zorder=3)
+            for date in times:
+                ax.text(date, 0, "✓", ha="center", va="center",
+                        fontsize=10, weight="bold", color="white", zorder=4)
+            ax.set_ylim(-.47, .56)
+            ax.set_yticks([])
+            ax.spines["left"].set_visible(False)
+            ax.spines["bottom"].set_color(GRID)
+            time_axis(ax, times, max_ticks=15)
+            save(fig, output, "campaign_completion")
+            plt.close(fig)
+            names.append("campaign_completion.png")
+        if evidence["convergence"]:
+            import numpy as np
+            from matplotlib.colors import Normalize
+            from matplotlib.cm import ScalarMappable
+            by_cycle: dict[str, list[dict]] = {}
+            for record in evidence["cost_iterations"]:
+                by_cycle.setdefault(record["cycle"], []).append(record)
+            ordered_cycles = sorted(by_cycle)
+            fig, ax = plt.subplots(figsize=(12.2, 6.6))
+            fig.subplots_adjust(left=.09, right=.97, bottom=.13, top=.83)
+            norm = Normalize(vmin=0, vmax=max(1, len(ordered_cycles)-1))
+            steps = sorted({r["iteration"] for r in evidence["cost_iterations"]})
+            curves = np.full((len(ordered_cycles), len(steps)), np.nan)
+            reductions = [r["reduction_percent"] for r in evidence["convergence"]]
+            monotonic = sum(bool(r["monotonic"]) for r in evidence["convergence"])
+            heading(fig, "Convergência da função custo",
+                    f"{len(ordered_cycles)}/{evidence['cycles_expected']} ciclos com J disponível"
+                    f" • redução média = {float(np.mean(reductions)):.1f}%"
+                    f" • monotônica em {monotonic}/{len(ordered_cycles)} ciclos",
+                    left=.09)
+            for index, cycle in enumerate(ordered_cycles):
+                rows = sorted(by_cycle[cycle], key=lambda r: r["iteration"])
+                x = [r["iteration"] for r in rows]
+                y = [r["J_normalized"] for r in rows]
+                ax.plot(x, y, color=plt.cm.viridis(norm(index)),
+                        marker="o", ms=2.6, lw=1.5, alpha=.84)
+                for row in rows:
+                    curves[index, steps.index(row["iteration"])] = row["J_normalized"]
+            ax.plot(steps, np.nanmedian(curves, axis=0), color=INK, lw=3,
+                    label="Mediana dos ciclos", zorder=4)
+            ax.axhline(1, color="#9ca3af", ls="--", lw=1)
+            ax.set_xlabel("Iteração do minimizador DRPCG")
+            ax.set_ylabel("Função custo normalizada  J/J₀")
+            ax.set_xticks(steps)
+            ax.grid(axis="y", color=GRID, alpha=.65, lw=.8)
+            ax.legend(loc="lower left", frameon=False)
+            colorbar = fig.colorbar(ScalarMappable(norm=norm, cmap="viridis"),
+                                   ax=ax, fraction=.045, pad=.03)
+            ids = np.unique(np.linspace(0, len(ordered_cycles)-1,
+                                        min(6, len(ordered_cycles))).astype(int))
+            colorbar.set_ticks(ids)
+            colorbar.set_ticklabels([
+                dates([ordered_cycles[i]])[0].strftime("%d/%m %HZ") for i in ids
+            ])
+            colorbar.set_label("Ciclo da campanha")
+            colorbar.outline.set_visible(False)
+            save(fig, output, "jedi_cost_convergence")
+            plt.close(fig)
+            names.append("jedi_cost_convergence.png")
     return names
