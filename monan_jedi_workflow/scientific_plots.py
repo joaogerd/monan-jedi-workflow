@@ -174,6 +174,32 @@ def render(report: dict, output: Path) -> list[str]:
     (output / "manifest.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n"
     )
+    op = summary["operational_and_variational"]
+    cost_coverage = op["cycles_with_cost"]
+    mean = op["mean_J_reduction_percent"]
+    mean_text = f"{mean:.2f}%" if mean is not None else "indisponível"
+    lines = [
+        "# Diagnóstico MONAN-JEDI — campanha",
+        "",
+        f"- Ciclos esperados: {report['cycles_expected']}",
+        f"- Continuidade operacional comprovada: {'sim' if op['campaign_complete'] else 'não'}",
+        f"- Ciclos com função custo legível: {cost_coverage}/{report['cycles_expected']}",
+        f"- Ciclos com J monotonicamente não crescente: {op['cycles_monotonic']}/{cost_coverage}",
+        f"- Redução média da função custo: {mean_text}",
+        f"- Estatísticas O–B/O–A por ciclo/variável: {len(report['rows'])}",
+        f"- Arquivos observacionais ausentes: {len(report['missing'])}",
+        f"- Variáveis observacionais ignoradas: {len(report['skipped'])}",
+        f"- Lacunas operacionais/variacionais: {len(op['gaps'])}",
+        "",
+        "As estatísticas O–B/O–A referem-se às observações assimiladas e não à verificação independente.",
+        "Convergência do minimizador e conclusão operacional não demonstram habilidade preditiva.",
+        "As lacunas completas e referências aos arquivos estão em manifest.json.",
+        "",
+        "## Figuras",
+        "",
+    ]
+    lines.extend(f"- {name}" for name in generated)
+    (output / "report.md").write_text("\n".join(lines) + "\n")
     return generated
 
 
