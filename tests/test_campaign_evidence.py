@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from monan_jedi_workflow.campaign_evidence import (
-    collect_evidence, parse_cost, render_evidence,
+    collect_evidence, parse_cost, parse_cost_components, render_evidence,
 )
 
 
@@ -69,11 +69,13 @@ def test_campaign_evidence_complete_and_pngs(tmp_path):
     assert result["convergence"][0]["reduction_percent"] == pytest.approx(40.0)
     output = root / "diagnostics" / "figures"
     figures = render_evidence(result, output)
-    assert figures == ["campaign_completion.png", "jedi_cost_convergence.png"]
+    assert figures == ["campaign_completion.png", "jedi_cost_convergence.png",
+                       "jedi_cost_components_20260130T000000Z.png"]
     assert all((output / name).stat().st_size > 0 for name in figures)
     assert all((output / name.replace(".png", ".pdf")).stat().st_size > 0 for name in figures)
     assert all((output / name.replace(".png", ".svg")).stat().st_size > 0 for name in figures)
     assert len((output / "jedi_cost_iterations.csv").read_text().splitlines()) == 7
+    assert (output / "jedi_cost_components.csv").is_file()
 
 
 def test_incomplete_cycle_does_not_claim_continuity(tmp_path):
@@ -102,3 +104,18 @@ def test_failure_in_sqlite_blocks_complete_campaign(tmp_path):
     with sqlite3.connect(root / ".simpleworkflow" / "state.sqlite3") as db:
         db.execute("UPDATE task_state SET status='FAILED' WHERE task='c00001_jedi_run'")
     assert collect_evidence(root, cycles)["campaign_complete"] is False
+
+
+def test_cost_components_are_not_inferred_when_missing():
+    log = ("CostFunction: Nonlinear J = 100\n"
+           "Quadratic cost function: J ( 1) = 80\n"
+           "Quadratic cost function: Jb ( 1) = 10\n"
+           "Quadratic cost function: JoJc ( 1) = 70\n"
+           "Quadratic cost function: J ( 2) = 60\n")
+    result = parse_cost_components(log, parse_cost(log))
+    assert result[0]["Jb"] is None
+    assert result[1]["Jb"] == 10
+    assert result[1]["JoJc"] == 70
+    assert result[2]["Jb"] is None
+    assert result[2]["JoJc"] is None
+    assert all(r["residual_norm"] is None for r in result)
