@@ -1,0 +1,15 @@
+# Runnable installation test. Products are ARTIFICIAL, not a scientific experiment.
+schema_version: 1
+experiment:
+  name: beta-installation-test
+  destination: ./results
+site:
+  execution:
+    mode: local
+jedi: catalog:smoke/jedi.yaml
+mpas: catalog:smoke/mpas.yaml
+observations: catalog:smoke/observations.yaml
+diagnostics:
+  run_dir: diagnostics/{cycle_id}
+  cost_function:
+    log: '{experiment_root}/jedi/{cycle_id}/jedi.stdout.log'

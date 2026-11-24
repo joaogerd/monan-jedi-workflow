@@ -1,0 +1,11 @@
+{
+  "scope": "static reference integrity and beta temporal/template rendering",
+  "numerically_validated": false,
+  "reference_cycles": 29,
+  "reference_forecast_legs": 28,
+  "files_hashed": 2419,
+  "rendered_files_compared": 201,
+  "checksum_manifest_sha256": "98a4eb8db80ee6fd1f5b29c586c1b1200bdd57b3daddce58f79294c896be6632",
+  "failures": [],
+  "passed": true
+}

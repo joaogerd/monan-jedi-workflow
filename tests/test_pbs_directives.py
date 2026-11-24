@@ -46,3 +46,13 @@ def test_repeated_render_does_not_duplicate_exclusive_placement() -> None:
 
     assert first == second
     assert second.count("#PBS -l place=excl") == 1
+
+
+def test_scientific_pbs_bootstrap_uses_configured_libfabric_not_personal_path() -> None:
+    from monan_jedi_workflow.pbs_directives import pbs_runtime_library_lines
+    script = "\\n".join(pbs_runtime_library_lines())
+    assert "MONAN_LIBFABRIC_ROOT" in script
+    assert "LD_LIBRARY_PATH" in script
+    assert "libfabric.so.1" in script
+    assert "exit 127" in script
+    assert "/p/projetos/monan_das/joao.gerd" not in script

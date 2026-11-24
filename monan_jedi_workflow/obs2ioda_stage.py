@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -328,8 +329,21 @@ def _render_inspection(run: Obs2IODARun, converter: dict[str, Any], output: Path
     )
     if any(not isinstance(item, str) or not item for item in markers):
         raise StageConfigurationError("Obs2IODA header markers must be non-empty strings.")
+    command = _render_argv(
+        argv, {**run.context, "output": str(output)}, "obs2ioda inspection.argv"
+    )
+    # The packaged reference recipe historically uses 'ncdump -h'. A clean
+    # Python installation does not necessarily expose that Spack executable
+    # on the login PATH. Only for that exact conventional inspection, fall
+    # back to the installed netCDF4 Python API, which reads real IODA groups.
+    # Do not override custom inspection commands or explicit ncdump paths.
+    if (
+        len(command) == 3 and command[:2] == ["ncdump", "-h"]
+        and shutil.which("ncdump") is None
+    ):
+        command = [sys.executable, "-m", "monan_jedi_workflow.ioda_header", command[2]]
     return {
-        "argv": _render_argv(argv, {**run.context, "output": str(output)}, "obs2ioda inspection.argv"),
+        "argv": command,
         "required_header_markers": markers,
         "timeout_seconds": _timeout(local_cfg.get("timeout_seconds", global_cfg.get("timeout_seconds")), "obs2ioda inspection.timeout_seconds", 60),
     }
@@ -521,15 +535,47 @@ def run_obs2ioda(config_dir: Path, cycle_time: str, *, force: bool = False) -> P
         stdout_path = logs_dir / f"{name}.attempt-{attempt}.stdout.log"
         stderr_path = logs_dir / f"{name}.attempt-{attempt}.stderr.log"
         started_at = _timestamp()
-        try:
-            process = subprocess.run(converter["argv"], cwd=run.work_dir, env=child_environment, text=True, capture_output=True, check=False, timeout=_timeout(converter.get("timeout_seconds"), f"{name}.timeout_seconds", 900))
-        except subprocess.TimeoutExpired as error:
-            stdout_path.write_text(error.stdout or "", encoding="utf-8")
-            stderr_path.write_text(error.stderr or "", encoding="utf-8")
-            manifest.update({"state": "failed", "failed_converter": name})
-            manifest.setdefault("runs", []).append({"name": name, "attempt": attempt, "started_at": started_at, "finished_at": _timestamp(), "timeout": True})
-            _write_manifest(run, manifest)
-            raise RuntimeError(f"Obs2IODA converter '{name}' timed out.") from error
+        if run.config.get("pbs"):
+            from .native_pbs import native_pbs_run
+            # Serialize converter-specific commands into a native PBS shell.
+            # Python remains on login and records its stage manifest afterwards.
+            try:
+                job_id, return_code = native_pbs_run(
+                    name=f"obs_{run.cycle.cycle_id}_{name}_attempt{attempt}",
+                    commands=[converter["argv"]], cwd=run.work_dir,
+                    stdout=stdout_path, stderr=stderr_path,
+                    resources=run.config["pbs"],
+                    environment={
+                        # Do not propagate the controller/Conda library path
+                        # into a compute job with a site-owned scientific stack.
+                        "LD_LIBRARY_PATH": (
+                            os.pathsep.join(str(p) for p in runtime.get("library_paths", []))
+                            if run.config.get("pbs", {}).get("site_config")
+                            else child_environment.get("LD_LIBRARY_PATH", "")
+                        ),
+                    },
+                )
+            except Exception:
+                manifest["state"] = "failed"
+                manifest["failed_converter"] = name
+                _write_manifest(run, manifest)
+                raise
+            process = subprocess.CompletedProcess(
+                args=converter["argv"], returncode=return_code,
+                stdout=stdout_path.read_text(errors="replace") if stdout_path.is_file() else "",
+                stderr=stderr_path.read_text(errors="replace") if stderr_path.is_file() else "",
+            )
+            manifest.setdefault("pbs_jobs", []).append({"converter": name, "job_id": job_id})
+        else:
+            try:
+                process = subprocess.run(converter["argv"], cwd=run.work_dir, env=child_environment, text=True, capture_output=True, check=False, timeout=_timeout(converter.get("timeout_seconds"), f"{name}.timeout_seconds", 900))
+            except subprocess.TimeoutExpired as error:
+                stdout_path.write_text(error.stdout or "", encoding="utf-8")
+                stderr_path.write_text(error.stderr or "", encoding="utf-8")
+                manifest.update({"state": "failed", "failed_converter": name})
+                manifest.setdefault("runs", []).append({"name": name, "attempt": attempt, "started_at": started_at, "finished_at": _timestamp(), "timeout": True})
+                _write_manifest(run, manifest)
+                raise RuntimeError(f"Obs2IODA converter '{name}' timed out.") from error
         stdout_path.write_text(process.stdout, encoding="utf-8")
         stderr_path.write_text(process.stderr, encoding="utf-8")
         records = [_file_record(Path(path), include_sha256=include_sha256) for path in outputs]
@@ -589,6 +635,16 @@ def validate_obs2ioda(config_dir: Path, cycle_time: str) -> Path:
                 stderr_path.write_text(error.stderr or "", encoding="utf-8")
                 record.update({"valid": False, "problem": "inspection timeout"})
                 problems.append(f"{name}: IODA inspection timed out for {output}")
+            except OSError as error:
+                # Persist failure in the scientific validation report rather
+                # than aborting without an obs2ioda-validation.json artifact.
+                stderr_path.write_text(str(error) + "\n", encoding="utf-8")
+                record.update({
+                    "valid": False, "problem": f"inspector unavailable: {error}",
+                    "inspection_argv": inspection["argv"],
+                    "inspection_stderr": str(stderr_path),
+                })
+                problems.append(f"{name}: IODA inspector unavailable: {error}")
             records.append(record)
     report = {"schema_version": 2, "validated_at": _timestamp(), "cycle_time": run.cycle.cycle_time, "cycle_id": run.cycle.cycle_id, "plan_sha256": manifest.get("plan_sha256"), "valid": not problems, "records": records, "problems": problems}
     report_path = run.manifest_path.with_name("obs2ioda-validation.json")

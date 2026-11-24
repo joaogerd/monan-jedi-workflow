@@ -1,14 +1,13 @@
-"""Cycle-aware WPS/UNGRIB preparation, execution and validation.
+"""Cycle-aware WPS/UNGRIB with optional login-side GRIB acquisition.
 
-This module never downloads GRIB data and never builds WPS.  It consumes the
-WPS tools published by MONAN-JEDI and transforms one declared GRIB input into
-the WPS intermediate file required by ``mpas_init_atmosphere``.
+Scientific work remains native PBS; only input acquisition runs on login.
 """
 
 from __future__ import annotations
 
 import json
 import subprocess
+import shlex
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -158,8 +157,47 @@ def _load_manifest(run: WPSRun) -> dict[str, Any]:
 
 
 def prepare_wps(config_dir: Path, cycle_time: str) -> WPSRun:
-    """Stage declared WPS tools, GRIB link and rendered namelist for one cycle."""
+    """Acquire configured GFS if absent, then prepare WPS without compute Python."""
     run = load_wps_run(config_dir, cycle_time)
+    # A repeated preparation must never remove already-produced GFS:* files,
+    # overwrite a previously validated manifest, or silently attempt to reuse
+    # an existing native PBS job. In particular, do this before acquisition,
+    # _clean(), template writes or _write_manifest().
+    previous_validation = run.manifest_path.with_name("wps-validation.json")
+    native_script = run.work_dir / f"wps_{run.cycle.cycle_id}.native.pbs"
+    if run.manifest_path.exists() or previous_validation.exists() or native_script.exists():
+        evidence = [
+            str(path) for path in (run.manifest_path, previous_validation, native_script)
+            if path.exists()
+        ]
+        raise FileExistsError(
+            "WPS initialization already has persistent state; refusing a "
+            "second preparation because it may delete scientific outputs. "
+            f"Cycle: {run.cycle.cycle_time}. Existing: {', '.join(evidence)}. "
+            "Inspect original PBS job, manifest, and validation; never "
+            "remove these files merely to make a rerun succeed. Use a "
+            "separate experiment for intentional scientific reinitialization."
+        )
+    acquisition = _mapping(run.config.get("acquisition", {}), "wps.acquisition")
+    if acquisition:
+        from .input_acquisition import ensure_input
+        source = resolve_path(
+            _string(acquisition.get("source"), "wps.acquisition.source"),
+            config_dir=run.config_dir, context=run.context,
+            label="wps.acquisition.source",
+        )
+        enabled = acquisition.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise StageConfigurationError("wps.acquisition.enabled must be boolean")
+        url = (
+            render_text(acquisition["url"], run.context, label="wps.acquisition.url")
+            if enabled and acquisition.get("url") else None
+        )
+        ensure_input(
+            target=source, url=url, label=f"GFS {run.cycle.cycle_time}",
+            timeout=int(acquisition.get("timeout_seconds", 300)),
+            magic=b"GRIB" if acquisition.get("validate_grib", False) else None,
+        )
     run.work_dir.mkdir(parents=True, exist_ok=True)
     _clean(run)
 
@@ -234,6 +272,25 @@ def run_wps(config_dir: Path, cycle_time: str, *, force: bool = False) -> Path:
 
     logs = run.work_dir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
+    if run.config.get("pbs"):
+        from .native_pbs import native_pbs_run
+        script_commands = []
+        for name, argv in (("link_grib", manifest["link_grib_argv"]),
+                           ("ungrib", manifest["ungrib_argv"])):
+            command = (shlex.join(argv) + " > " +
+                       shlex.quote(str(logs / f"{name}.stdout.log")) +
+                       " 2> " + shlex.quote(str(logs / f"{name}.stderr.log")))
+            script_commands.append(["bash", "-c", "set -euo pipefail; " + command])
+        job_id, _ = native_pbs_run(
+            name=f"wps_{run.cycle.cycle_id}", commands=script_commands,
+            cwd=run.work_dir, stdout=logs / "pbs.stdout.log",
+            stderr=logs / "pbs.stderr.log", resources=run.config["pbs"],
+        )
+        manifest.update({"state": "completed", "completed_at": _timestamp(),
+                         "job_id": job_id})
+        _write_manifest(run, manifest)
+        print(f"[OK] completed WPS PBS cycle: {run.cycle.cycle_time}")
+        return run.manifest_path
     for name, argv in (("link_grib", manifest["link_grib_argv"]), ("ungrib", manifest["ungrib_argv"])):
         result = subprocess.run(argv, cwd=run.work_dir, text=True, capture_output=True, check=False)
         (logs / f"{name}.stdout.log").write_text(result.stdout, encoding="utf-8")

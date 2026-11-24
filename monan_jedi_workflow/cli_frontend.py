@@ -59,6 +59,10 @@ def _fetch_observations(config: Path) -> None:
 
 
 def _dispatch(args: list[str]) -> int:
+    if args and args[0] in {"diagnose", "doctor"}:
+        from .diagnostics import main as diagnosis_main
+        return diagnosis_main(args[1:])
+
     if args and args[0] in {"obs2ioda-doctor", "obs2ioda-prepare", "obs2ioda-run"}:
         cycle_index = args.index("--cycle")
         cycle = args[cycle_index + 1]

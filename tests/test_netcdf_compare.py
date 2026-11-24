@@ -70,3 +70,31 @@ def test_cli_exit_status(tmp_path: Path, capsys) -> None:
     output = capsys.readouterr().out
     assert "[DIFF]" in output
     assert "temperature: data differ" in output
+
+
+def test_nested_ioda_groups_are_compared(tmp_path: Path) -> None:
+    paths = [tmp_path / 'reference.nc', tmp_path / 'candidate.nc']
+    for index, path in enumerate(paths):
+        with Dataset(path, 'w') as ds:
+            ds.createDimension('Location', 2)
+            group = ds.createGroup('hofx1').createGroup('nested')
+            var = group.createVariable('airTemperature', 'f8', ('Location',))
+            var[:] = [280., 281. + index]
+    report = compare_netcdf(*paths)
+    assert not report.equivalent
+    assert report.variables_compared == 1
+    assert any('/hofx1/nested/airTemperature' in d for d in report.data_differences)
+
+
+def test_group_inventory_and_metadata_are_compared(tmp_path: Path) -> None:
+    paths = [tmp_path / 'reference.nc', tmp_path / 'candidate.nc']
+    for index, path in enumerate(paths):
+        with Dataset(path, 'w') as ds:
+            group = ds.createGroup('ObsValue')
+            group.setncattr('source', str(index))
+            if index:
+                ds.createGroup('EffectiveQC1')
+    report = compare_netcdf(*paths)
+    assert not report.equivalent
+    assert any('group inventory' in d for d in report.differences)
+    assert any('/ObsValue' in d and 'source' in d for d in report.differences)

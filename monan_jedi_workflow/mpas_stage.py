@@ -14,7 +14,8 @@ from typing import Any
 
 from .cycle_context import CycleContext, parse_cycle_time
 from .netcdf_validation import NetcdfStructureContract, validate_netcdf_structure
-from .pbs_directives import pbs_header_lines
+from .pbs_directives import pbs_header_lines, pbs_runtime_library_lines, pbs_linker_preflight_lines
+from .scientific_environment import render_native_site_setup
 from .scheduler import PBSError, query
 from .stage_config import (
     StageConfigurationError,
@@ -288,10 +289,13 @@ def _render_pbs(run: MPASRun) -> None:
         "",
         "set -euo pipefail",
         f"cd {shlex.quote(str(run.run_dir))}",
+        *render_native_site_setup(pbs, config_dir=run.config_dir),
         *bootstrap_lines,
         *setup_lines,
         *exports,
+        *(pbs_runtime_library_lines() if not pbs.get("site_config") else []),
         "ulimit -s unlimited || true",
+        *pbs_linker_preflight_lines(render_text(command[0], run.context, label="pbs.command executable")),
         f"{shlex.quote(launcher)} -n {mpiprocs} {rendered_command} > {shlex.quote(stdout)} 2> {shlex.quote(stderr)}",
         "",
     ]
@@ -540,7 +544,9 @@ def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
     """Validate the MPAS log and products declared for one submitted cycle."""
     run = load_mpas_run(config_dir, cycle_time)
     manifest = _load_manifest(run)
-    if not isinstance(manifest.get("job_id"), str) or not manifest["job_id"]:
+    if manifest.get("worker_completed") is not True and (
+        not isinstance(manifest.get("job_id"), str) or not manifest["job_id"]
+    ):
         raise MPASValidationError("MPAS validation requires a submitted job manifest.")
 
     validation = _require_mapping(run.config.get("validation"), "mpas.validation")
@@ -579,7 +585,7 @@ def validate_mpas(config_dir: Path, cycle_time: str) -> Path:
         "validated_at": _timestamp(),
         "cycle_time": run.cycle.cycle_time,
         "cycle_id": run.cycle.cycle_id,
-        "job_id": manifest["job_id"],
+        "job_id": manifest.get("job_id"),
         "valid": not missing_markers and not missing_outputs and not netcdf_issues,
         "log": str(log_path),
         "missing_log_markers": missing_markers,

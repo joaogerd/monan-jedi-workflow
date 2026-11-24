@@ -3,9 +3,12 @@ name: Tests
 on:
   pull_request:
     branches:
+      - develop
       - main
   push:
     branches:
+      - feat/platform-domain-apps
+      - develop
       - main
 
 jobs:
@@ -34,6 +37,12 @@ jobs:
       - name: Install package and test dependencies
         run: make install
 
+      - name: Install optional scientific plotting support
+        run: python -m pip install '.[plots]'
+
+      - name: Validate local documentation links
+        run: python scripts/check_docs_links.py
+
       - name: Run tests
         run: python -m pytest --junitxml=pytest-results.xml
 
@@ -45,8 +54,39 @@ jobs:
           path: pytest-results.xml
           if-no-files-found: error
 
+      - name: Verify packaged recipe in built wheel
+        run: |
+          python -m pip wheel --no-deps -w /tmp/monan-jedi-wheels .
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheels = list(Path("/tmp/monan-jedi-wheels").glob("monan_jedi_workflow*.whl"))
+          assert len(wheels) == 1, wheels
+          with ZipFile(wheels[0]) as wheel:
+              paths = set(wheel.namelist())
+          required = {
+              "monan_jedi_workflow/recipes/mpas-jedi-3dvar/recipe.yaml",
+              "monan_jedi_workflow/recipes/mpas-jedi-3dvar/README.md",
+              "monan_jedi_workflow/recipes/mpas-jedi-3dvar/science/jedi.yaml",
+              "monan_jedi_workflow/recipes/mpas-jedi-3dvar/science/initialization/mpas.yaml",
+              "monan_jedi_workflow/recipes/mpas-jedi-3dvar/science/templates/variational.yaml",
+          }
+          missing = required - paths
+          assert not missing, f"Wheel missing scientific resources: {sorted(missing)}"
+          print("Packaged recipe and scientific catalog verified")
+          PY
+
       - name: Check public CLI
         run: |
+          experiment --help
+          diagnose --help
+          wps --help
+          obs --help
+          jedi --help
+          mpas --help
+          diagnostics --help
+          campaign --help
           monan-jedi-workflow --help
           monan-jedi-workflow campaign --help
 

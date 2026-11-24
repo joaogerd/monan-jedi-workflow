@@ -35,8 +35,15 @@ class InputResolution:
 
 
 def _looks_like_observation_data(path: Path) -> bool:
+    """Only scientific data files, never scripts or directories containing dates."""
     name = path.name.lower()
-    return "prepbufr" in name or "gpsro" in name or ".bufr" in name
+    if name.endswith((".sh", ".py", ".yaml", ".yml", ".json")):
+        return False
+    return (
+        name.endswith((".bufr", ".nr"))
+        or name in {"prepbufr", "gpsro"}
+        or name.startswith(("prepbufr.", "gdas.gpsro."))
+    )
 
 
 def cycle_candidate(path: Path, cycle) -> tuple[Path, bool]:
@@ -44,10 +51,14 @@ def cycle_candidate(path: Path, cycle) -> tuple[Path, bool]:
     if not _looks_like_observation_data(path):
         return path, False
 
-    text = str(path)
-    date_hours = set(_DATE_HOUR.findall(text))
-    dates = set(_DATE.findall(text))
-    t_hours = {item.lower() for item in _T_HOUR.findall(text)}
+    # Never substitute timestamp-like strings in parent directories: the
+    # experiment itself may be named m3-7dias-20260130 while the observation
+    # filename correctly refers to 20260131. Only the data basename carries
+    # the cycle identity for the supported PREPBUFR/GPSRO conventions.
+    name = path.name
+    date_hours = set(_DATE_HOUR.findall(name))
+    dates = set(_DATE.findall(name))
+    t_hours = {item.lower() for item in _T_HOUR.findall(name)}
     if not date_hours and not dates and not t_hours:
         return path, False
 
@@ -62,10 +73,10 @@ def cycle_candidate(path: Path, cycle) -> tuple[Path, bool]:
     if matches:
         return path, False
 
-    candidate_text = _DATE_HOUR.sub(expected_10, text)
-    candidate_text = _DATE.sub(expected_8, candidate_text)
-    candidate_text = _T_HOUR.sub(cycle.value.strftime("t%Hz"), candidate_text)
-    return Path(candidate_text), True
+    candidate_name = _DATE_HOUR.sub(expected_10, name)
+    candidate_name = _DATE.sub(expected_8, candidate_name)
+    candidate_name = _T_HOUR.sub(cycle.value.strftime("t%Hz"), candidate_name)
+    return path.with_name(candidate_name), True
 
 
 def _local_candidates(root: Path, candidate: Path, cycle, converter: str) -> list[Path]:

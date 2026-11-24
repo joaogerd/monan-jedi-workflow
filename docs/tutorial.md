@@ -1,165 +1,367 @@
-# Tutorial — do zero a uma campanha MONAN-JEDI
+# Tutorial — primeiro experimento MONAN-JEDI e campanhas na JACI
 
-Este é o caminho normal do usuário. Não é necessário procurar outros exemplos.
+> **Escopo:** branch `feat/platform-domain-apps`, pacote beta `0.3.0b1`. Este é o caminho de entrada para **usuários novos**, a partir da instalação. A implementação atual da receita científica usa **MPAS-JEDI** com 3DVar/FGAT; o nome da plataforma MONAN-JEDI **não** significa que o executável do núcleo MONAN já esteja sendo usado. Não confundir com a interface antiga `monan-jedi-workflow campaign create/run`.
+>
+> **Estado da validação:** já foi demonstrado um caso científico de duas análises consecutivas (00Z e 06Z, 30/01/2026) na JACI. A campanha independente de sete dias de 30/01–06/02/2026 foi executada e diagnosticada na JACI (29 análises, 267 tarefas). Isso valida continuidade operacional e consistência interna para a receita de 240 km, não habilidade preditiva independente ou outras resoluções. As campanhas históricas de 2018 e 2025 pertencem a outros estados do software.
 
-## 1. Pré-requisitos
+## 1. Entender a sequência antes de instalar
 
-Você precisa ter:
+O usuário cria um **experimento** (receita científica, ambiente, arquivos de configuração) e uma **campanha** (datas e operações). O `experiment export` converte a campanha em `workflow.yaml`; `experiment run` delega a execução ao `simpleWorkflow`.
 
-- MONAN-JEDI instalado;
-- simpleWorkflow instalado;
-- este repositório instalado;
-- acesso aos dados científicos do experimento.
+```text
+NÓ DE LOGIN (controlador Python; simpleWorkflow)
+  experiment create
+       |
+       v
+  environment.sh + science/*.yaml + campaign.yaml
+       |
+       v
+  experiment check -> experiment export -> experiment validate -> experiment plan
+       |
+       v
+  experiment run (simpleWorkflow, tarefas locais de controle)
+       |
+       +-- Inicialização, uma vez:
+       |     WPS prepare -> WPS run/validate -> MPAS Init -> MPAS 6 h
+       |
+       +-- Para cada análise de 6 h:
+             OBS convert -> JEDI (análise) -> MPAS (previsão 6 h)
+                    ^                          |
+                    +----- background seguinte-+
+```
 
-Selecione o runtime:
+Cada etapa de controle tem `prepare`, `run` e `validate`. Quando a ciência exige recursos da JACI, o aplicativo submete um **script PBS nativo** via `qsub` e acompanha o job. **Não se executa Python/Conda do workflow nos nós de computação.** O Conda do controlador pode residir no diretório pessoal, mas entradas, executáveis, bibliotecas e produtos científicos devem ser acessíveis aos compute nodes.
+
+As interfaces independentes continuam disponíveis: `obs acquire`, `obs convert`, `jedi`, `mpas init`, `mpas`, `diagnostics`, `campaign`, `wps` e `diagnose`. O primeiro experimento não exige chamar cada aplicativo manualmente.
+
+## 2. Instalar uma única vez
+
+**Pré-requisitos:** Python >= 3.10; acesso à JACI, ambiente PBS e instalação científica de WPS, MPAS/MPAS-JEDI e Obs2IODA; malha, tabelas de física e matriz B adequadas ao caso. Instalar o pacote Python **não** instala ou compila os modelos científicos.
 
 ```bash
-export MONAN_JEDI_INSTALL_ROOT=/caminho/para/monan-jedi
-export STACK_ROOT=/caminho/para/spack-stack
+git clone --branch feat/platform-domain-apps \
+  https://github.com/joaogerd/monan-jedi-workflow.git
 
-monan-jedi-workflow --help
+cd monan-jedi-workflow
+python -m pip install -e '.[dev,orchestration]'
+
+experiment --help
+campaign --help
 swf --help
+diagnose --help
 ```
 
-## 2. Crie a configuração do experimento
+O `simpleWorkflow` é dependência do pacote, atualmente fixada num commit em `pyproject.toml`. Instalação editável é útil no desenvolvimento, **não** autoriza atualizar o checkout enquanto uma campanha está executando. Fixe o commit antes do experimento e registre `git rev-parse HEAD`.
 
-Copie o template mantido:
+### 2.1. Alternativa: testar sem dados científicos (opcional)
+
+Este teste artificial verifica apenas contratos de entrada e saída dos aplicativos. Não use os produtos como evidência meteorológica.
 
 ```bash
-cp -r examples/case my-experiment
-cd my-experiment
+# A partir da raiz do checkout:
+mkdir -p /p/projetos/SEU_GRUPO/SEU_USUARIO/testes
+cp -r examples/beta /p/projetos/SEU_GRUPO/SEU_USUARIO/testes/beta-ciclo
+cd /p/projetos/SEU_GRUPO/SEU_USUARIO/testes/beta-ciclo
+bash manual.sh experiment.yaml 2025-09-01T00:00:00Z
 ```
 
-Você encontrará um único conjunto de arquivos de usuário:
+O script registra `manual-test.log` e só imprime `TODOS OS 5 TESTES PASSARAM` se os cinco aplicativos artificiais passarem em `prepare/run/validate/status`. Não reaproveite esse diretório para ciência.
+
+## 3. Entender os diretórios e preparar seu workspace
+
+Antes de executar o primeiro experimento, é importante diferenciar **onde o programa está instalado**, **onde o usuário trabalha** e **onde ficam os resultados de cada experimento**. Esses três locais têm funções distintas. Não é necessário copiar a organização de diretórios do desenvolvedor.
+
+### 3.1. Três conceitos diferentes
+
+| Conceito | O que é | Quem define |
+| --- | --- | --- |
+| **Instalação do software** | O código e os comandos `experiment`, `obs`, `jedi`, `mpas` e `swf`, disponíveis no ambiente Python/Conda | Instalação feita na seção 2 |
+| **Workspace** | Pasta-base do usuário, na qual podem existir configurações compartilhadas do site e **vários experimentos** | O usuário, pelo argumento `--workspace` |
+| **Experimento (case)** | Uma execução específica, com seus YAMLs, trabalhos, produtos, logs e estado do orquestrador | O usuário, pelo primeiro argumento de `experiment create` |
+
+O software pode estar instalado no ambiente Conda do usuário, enquanto o workspace e os resultados ficam em `/p`. Os dados externos (GFS, observações, malha, matriz B, física) também podem estar em diretórios **compartilhados**, fora do workspace. Não é preciso nem recomendável duplicá-los em cada experimento.
+
+Em computadores diferentes da JACI, a convenção de caminhos pode ser outra. `/p/projetos/...` é um **exemplo de armazenamento da JACI**, não uma exigência da interface MONAN-JEDI.
+
+### 3.2. Escolher seu diretório de trabalho
+
+Neste tutorial usaremos duas variáveis de shell que **não são obrigatórias para o software**: `WORKSPACE` e `CASE`. Elas apenas facilitam digitar caminhos longos sem erros.
+
+```bash
+# Exemplo ilustrativo: substitua pelos diretórios autorizados para sua conta.
+export WORKSPACE=/p/projetos/SEU_GRUPO/SEU_USUARIO/monan-jedi
+
+# Uma pasta para UM experimento. O nome é livre e deve ser descritivo.
+export CASE="$WORKSPACE/experiments/primeiro-experimento"
+```
+
+O que cada linha significa?
+
+- `export WORKSPACE=...` guarda o **caminho da pasta principal** na variável `WORKSPACE`, tornando-o disponível para os comandos seguintes. Não cria a pasta, não instala nada e não ativa o modelo.
+- `export CASE="$WORKSPACE/experiments/primeiro-experimento"` monta o **caminho completo de um experimento**. `$WORKSPACE` é substituído pelo valor definido acima. As aspas preservam o caminho como um único argumento.
+- `SEU_GRUPO` e `SEU_USUARIO` são **marcadores para substituir**, não palavras que devem ser digitadas literalmente.
+
+Por exemplo, se a pasta de trabalho autorizada for `/p/projetos/grupo_exemplo/usuario_exemplo/monan-jedi`, a variável `CASE` será:
 
 ```text
-my-experiment/
-  campaign.yaml       quando e por quanto tempo executar
-  profile.yaml        liga a campanha aos componentes abaixo
-  jedi.yaml           análise/DA
-  mpas.yaml           forecast MONAN/MPAS
-  obs2ioda.yaml       observações
-  initialization/     configuração do primeiro estado MPAS
-  templates/          namelists, streams e YAML variacional (a preencher)
+/p/projetos/grupo_exemplo/usuario_exemplo/monan-jedi/experiments/primeiro-experimento
 ```
 
-Não crie `workflow.yaml` manualmente. Ele é produto da materialização.
-
-## 3. Configure na ordem correta
-
-### 3.1 Campanha
-
-Abra `campaign.yaml`. Para o primeiro teste escolha uma data para a qual todos
-os dados estejam disponíveis e use:
-
-```yaml
-duration: P3D
-```
-
-Veja [campaign](configuration/campaign.md).
-
-### 3.2 MONAN/MPAS
-
-Abra `mpas.yaml` e confira malha, partição, forecast, intervalo dos estados
-DA, namelist/streams e PBS.
-
-Veja [MONAN/MPAS](configuration/mpas.md).
-
-### 3.3 Observações
-
-Abra `obs2ioda.yaml`. Para cada observação confirme origem, conversor e output
-IODA. A lista `converters[*].outputs` é a lista de produtos que a campanha
-espera.
-
-Veja [observações](configuration/observations.md).
-
-### 3.4 JEDI
-
-Abra `jedi.yaml` e confira ciclo/janela, background, B, links das observações,
-YAML variacional, recursos PBS e validação.
-
-Depois confira o YAML variacional em `templates/`: geometry, variáveis,
-B, observers, operadores, QC, erros e minimização.
-
-Veja [JEDI](configuration/jedi.md).
-
-## 4. Verifique antes de executar
-
-Da raiz do repositório:
+Use `echo` para conferir os caminhos **antes de criar arquivos**:
 
 ```bash
-monan-jedi-workflow campaign check my-experiment/campaign.yaml
+echo "$WORKSPACE"
+echo "$CASE"
 ```
 
-Corrija tudo que aparecer como erro. Não prossiga enquanto o preflight não
-estiver limpo.
+Se a saída ainda contiver `SEU_GRUPO` ou `SEU_USUARIO`, pare e corrija o exemplo.
 
-## 5. Materialize sem submeter
+### 3.3. Criar somente a pasta que organizará os experimentos
 
 ```bash
-monan-jedi-workflow campaign create my-experiment/campaign.yaml
+mkdir -p "$WORKSPACE/experiments"
 ```
 
-O diretório indicado por `campaign.destination` será criado. Agora sim ele
-conterá o `workflow.yaml`.
+- `mkdir` cria diretórios.
+- `-p` cria também os diretórios intermediários, quando necessário, e não falha se a pasta já existir.
+- **Este comando não cria o experimento** e não executa nenhuma tarefa científica. Ele prepara apenas o local onde o `experiment create` irá trabalhar.
+- É necessário ter permissão de escrita no local escolhido. Se houver erro de permissão, use um caminho autorizado; não altere permissões dos diretórios compartilhados da instituição.
 
-Inspecione:
+Para confirmar:
 
 ```bash
-swf plan CAMPAIGN_DESTINATION/workflow.yaml
+test -d "$WORKSPACE/experiments" && echo "[OK] Pasta de experimentos encontrada"
+test -w "$WORKSPACE/experiments" && echo "[OK] Pasta permite escrita"
 ```
 
-Até aqui nenhum experimento científico deve ter sido submetido.
-
-## 6. Execute
-
-```bash
-monan-jedi-workflow campaign run my-experiment/campaign.yaml
-```
-
-Acompanhe:
-
-```bash
-monan-jedi-workflow campaign status my-experiment/campaign.yaml
-```
-
-## 7. Valide três dias
-
-Antes de ampliar o período, confirme:
-
-- todos os ciclos terminaram;
-- observações foram convertidas e usadas;
-- JEDI terminou com seus marcadores de sucesso;
-- análises foram produzidas;
-- forecasts MPAS terminaram;
-- cada forecast forneceu o estado esperado ao ciclo seguinte;
-- horários NetCDF são coerentes;
-- logs não mostram erro científico silencioso.
-
-## 8. Amplie sem mudar a ciência
-
-Crie uma nova campanha/destination e altere apenas a duração:
+### 3.4. Como ficará a organização
 
 ```text
-P3D -> P7D -> P30D -> P365D
+monan-jedi/                      <- WORKSPACE: pasta-base do usuário
+├── site.yaml                    <- perfil do ambiente científico (se configurado)
+└── experiments/
+    ├── primeiro-experimento/    <- CASE 1: criado por experiment create
+    │   ├── environment.sh
+    │   ├── experiment.yaml
+    │   ├── campaign.yaml
+    │   ├── science/
+    │   ├── work/                <- produtos e logs científicos da execução
+    │   └── .simpleworkflow/     <- estado/histórico após iniciar o workflow
+    ├── teste-3dias/             <- outro experimento, independente
+    └── teste-7dias/             <- outro experimento, independente
 ```
 
-Se for necessário alterar Python apenas porque a duração aumentou, isso deve
-ser tratado como defeito do workflow, não como procedimento do usuário.
+A árvore acima representa a **organização conceitual**. Alguns arquivos e diretórios só aparecem depois da criação ou da execução; o programa também pode gerar outros YAMLs e pastas auxiliares.
 
-## Próximo marco
+O nome `primeiro-experimento` **não tem significado científico especial**. Pode ser `teste-20260130`, `3dvar-controle` ou outro nome. Em cada novo experimento, escolha um caminho de destino que **ainda não exista**: `experiment create` não deve sobrescrever uma execução anterior.
 
-O template `examples/case` será fechado com o baseline científico 2025 antes
-de ser declarado pronto para produção. Até lá, nenhum valor científico de
-exemplo deve ser interpretado como recomendação universal.
+### 3.5. Qual a diferença entre `site.yaml` e `environment.sh`?
+
+O `site.yaml` descreve os **recursos do ambiente** que novos experimentos desse workspace podem reutilizar: caminhos para instalações e dados, bibliotecas e configurações específicas do local. Já o `environment.sh` é produzido **dentro de cada experimento** e deve ser carregado com `source ./environment.sh` antes dos comandos científicos.
+
+A pasta existir não significa que o ambiente científico esteja pronto. Antes de executar `experiment create --workspace "$WORKSPACE"`, confirme que o workspace dispõe de um `site.yaml` revisado e apropriado ao seu ambiente. Caso seja uma instalação nova, consulte `experiment site init --help`, verifique os caminhos descobertos e valide a configuração **antes da primeira submissão**. Para detalhes de descoberta do perfil, consulte [ambiente persistente do site](persistent-site-environment.md) e [arquitetura de execução na JACI](developer/architecture.md).
+
+Os valores científicos da receita de referência (resolução, malha, número de processos, física e matriz B) são parâmetros de **um caso específico**, não valores universais do software.
+
+### 3.6. Perguntas frequentes
+
+**Preciso criar um workspace novo para cada experimento?** Não. Um mesmo workspace pode conter vários experimentos independentes, cada um com sua própria pasta.
+
+**Posso escolher outro nome ou outro local?** Sim, desde que a conta tenha acesso aos dados científicos necessários e permissão para gravar os resultados. O argumento `--workspace` aponta para a pasta-base, e o primeiro argumento de `experiment create` aponta para a pasta do experimento.
+
+**Preciso mover o repositório do software para dentro do workspace?** Não. A instalação e a área de resultados são independentes.
+
+**`mkdir -p` já roda o MONAN/MPAS/JEDI?** Não. Ele apenas cria uma pasta. A ciência só começa posteriormente, quando o usuário aprova o plano e executa `experiment run`.
+
+**Posso reutilizar o nome de um experimento antigo?** Não para criar um caso novo no mesmo destino. Preserve o histórico e escolha outro nome. Para continuar uma execução já existente, use sua pasta original e o estado persistido, observando as regras de retomada da seção 7.
+
+## 4. Criar o primeiro experimento científico — dois ciclos
+
+Escolha uma data realmente coberta por observações e pelo GFS de inicialização. A data abaixo é a do caso que serviu aos testes operacionais; **não é um default obrigatório**.
+
+```bash
+experiment create "$CASE" \
+  --workspace "$WORKSPACE" \
+  --start 2026-01-30T00:00:00Z
+
+cd "$CASE"
+source ./environment.sh
+```
+
+O destino deve ser **novo**. O criador recusa sobrescrever um diretório existente. Por padrão, usa `cold start`; `warm start` científico não está implementado. O criador agora aceita `--recipe`, `--config` e sobrescritas explícitas de parâmetros (consulte a seção 4.1).
+
+Arquivos principais:
+
+| Arquivo/diretório | Para que serve |
+| --- | --- |
+| `environment.sh` | carrega e verifica as variáveis do caso |
+| `science/` | configurações específicas de WPS, MPAS, JEDI, Obs2IODA, templates e perfil |
+| `experiment.yaml` | aponta para as configurações científicas dos ciclos |
+| `init.yaml` / `initialization.yaml` | inicialização WPS/MPAS anterior à primeira análise |
+| `campaign.yaml` | declara calendário, operações e `workflow.yaml` de saída |
+| `work/` | produtos científicos, manifests e logs, após execução |
+| `.simpleworkflow/` | histórico e estado do orquestrador, após execução |
+
+`experiment create` gera configurações e links de background, **não submete jobs nem produz análises**. Na receita de referência, a primeira análise ocorre às 00Z, a segunda às 06Z e a inicialização às 18Z do dia anterior.
+
+### 4.1. Receitas, parâmetros e campanhas de duração variável
+
+As receitas documentadas podem ser listadas e inspecionadas:
+
+```bash
+experiment recipes list
+experiment recipes show mpas-jedi-3dvar
+experiment create --help
+```
+
+A receita embutida `mpas-jedi-3dvar` preserva a configuração científica
+de referência de 240 km e 55 níveis. Quando nenhum override é informado,
+`experiment create` mantém o caso curto de **duas análises**, com intervalo
+de 6 h. Opções fornecidas explicitamente têm prioridade sobre o
+`--config` YAML, que por sua vez tem prioridade sobre os defaults da receita.
+
+Para criar **um caso independente de sete dias**, mantendo os demais
+parâmetros da receita:
+
+```bash
+experiment create "$WORKSPACE/experiments/teste-7dias" \\
+  --workspace "$WORKSPACE" \\
+  --recipe mpas-jedi-3dvar \\
+  --start 2026-01-30T00:00:00Z \\
+  --duration P7D
+```
+
+Isso produz 29 análises (fim inclusivo) e cria os vínculos de background
+para os 29 horários, sem alterar o experimento original. A verificação
+`experiment check-inputs .` passa a examinar as observações de **todos**
+os ciclos dessa campanha, além do GFS de inicialização. A execução ainda
+exige insumos reais, executáveis científicos e recursos PBS suficientes.
+
+A troca nominal de resolução **não** reutiliza a configuração de 240 km:
+`--resolution 60km` somente é admitido quando a receita possui um
+perfil de resolução com seus próprios arquivos científicos completos.
+Na distribuição atual, apenas 240 km tem um perfil embutido. As alterações
+de intervalo temporal, níveis verticais, matriz B, passo de tempo e seleção
+de observações também dependem de receitas científicas compatíveis; as
+alterações ainda não suportadas falham explicitamente durante o `create`.
+Consulte [o README da receita](../monan_jedi_workflow/recipes/mpas-jedi-3dvar/README.md).
+
+## 5. Verificar os dados antes de gastar horas de JACI
+
+```bash
+cd "$CASE"
+source ./environment.sh
+
+# Verifica o GFS inicial e observações de todos os ciclos da campanha.
+experiment check-inputs .
+
+experiment check campaign.yaml
+experiment export campaign.yaml
+experiment validate workflow.yaml
+experiment plan workflow.yaml
+
+# Inspeção do plano: não executa tarefas científicas.
+swf run workflow.yaml --dry-run --ui plain
+```
+
+**Verifique também:** disponibilidade real da malha/partições, física, matriz B, executáveis, bibliotecas do stack, permissões de escrita e limites das filas PBS. `source environment.sh` prova que os diretórios básicos existem, não que todos os arquivos científicos estão corretos.
+
+O GFS pode ser **obtido automaticamente** por `wps prepare` quando a receita declara `wps.acquisition` com um provedor HTTPS válido e cache gravável. A opção habilitada, sozinha, **não garante** que a URL exista ou que o download funcione. PREPBUFR/GNSS-RO também precisam de entradas datadas válidas. Nunca reutilize silenciosamente dados de outro horário.
+
+## 6. Executar, acompanhar e verificar o primeiro experimento
+
+Somente após aprovar as verificações:
+
+```bash
+cd "$CASE"
+source ./environment.sh
+set -o pipefail
+
+experiment run workflow.yaml --ui plain 2>&1 | tee run.log
+experiment status workflow.yaml
+```
+
+A receita curta tem **9 tarefas de inicialização e 15 tarefas cíclicas**: OBS/JEDI/MPAS no primeiro ciclo, OBS/JEDI no segundo. Resultado esperado: **duas análises JEDI e uma previsão MPAS entre elas**, além da previsão de inicialização. A validação deve confirmar produtos NetCDF, horários, observações e convergência — não apenas a palavra `SUCCESS` no orquestrador.
+
+Durante a campanha, use outro terminal com `qstat -u "$USER"`; não lance outro `run` enquanto o controlador estiver ativo.
+
+## 7. Se falhar: um comando de diagnóstico
+
+```bash
+cd "$CASE"
+diagnose . --no-pbs
+```
+
+O comando **não altera arquivos nem ressubmete jobs**. Ele mostra a tarefa de origem do erro e o `stderr` relevante, em vez de listar centenas de dependentes `BLOCKED`.
+
+Para detalhes:
+
+```bash
+diagnose . --verbose
+diagnose . --json
+swf explain workflow.yaml
+```
+
+Para consultar o PBS use `diagnose .` (sem `--no-pbs`). `swf explain --task` tem uma limitação na versão atual: selecionar uma tarefa de inicialização pode produzir `Unknown selected task(s)` ao tentar usar a seleção também na fase cíclica. Use `swf explain workflow.yaml` sem `--task` até a correção.
+
+**Regra para retomada:** nunca apague `.simpleworkflow/`, manifests, scripts PBS ou produtos validados apenas para forçar nova execução. Não use `--force` ou `reset` e **não reinstale** o pacote durante a campanha. As assinaturas do `simpleWorkflow` incluem metadados do executável e hashes do ambiente (`PATH`, `PYTHONPATH` etc.); mudar o controlador pode provocar uma tentativa indevida de repetir tarefas científicas. `status SUCCESS` e `explain SUCCESS` não substituem a comparação das assinaturas. Ver [guia de diagnóstico](diagnostics.md).
+
+### Caso real: observações do quinto ciclo
+
+Na campanha de sete dias iniciada em 30/01/2026, a inicialização e quatro ciclos 00/06/12/18Z foram concluídos, mas `c00004_obs_convert_prepare` falhou. O erro era **do resolvedor de caminhos**: interpretava a data `20260130` do diretório `m3-7dias-20260130` como data do PREPBUFR e chegava a tentar mudar o diretório do script `run_prepbufr.sh`. Os arquivos reais de 31/01 00Z existiam.
+
+A correção restringiu a interpretação temporal ao **nome do arquivo observacional** e excluiu scripts da verificação. O diagnóstico agora mostra essa causa diretamente. Uma campanha independente de sete dias foi posteriormente concluída com 29 ciclos na JACI; isso não prova a retomada segura de qualquer execução interrompida.
+
+## 8. Campanhas longas: 3 e 7 dias (avançado)
+
+A interface `experiment create` agora aceita `--duration P3D` e `--duration P7D`, gerando os backgrounds correspondentes para cada ciclo de 6 h. **Não basta editar manualmente `calendar.end`** de um experimento já criado. Use `experiment create --duration` para criar um novo experimento; o preparador histórico institucional não faz parte da API recomendada.
+
+Exemplo de planejamento para 30/01/2026 00Z, horário final **inclusivo**:
+
+| Período | Final UTC inclusivo | Análises | Previsões MPAS entre ciclos |
+| --- | --- | ---: | ---: |
+| 3 dias (72 h) | 02/02/2026 00Z | 13 | 12 |
+| 7 dias (168 h) | 06/02/2026 00Z | 29 | 28 |
+
+Cada campanha precisa de diretório, `campaign.yaml`, `workflow.yaml` e `.simpleworkflow/` **independentes**; não aumente a duração de um experimento já executado. O comando `experiment check-inputs .` verifica GFS inicial e observações de todos os horários, mas não executáveis científicos, recursos PBS ou consistência da matriz B. **`experiment check-inputs .` verifica todos os ciclos declarados na campanha, mas não substitui a validação científica e dos recursos computacionais.**
+
+A campanha atual tem [relatório de 29 ciclos na JACI](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/M3_7dias_2026-01.md).
+
+O formato genérico `campaign.yaml` também permite definir `calendar.end` e `end_inclusive`. Use **final inclusivo** se quiser a análise às 00Z do último dia (13 ou 29 análises); use **final exclusivo** para 12 ou 28 análises, respectivamente. Essas convenções produzem contagens diferentes e não devem ser confundidas na comparação de campanhas.
+
+Antes de campanhas de 30 dias/1 ano, validar escalabilidade do grafo, controle de armazenamento, assinaturas e estratégia de restart em horizontes menores. O grafo estático cresce com o período e precisa de testes de escalabilidade para campanhas anuais.
+
+## 9. Critérios de validação científica e documentação
+
+Para cada ciclo, preservar: timestamp e estado da tarefa, ID PBS e logs nativos, validação IODA, análise JEDI, valores de função custo por iteração, O-B/O-A e QC quando disponíveis, estado completo e tempo dos outputs MPAS, continuidade do background, versão Git, YAML efetivamente usados e identificadores digitais (hashes).
+
+Critérios para relatórios longos: quantidade de análises e previsões esperadas, ausência de lacunas, porcentagem de ciclos aceitos, convergência, integridade/tempos NetCDF, O-B/O-A por variável/observador, comportamento temporal e registros de restart. Resultados de O-A próximos das observações assimiladas são **consistência do ajuste**, não validação independente de previsão.
+
+Relatórios históricos e a validação pós-refatoração estão organizados no [projeto institucional](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026). O caso de janeiro de 2026 tem [evidências documentadas](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/M3_7dias_2026-01.md). Novas execuções devem produzir registros próprios.
+
+## 10. Referências e restrições da beta
+
+- [Arquitetura de execução na JACI](developer/architecture.md) — fronteiras entre controlador, PBS nativo e etapas científicas.
+- [Diagnóstico de erros](diagnostics.md) — informações adicionais e JSON.
+- [Configuração de campanhas](configuration/campaign.md) — semântica de calendários e configurações.
+- [Teste artificial de instalação](../examples/beta/manual.sh) — fixture artificial e validação de contratos.
+- [Relatório científico de 7 dias na JACI](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/M3_7dias_2026-01.md) — 29 ciclos e diagnósticos.
+
+Antes da release estável ainda é necessário testar instalação limpa com outros perfis, validar outras resoluções/meshes e warm start, demonstrar retomada segura e realizar verificação independente de previsões. Essas restrições não invalidam o baseline de sete dias.
 
 
-## O que NÃO usar
+## 11. Diagnóstico científico após a execução
 
-Não há um segundo diretório de exemplos para escolher. O caminho mantido é
-`examples/case/`. Material de reprodução histórica foi retirado da árvore
-ativa e permanece preservado em `archive/pre-cleanup-2026-10-01`.
+`experiment status workflow.yaml` e `diagnose .` comprovam a execução e
+ajudam a localizar falhas, mas **não medem a qualidade científica**.
+Para gerar figuras a partir dos arquivos de feedback JEDI O–B e O–A:
 
-Os comandos de stage (`jedi-prepare`, `mpas-prepare`, `obs2ioda-run` etc.)
-são usados pelo workflow e servem para diagnóstico/desenvolvimento. Para uma
-campanha normal, use a interface `campaign`.
+```bash
+python -m pip install 'matplotlib>=3.7'  # caso a dependência opcional ainda não esteja instalada
+experiment plots .
+```
+
+Os PNGs, `paired_feedback.csv` e `manifest.json` ficam em
+`diagnostics/figures/`. A presença de arquivos O–B/O–A e os grupos QC
+compatíveis é verificada sem inventar resultados. Consulte
+[Figuras científicas](scientific-plots.md) para metodologia e limitações.

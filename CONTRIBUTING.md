@@ -102,3 +102,19 @@ O corpo do PR deve registrar:
 - impacto para usuário/desenvolvedor;
 - testes executados;
 - o que ainda requer validação no JACI.
+
+## Documentação: fonte única de verdade
+
+- O [tutorial](docs/tutorial.md) é a porta de entrada e deve descrever somente comandos que existem no branch atual.
+- O [README](README.md) apresenta o projeto e aponta para o tutorial, sem repetir receitas longas.
+- A [configuração da campanha](docs/configuration/campaign.md) deve acompanhar o contrato real de `platform_campaign.py`. Não misture schemas legados com `calendar`.
+- A [arquitetura implementada](docs/developer/architecture.md) distingue execução comprovada, limitações da beta e decisões futuras. Um ADR ou plano não é prova de funcionalidade entregue.
+- Registros de validação têm período, commit, condições e limites explícitos; não reescreva um resultado histórico como se fosse da versão atual.
+- Antes de abrir ou aprovar um PR que modifique documentação ou comandos, execute:
+
+```bash
+python scripts/check_docs_links.py
+python -m pytest -q
+```
+
+O teste de links verifica caminhos **locais**, não garante acesso a URLs externas. Faça também uma conferência manual dos comandos contra `--help` e o código no mesmo commit. Uma alteração na CLI requer atualizar o tutorial e os testes correspondentes.
