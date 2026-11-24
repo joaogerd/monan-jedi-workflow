@@ -36,8 +36,11 @@ Output directory (default: `diagnostics/figures/`):
 
 Observations are paired at the *same locations* for O–B and O–A. Selection is
 the intersection of available EffectiveQC groups equal to zero, finite and
-unmasked values. Observations and both HofX fields must have matching shapes
-and units; otherwise the variable is skipped and explained in the manifest.
+unmasked values. Observations and both HofX fields must have matching shapes. The physical
+unit is taken from `ObsValue`: `hofx0` and `hofx1` may omit their `units`
+attribute (as in operational JEDI output), but an explicitly conflicting unit
+is rejected. If `ObsValue` has no unit, the variable is skipped and explained
+in the manifest. This is a metadata convention, not a numerical unit conversion.
 The figures do **not** calculate forecast scores or establish independent
 validation: they are fit-to-assimilated-observations diagnostics.
 
