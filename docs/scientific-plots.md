@@ -33,8 +33,13 @@ Output directory (default: `diagnostics/figures/`):
 - `campaign_completion.png`: timeline, only if **every** expected cycle has
   valid JEDI/MPAS stage manifests and SQLite records all tasks successful
 - `jedi_cost_convergence.png`: normalized quadratic cost J/J₀ from JEDI logs,
-  one line per cycle with usable data (partial coverage is explicitly reported)
-- `campaign_completion.csv`, `jedi_convergence.csv`, `jedi_cost_iterations.csv`:
+  blue individual trajectories, teal median and cross-cycle interquartile band;
+  incomplete coverage is explicitly reported
+- `jedi_cost_components_<cycle>.png`: optional detailed plot of J, Jb and JoJc
+  for the first cycle with both logged components; residual norm is shown
+  only if uniquely identified by iteration in the log
+- `campaign_completion.csv`, `jedi_convergence.csv`, `jedi_cost_iterations.csv`,
+  `jedi_cost_components.csv`:
   traced operational and minimizer evidence, including JEDI log SHA-256
 - `manifest.json`: expected campaign cycles, absent feedback files,
   skipped variables (with reasons), and generated figure names
@@ -99,6 +104,8 @@ fundo branco, DejaVu Sans, títulos alinhados à esquerda, metadados da campanha
 em subtítulos cinza, datas UTC com dia/mês e horário Z, eixos discretos e
 arquivos **PNG (200 dpi), PDF e SVG**. O RMSE usa azul para O–B e verde-água
 para O–A, médias tracejadas e preenchimento meramente visual entre as curvas.
-A convergência usa viridis por ciclo e linha preta para a mediana, sempre
-calculada com os dados do próprio experimento. O estilo não modifica os CSVs
+A convergência usa curvas individuais azul discreto, mediana verde-água e
+faixa interquartil (25–75%) calculada entre os ciclos — não é intervalo de
+confiança. A decomposição detalhada usa J azul, Jb laranja e JoJc verde-água,
+no mesmo layout branco. Componentes ausentes nunca são inferidos pela diferença. O estilo não modifica os CSVs
 nem os filtros científicos.
