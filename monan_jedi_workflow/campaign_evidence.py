@@ -20,6 +20,59 @@ _NUMBER = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eEdD][+-]?\d+)?"
 _QUADRATIC = re.compile(r"Quadratic cost function:\s*J\s*\(\s*(\d+)\s*\)\s*=\s*(" + _NUMBER + r")")
 _NONLINEAR = re.compile(r"CostFunction:\s*Nonlinear J\s*=\s*(" + _NUMBER + r")")
 
+_COMPONENT = re.compile(r"Quadratic cost function:\s*(Jb|JoJc)\s*\(\s*(\d+)\s*\)\s*=\s*(" + _NUMBER + r")")
+_RESIDUAL = re.compile(r"(?:norm(?:a)?\s+(?:of\s+)?(?:the\s+)?residual|residual\s+norm)\s*(?:\(\s*(\d+)\s*\))?\s*[:=]\s*(" + _NUMBER + r")", re.I)
+
+
+def parse_cost_components(text: str, curve: list[tuple[int, float]]) -> list[dict]:
+    """Return only explicitly logged Jb, JoJc and iteration-indexed residual.
+
+    Never derive missing components as J - other component; the nonlinear J0
+    and inner quadratic components are not necessarily directly comparable.
+    Ambiguous or repeated component iterations are excluded.
+    """
+    valid = {i for i, _ in curve}
+    components: dict[tuple[int, str], float] = {}
+    duplicated: set[tuple[int, str]] = set()
+    for line in text.splitlines():
+        found = _COMPONENT.search(line)
+        if not found:
+            continue
+        label, iteration = found[1], int(found[2])
+        key = (iteration, label)
+        value = float(found[3].replace("D", "e").replace("d", "e"))
+        if key in components:
+            duplicated.add(key)
+        elif np.isfinite(value) and iteration in valid:
+            components[key] = value
+    for key in duplicated:
+        components.pop(key, None)
+    records: list[dict] = []
+    for iteration, j in curve:
+        record = {"iteration": iteration, "J": j,
+                  "Jb": components.get((iteration, "Jb")),
+                  "JoJc": components.get((iteration, "JoJc"))}
+        records.append(record)
+    # The residual is not inferred without a known per-iteration key.
+    residual: dict[int, float] = {}
+    duplicate_residual: set[int] = set()
+    for line in text.splitlines():
+        found = _RESIDUAL.search(line)
+        if found is None or found[1] is None:
+            continue
+        it = int(found[1])
+        value = float(found[2].replace("D", "e").replace("d", "e"))
+        if it in residual:
+            duplicate_residual.add(it)
+        elif it in valid and np.isfinite(value) and value >= 0:
+            residual[it] = value
+    for it in duplicate_residual:
+        residual.pop(it, None)
+    for record in records:
+        record["residual_norm"] = residual.get(record["iteration"])
+    return records
+
+
 
 def parse_cost(text: str) -> list[tuple[int, float]]:
     """Parse one outer-loop quadratic total J, not Jb or JoJc.
@@ -87,7 +140,7 @@ def collect_evidence(root: Path, cycles: list[str]) -> dict:
     """Inspect JEDI/MPAS manifests and JEDI logs for expected campaign cycles."""
     root = root.expanduser().resolve()
     state = _workflow_state(root)
-    continuity, convergence, iterations, gaps = [], [], [], []
+    continuity, convergence, iterations, components, gaps = [], [], [], [], []
     for i, cycle in enumerate(cycles):
         jedi, error = _manifest(root, cycle, "jedi")
         mpas, mpas_error = _manifest(root, cycle, "mpas") if i < len(cycles) - 1 else (None, None)
@@ -131,12 +184,14 @@ def collect_evidence(root: Path, cycles: list[str]) -> dict:
                             "log_sha256": hashlib.sha256(log.read_bytes()).hexdigest()})
         iterations.extend({"cycle": cycle, "iteration": it, "J": cost,
                            "J_normalized": cost/start} for it, cost in curve)
+        components.extend({"cycle": cycle, **record} for record in parse_cost_components(raw, curve))
     complete = bool(state["available"] and state["tasks_total"] and
                     state["tasks_total"] == state["tasks_success"] and
                     len(continuity) == len(cycles) and
                     all(row["validated"] for row in continuity))
     return {"cycles_expected": len(cycles), "continuity": continuity,
             "convergence": convergence, "cost_iterations": iterations,
+            "cost_components": components,
             "workflow": state, "campaign_complete": complete,
             "gaps": gaps, "method": "historical M3 quadratic J, single outer loop; normalized J/J0"}
 
@@ -159,6 +214,9 @@ def render_evidence(evidence: dict, output: Path) -> list[str]:
     _csv(output / "jedi_cost_iterations.csv",
          ["cycle", "iteration", "J", "J_normalized"], evidence["cost_iterations"])
     from .plot_style import GREEN, INK, GRID, MUTED, dates, heading, save, style, time_axis
+    _csv(output / "jedi_cost_components.csv",
+         ["cycle", "iteration", "J", "Jb", "JoJc", "residual_norm"],
+         evidence.get("cost_components", []))
     names: list[str] = []
     with style() as plt:
         if evidence["campaign_complete"]:
@@ -203,52 +261,109 @@ def render_evidence(evidence: dict, output: Path) -> list[str]:
             plt.close(fig)
             names.append("campaign_completion.png")
         if evidence["convergence"]:
-            import numpy as np
-            from matplotlib.colors import Normalize
-            from matplotlib.cm import ScalarMappable
+            from .plot_style import BLUE, TEAL
             by_cycle: dict[str, list[dict]] = {}
             for record in evidence["cost_iterations"]:
                 by_cycle.setdefault(record["cycle"], []).append(record)
             ordered_cycles = sorted(by_cycle)
-            fig, ax = plt.subplots(figsize=(12.2, 6.6))
-            fig.subplots_adjust(left=.09, right=.97, bottom=.13, top=.83)
-            norm = Normalize(vmin=0, vmax=max(1, len(ordered_cycles)-1))
             steps = sorted({r["iteration"] for r in evidence["cost_iterations"]})
             curves = np.full((len(ordered_cycles), len(steps)), np.nan)
             reductions = [r["reduction_percent"] for r in evidence["convergence"]]
             monotonic = sum(bool(r["monotonic"]) for r in evidence["convergence"])
+
+            fig, ax = plt.subplots(figsize=(12.2, 6.2))
+            fig.subplots_adjust(left=.09, right=.975, bottom=.14, top=.80)
             heading(fig, "Convergência da função custo",
                     f"{len(ordered_cycles)}/{evidence['cycles_expected']} ciclos com J disponível"
                     f" • redução média = {float(np.mean(reductions)):.1f}%"
-                    f" • monotônica em {monotonic}/{len(ordered_cycles)} ciclos",
+                    f" • redução monotônica em {monotonic}/{len(ordered_cycles)} ciclos",
                     left=.09)
             for index, cycle in enumerate(ordered_cycles):
                 rows = sorted(by_cycle[cycle], key=lambda r: r["iteration"])
                 x = [r["iteration"] for r in rows]
                 y = [r["J_normalized"] for r in rows]
-                ax.plot(x, y, color=plt.cm.viridis(norm(index)),
-                        marker="o", ms=2.6, lw=1.5, alpha=.84)
+                ax.plot(x, y, color=BLUE, lw=1.0, alpha=.18, zorder=1)
                 for row in rows:
                     curves[index, steps.index(row["iteration"])] = row["J_normalized"]
-            ax.plot(steps, np.nanmedian(curves, axis=0), color=INK, lw=3,
-                    label="Mediana dos ciclos", zorder=4)
-            ax.axhline(1, color="#9ca3af", ls="--", lw=1)
+            # The median is a per-iteration, across-cycle statistic; the
+            # interquartile envelope represents cross-cycle variability,
+            # not uncertainty bounds or confidence intervals.
+            median = np.nanmedian(curves, axis=0)
+            q25 = np.nanpercentile(curves, 25, axis=0)
+            q75 = np.nanpercentile(curves, 75, axis=0)
+            ax.fill_between(steps, q25, q75, color=TEAL, alpha=.13,
+                            label="Intervalo interquartil (ciclos)", zorder=2)
+            ax.plot(steps, median, color=TEAL, lw=2.7, marker="o",
+                    ms=6, mfc="white", mew=1.6,
+                    label="Mediana de J/J₀", zorder=4)
+            ax.axhline(1, color=MUTED, ls="--", lw=1, alpha=.6)
             ax.set_xlabel("Iteração do minimizador DRPCG")
             ax.set_ylabel("Função custo normalizada  J/J₀")
             ax.set_xticks(steps)
             ax.grid(axis="y", color=GRID, alpha=.65, lw=.8)
-            ax.legend(loc="lower left", frameon=False)
-            colorbar = fig.colorbar(ScalarMappable(norm=norm, cmap="viridis"),
-                                   ax=ax, fraction=.045, pad=.03)
-            ids = np.unique(np.linspace(0, len(ordered_cycles)-1,
-                                        min(6, len(ordered_cycles))).astype(int))
-            colorbar.set_ticks(ids)
-            colorbar.set_ticklabels([
-                dates([ordered_cycles[i]])[0].strftime("%d/%m %HZ") for i in ids
-            ])
-            colorbar.set_label("Ciclo da campanha")
-            colorbar.outline.set_visible(False)
+            ax.legend(loc="upper right", frameon=False)
+            ax.text(.015, .045,
+                    f"Redução média de J\n{float(np.mean(reductions)):.1f}%"
+                    f"\nCiclos: {len(ordered_cycles)}",
+                    transform=ax.transAxes, va="bottom", color=MUTED,
+                    bbox={"boxstyle": "round,pad=.45", "facecolor": "white",
+                          "edgecolor": GRID, "alpha": .95})
             save(fig, output, "jedi_cost_convergence")
             plt.close(fig)
             names.append("jedi_cost_convergence.png")
+
+            # Separate detail figure, never imputing Jb/JoJc/residual. Pick
+            # first cycle with BOTH logged components, deterministic by time.
+            rows_by_cycle: dict[str, list[dict]] = {}
+            for item in evidence.get("cost_components", []):
+                rows_by_cycle.setdefault(item["cycle"], []).append(item)
+            detailed = next(
+                (cycle for cycle in sorted(rows_by_cycle)
+                 if any(row["Jb"] is not None and row["JoJc"] is not None
+                        for row in rows_by_cycle[cycle])), None)
+            if detailed is not None:
+                detail = sorted(rows_by_cycle[detailed], key=lambda row: row["iteration"])
+                fig, ax = plt.subplots(figsize=(12.2, 6.2))
+                fig.subplots_adjust(left=.09, right=.975, bottom=.14, top=.80)
+                detail_reduction = next(r["reduction_percent"]
+                                        for r in evidence["convergence"]
+                                        if r["cycle"] == detailed)
+                heading(fig, "Função custo — decomposição por iteração",
+                        f"Ciclo {dates([detailed])[0]:%d/%m/%Y %HZ}"
+                        f" • redução de J = {detail_reduction:.1f}%"
+                        f" • componentes extraídas do log JEDI", left=.09)
+                x = [r["iteration"] for r in detail]
+                for key, label, color, line in (
+                        ("J", "J — total", BLUE, "-"),
+                        ("Jb", "Jb — background", "#d97706", "--"),
+                        ("JoJc", "Jo + Jc — observações e restrições", TEAL, "-.")):
+                    points = [(r["iteration"], r[key]) for r in detail
+                              if r[key] is not None]
+                    if not points:
+                        continue
+                    ax.plot([p[0] for p in points], [p[1] for p in points],
+                            color=color, ls=line, lw=2.3, marker="o", ms=5,
+                            mfc="white", mew=1.5, label=label)
+                residuals = [(r["iteration"], r["residual_norm"]) for r in detail
+                             if r["residual_norm"] is not None]
+                if len(residuals) > 1:
+                    ax2 = ax.twinx()
+                    ax2.plot([p[0] for p in residuals], [p[1] for p in residuals],
+                             color="#b45385", ls=":", lw=2,
+                             marker="D", ms=4, label="Norma do resíduo")
+                    ax2.set_ylabel("Norma do resíduo (log JEDI)")
+                    ax2.spines["top"].set_visible(False)
+                    lines1, labels1 = ax.get_legend_handles_labels()
+                    lines2, labels2 = ax2.get_legend_handles_labels()
+                    ax.legend(lines1 + lines2, labels1 + labels2,
+                              loc="upper right", frameon=False, fontsize=9)
+                else:
+                    ax.legend(loc="upper right", frameon=False, fontsize=9)
+                ax.set_xlabel("Iteração do minimizador DRPCG")
+                ax.set_ylabel("Função custo (unidades do JEDI)")
+                ax.set_xticks(x)
+                ax.grid(axis="y", color=GRID, alpha=.65, lw=.8)
+                save(fig, output, f"jedi_cost_components_{detailed}")
+                plt.close(fig)
+                names.append(f"jedi_cost_components_{detailed}.png")
     return names
