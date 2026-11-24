@@ -1,6 +1,6 @@
 # Referência de configuração da campanha (interface atual)
 
-> **Branch:** `feat/platform-domain-apps`. Este arquivo descreve a estrutura consumida por `monan_jedi_workflow/platform_campaign.py` e **não** o antigo `campaign.duration`. Primeiro aprenda o fluxo completo no [tutorial](../tutorial.md).
+> **Branch:** `develop`. Este arquivo descreve a estrutura consumida por `monan_jedi_workflow/platform_campaign.py` e **não** o antigo `campaign.duration`. Primeiro aprenda o fluxo completo no [tutorial](../tutorial.md).
 
 ## O que é uma campanha?
 
