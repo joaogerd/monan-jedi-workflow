@@ -3,7 +3,8 @@
 The `experiment status` command verifies orchestration, and `diagnose`
 investigates failures. **Neither demonstrates scientific quality.**
 The optional `experiment plots` command reads the **actual JEDI observation
-feedback** saved in the experiment and produces paired O–B/O–A figures.
+feedback** saved in the experiment and produces paired O–B/O–A figures, plus campaign continuity and variational
+cost convergence when the required manifests, logs and workflow state exist.
 
 ## Usage (no jobs, read-only scientific products)
 
@@ -29,6 +30,12 @@ Output directory (default: `diagnostics/figures/`):
 - `<observer>_<variable>.png`: a three-panel diagnostic (RMSE, bias, and
   number of paired accepted observations per cycle)
 - `paired_feedback.csv`: tabular values for all available combinations
+- `campaign_completion.png`: timeline, only if **every** expected cycle has
+  valid JEDI/MPAS stage manifests and SQLite records all tasks successful
+- `jedi_cost_convergence.png`: normalized quadratic cost J/J₀ from JEDI logs,
+  one line per cycle with usable data (partial coverage is explicitly reported)
+- `campaign_completion.csv`, `jedi_convergence.csv`, `jedi_cost_iterations.csv`:
+  traced operational and minimizer evidence, including JEDI log SHA-256
 - `manifest.json`: expected campaign cycles, absent feedback files,
   skipped variables (with reasons), and generated figure names
 
@@ -61,3 +68,25 @@ A successful `experiment status` or PBS `Exit_status=0` does not imply
 these diagnostics exist or that a model forecast is scientifically accurate.
 For maps, vertical diagnostics, independent verification, and other
 observation formats, new data readers/validation contracts must be added.
+
+## Historical M3 methodology and compatibility
+
+The convergence and continuity readers adapt the historical script
+[`scripts/generate_campaign_figures.py`](https://github.com/joaogerd/monan-jedi-workflow/blob/feature/2025-reference-case/scripts/generate_campaign_figures.py)
+to the **current** `campaign.yaml`, `.simpleworkflow/state.sqlite3`, JEDI
+`jedi-validation.json`, MPAS `mpas-validation.json` and real `jedi.stdout.log`
+contracts. No historical campaign results are copied or mixed into the new
+experiment.
+
+The total quadratic cost `Quadratic cost function: J (iter)` is extracted
+without conflating it with `Jb` or `JoJc`. If iteration zero is missing, the
+initial nonlinear `CostFunction: Nonlinear J` is used as in historical M3.
+Repeated outer-loop sequences are explicitly rejected, not spliced together.
+Only real cost curves contribute to the figure. For incomplete manifests,
+missing logs or non-success SQLite states, the report retains the specific
+failure rather than depicting all-green continuity.
+
+The manifest's `operational_and_variational` section reports coverage,
+monotonicity and the mean cost reduction. **Cost convergence does not imply
+forecast quality.** Check all gaps before interpreting the campaign as
+scientifically validated.
