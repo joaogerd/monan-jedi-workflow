@@ -71,6 +71,8 @@ def test_campaign_evidence_complete_and_pngs(tmp_path):
     figures = render_evidence(result, output)
     assert figures == ["campaign_completion.png", "jedi_cost_convergence.png"]
     assert all((output / name).stat().st_size > 0 for name in figures)
+    assert all((output / name.replace(".png", ".pdf")).stat().st_size > 0 for name in figures)
+    assert all((output / name.replace(".png", ".svg")).stat().st_size > 0 for name in figures)
     assert len((output / "jedi_cost_iterations.csv").read_text().splitlines()) == 7
 
 
