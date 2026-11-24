@@ -84,6 +84,8 @@ def test_render_png_csv_and_manifest(tmp_path):
     assert main([str(root), "--variables", "airTemperature"]) == 0
     out = root / "diagnostics/figures"
     assert (out / "sondes_airTemperature.png").is_file()
+    assert (out / "sondes_airTemperature.pdf").is_file()
+    assert (out / "sondes_airTemperature.svg").is_file()
     assert (out / "paired_feedback.csv").is_file()
     report = json.loads((out / "manifest.json").read_text())
     assert report["paired_records"] == 2
