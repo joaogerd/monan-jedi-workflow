@@ -123,38 +123,76 @@ def render(report: dict, output: Path) -> list[str]:
             raise RuntimeError(
                 "matplotlib is required for PNG figures: pip install -e '.[plots]'"
             ) from error
-        for (observer, variable, units), rows in sorted(grouped.items()):
-            rows.sort(key=lambda row: row["cycle"])
-            names = ["omb_rmse", "oma_rmse", "omb_bias", "oma_bias", "n"]
-            times = [datetime.strptime(row["cycle"], "%Y%m%dT%H%M%SZ")
-                     for row in rows]
-            fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
-            axes[0].plot(times, [r["omb_rmse"] for r in rows],
-                         marker=".", label="O-B")
-            axes[0].plot(times, [r["oma_rmse"] for r in rows],
-                         marker=".", label="O-A")
-            axes[0].set_ylabel(f"RMSE ({units})")
-            axes[0].legend()
-            axes[1].plot(times, [r["omb_bias"] for r in rows],
-                         marker=".", label="O-B")
-            axes[1].plot(times, [r["oma_bias"] for r in rows],
-                         marker=".", label="O-A")
-            axes[1].axhline(0, linewidth=0.8, color="gray")
-            axes[1].set_ylabel(f"Viés ({units})")
-            axes[1].legend()
-            axes[2].plot(times, [r["n"] for r in rows], marker=".")
-            axes[2].set_ylabel("Observações pareadas (QC=0)")
-            axes[2].set_xlabel("Ciclo UTC")
-            for axis in axes:
-                axis.grid(True, alpha=0.25)
-            fig.suptitle(f"{observer} · {variable} · O-B/O-A pareados")
-            fig.autofmt_xdate()
-            fig.tight_layout()
-            slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", f"{observer}_{variable}")
-            filename = f"{slug}.png"
-            fig.savefig(output / filename, dpi=150)
-            plt.close(fig)
-            generated.append(filename)
+        from .plot_style import BLUE, TEAL, GRID, MUTED, dates, heading, save, style, time_axis
+        import numpy as np
+        from matplotlib.ticker import MaxNLocator
+        with style():
+            for (observer, variable, units), rows in sorted(grouped.items()):
+                rows.sort(key=lambda row: row["cycle"])
+                times = dates([r["cycle"] for r in rows])
+                b = np.asarray([r["omb_rmse"] for r in rows], dtype=float)
+                a = np.asarray([r["oma_rmse"] for r in rows], dtype=float)
+                bias_b = np.asarray([r["omb_bias"] for r in rows], dtype=float)
+                bias_a = np.asarray([r["oma_bias"] for r in rows], dtype=float)
+                count = np.asarray([r["n"] for r in rows], dtype=int)
+                improved = int(np.count_nonzero(a <= b))
+                mean_b, mean_a = float(b.mean()), float(a.mean())
+                relative = 100 * (1 - mean_a / mean_b) if mean_b > 0 else float("nan")
+                label = {
+                    "sondes": "Radiossondas", "superficie": "Superfície",
+                    "gnssro": "GNSS-RO",
+                }.get(observer, observer)
+                name = {
+                    "airTemperature": "Temperatura do ar",
+                    "specificHumidity": "Umidade específica",
+                    "windEastward": "Vento zonal",
+                    "windNorthward": "Vento meridional",
+                    "stationPressure": "Pressão à superfície",
+                    "atmosphericRefractivity": "Refratividade atmosférica",
+                }.get(variable, variable)
+
+                fig, axes = plt.subplots(3, 1, figsize=(12.2, 10.0), sharex=True,
+                                         gridspec_kw={"height_ratios": [1.4, 1, .8]})
+                fig.subplots_adjust(left=.09, right=.975, bottom=.1, top=.825, hspace=.16)
+                heading(fig, f"Consistência observacional — {label}",
+                        f"{name} • O−A ≤ O−B em {improved}/{len(rows)} ciclos"
+                        f" • redução das médias de RMSE = {relative:.1f}%",
+                        left=.09)
+                axes[0].plot(times, b, color=BLUE, lw=2.2, marker="o", ms=5,
+                             mfc="white", mew=1.7, label="O−B — background")
+                axes[0].plot(times, a, color=TEAL, lw=2.2, marker="o", ms=5,
+                             mfc="white", mew=1.7, label="O−A — análise")
+                axes[0].fill_between(times, a, b, color=TEAL, alpha=.09,
+                                     label="_nolegend_")
+                axes[0].axhline(mean_b, color=BLUE, lw=1, ls="--", alpha=.55)
+                axes[0].axhline(mean_a, color=TEAL, lw=1, ls="--", alpha=.55)
+                axes[0].set_ylabel(f"RMSE ({units})")
+                axes[0].legend(loc="upper right", frameon=False, ncol=2, fontsize=10)
+                axes[0].text(.015, .045,
+                             f"RMSE médio\nO−B   {mean_b:.4g}\nO−A   {mean_a:.4g}",
+                             transform=axes[0].transAxes, va="bottom", color=MUTED,
+                             bbox={"boxstyle": "round,pad=.45", "facecolor": "white",
+                                   "edgecolor": GRID, "alpha": .96})
+
+                axes[1].plot(times, bias_b, color=BLUE, lw=1.8, marker="o", ms=4,
+                             mfc="white", label="O−B")
+                axes[1].plot(times, bias_a, color=TEAL, lw=1.8, marker="o", ms=4,
+                             mfc="white", label="O−A")
+                axes[1].axhline(0, color=MUTED, lw=.85)
+                axes[1].set_ylabel(f"Viés ({units})")
+                axes[1].legend(loc="upper right", ncol=2, frameon=False)
+                axes[2].plot(times, count, color=BLUE, lw=1.9, marker="o", ms=4,
+                             mfc="white")
+                axes[2].set_ylabel("Pares QC=0")
+                axes[2].yaxis.set_major_locator(MaxNLocator(nbins=5, integer=True))
+                time_axis(axes[2], times)
+                for axis in axes:
+                    axis.grid(axis="y", color=GRID, alpha=.65, lw=.8)
+                slug = re.sub(r"[^A-Za-z0-9_.-]+", "_",
+                              f"{observer}_{variable}")
+                save(fig, output, slug)
+                plt.close(fig)
+                generated.append(f"{slug}.png")
     from .campaign_evidence import collect_evidence, render_evidence
     evidence = collect_evidence(Path(report["experiment"]), report["cycles"])
     generated.extend(render_evidence(evidence, output))
