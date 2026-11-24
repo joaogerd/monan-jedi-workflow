@@ -348,3 +348,20 @@ Relatórios históricos e a validação pós-refatoração estão organizados no
 - [Campanhas M3 de 3/7 dias](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps) — preparador externo específico da receita.
 
 Antes de promover esta versão a release estável ainda é necessário: consolidar onboarding sem paths pessoais como dependência, testar instalação fora do checkout, validar generalidade das resoluções/meshes, garantir diagnósticos e retomada segura no `simpleWorkflow`, fixar revisões científicas e publicar os resultados das campanhas prolongadas.
+
+
+## Diagnóstico científico após a execução
+
+`experiment status workflow.yaml` e `diagnose .` comprovam a execução e
+ajudam a localizar falhas, mas **não medem a qualidade científica**.
+Para gerar figuras a partir dos arquivos de feedback JEDI O–B e O–A:
+
+```bash
+python -m pip install -e '/p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow[plots]'
+experiment plots .
+```
+
+Os PNGs, `paired_feedback.csv` e `manifest.json` ficam em
+`diagnostics/figures/`. A presença de arquivos O–B/O–A e os grupos QC
+compatíveis é verificada sem inventar resultados. Consulte
+[Figuras científicas](scientific-plots.md) para metodologia e limitações.
