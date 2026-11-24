@@ -2,7 +2,7 @@
 
 > **Escopo:** branch `feat/platform-domain-apps`, pacote beta `0.3.0b1`. Este é o caminho de entrada para **usuários novos**, a partir da instalação. A implementação atual da receita científica usa **MPAS-JEDI** com 3DVar/FGAT; o nome da plataforma MONAN-JEDI **não** significa que o executável do núcleo MONAN já esteja sendo usado. Não confundir com a interface antiga `monan-jedi-workflow campaign create/run`.
 >
-> **Estado da validação:** já foi demonstrado um caso científico de duas análises consecutivas (00Z e 06Z, 30/01/2026) na JACI. As campanhas independentes de 3 e 7 dias do branch refatorado estão sob avaliação; sucesso de tarefas não equivale, por si só, à homologação científica. As campanhas históricas de 2018 e 2025 pertencem a outros estados do software.
+> **Estado da validação:** já foi demonstrado um caso científico de duas análises consecutivas (00Z e 06Z, 30/01/2026) na JACI. A campanha independente de sete dias de 30/01–06/02/2026 foi executada e diagnosticada na JACI (29 análises, 267 tarefas). Isso valida continuidade operacional e consistência interna para a receita de 240 km, não habilidade preditiva independente ou outras resoluções. As campanhas históricas de 2018 e 2025 pertencem a outros estados do software.
 
 ## 1. Entender a sequência antes de instalar
 
@@ -310,11 +310,11 @@ Para consultar o PBS use `diagnose .` (sem `--no-pbs`). `swf explain --task` tem
 
 Na campanha de sete dias iniciada em 30/01/2026, a inicialização e quatro ciclos 00/06/12/18Z foram concluídos, mas `c00004_obs_convert_prepare` falhou. O erro era **do resolvedor de caminhos**: interpretava a data `20260130` do diretório `m3-7dias-20260130` como data do PREPBUFR e chegava a tentar mudar o diretório do script `run_prepbufr.sh`. Os arquivos reais de 31/01 00Z existiam.
 
-A correção restringiu a interpretação temporal ao **nome do arquivo observacional** e excluiu scripts da verificação. O diagnóstico agora mostra essa causa diretamente. O teste da correção e a retomada segura da campanha longa na JACI são verificações distintas; não declarar os 29 ciclos concluídos antes dos respectivos resultados.
+A correção restringiu a interpretação temporal ao **nome do arquivo observacional** e excluiu scripts da verificação. O diagnóstico agora mostra essa causa diretamente. Uma campanha independente de sete dias foi posteriormente concluída com 29 ciclos na JACI; isso não prova a retomada segura de qualquer execução interrompida.
 
 ## 8. Campanhas longas: 3 e 7 dias (avançado)
 
-A interface `experiment create` agora aceita `--duration P3D` e `--duration P7D`, gerando os backgrounds correspondentes para cada ciclo de 6 h. **Não basta editar manualmente `calendar.end`** de um experimento já criado. Há também um preparador histórico **específico da receita MPAS atual** no [repositório institucional](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps), que estende o calendário e cria links para os backgrounds futuros **em um experimento novo, ainda não exportado**. Ele não é um recurso genérico da API nem foi projetado para modificar uma campanha em andamento.
+A interface `experiment create` agora aceita `--duration P3D` e `--duration P7D`, gerando os backgrounds correspondentes para cada ciclo de 6 h. **Não basta editar manualmente `calendar.end`** de um experimento já criado. Use `experiment create --duration` para criar um novo experimento; o preparador histórico institucional não faz parte da API recomendada.
 
 Exemplo de planejamento para 30/01/2026 00Z, horário final **inclusivo**:
 
@@ -323,13 +323,13 @@ Exemplo de planejamento para 30/01/2026 00Z, horário final **inclusivo**:
 | 3 dias (72 h) | 02/02/2026 00Z | 13 | 12 |
 | 7 dias (168 h) | 06/02/2026 00Z | 29 | 28 |
 
-Cada campanha precisa de diretório, `campaign.yaml`, `workflow.yaml` e `.simpleworkflow/` **independentes**; não aumente a duração de um experimento já executado. O preparador verifica PREPBUFR/GNSS-RO de todos os horários, mas isso não substitui o preflight integral de GFS, recursos científicos e scheduler. **`experiment check-inputs .` verifica todos os ciclos declarados na campanha, mas não substitui a validação científica e dos recursos computacionais.**
+Cada campanha precisa de diretório, `campaign.yaml`, `workflow.yaml` e `.simpleworkflow/` **independentes**; não aumente a duração de um experimento já executado. O comando `experiment check-inputs .` verifica GFS inicial e observações de todos os horários, mas não executáveis científicos, recursos PBS ou consistência da matriz B. **`experiment check-inputs .` verifica todos os ciclos declarados na campanha, mas não substitui a validação científica e dos recursos computacionais.**
 
-Passo a passo específico, com comandos completos e condições de segurança: [campanhas M3 de 3/7 dias na JACI](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/experiments/M3/platform-domain-apps/README.md).
+A campanha atual tem [relatório de 29 ciclos na JACI](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/M3_7dias_2026-01.md).
 
 O formato genérico `campaign.yaml` também permite definir `calendar.end` e `end_inclusive`. Use **final inclusivo** se quiser a análise às 00Z do último dia (13 ou 29 análises); use **final exclusivo** para 12 ou 28 análises, respectivamente. Essas convenções produzem contagens diferentes e não devem ser confundidas na comparação de campanhas.
 
-Não iniciar 7 dias antes de avaliar a campanha de 3 dias; não iniciar 30 dias/1 ano antes de demonstrar estabilidade, controle de armazenamento, assinaturas e estratégia de restart em horizontes menores. O grafo estático cresce com o período e precisa de testes de escalabilidade para campanhas anuais.
+Antes de campanhas de 30 dias/1 ano, validar escalabilidade do grafo, controle de armazenamento, assinaturas e estratégia de restart em horizontes menores. O grafo estático cresce com o período e precisa de testes de escalabilidade para campanhas anuais.
 
 ## 9. Critérios de validação científica e documentação
 
@@ -337,7 +337,7 @@ Para cada ciclo, preservar: timestamp e estado da tarefa, ID PBS e logs nativos,
 
 Critérios para relatórios longos: quantidade de análises e previsões esperadas, ausência de lacunas, porcentagem de ciclos aceitos, convergência, integridade/tempos NetCDF, O-B/O-A por variável/observador, comportamento temporal e registros de restart. Resultados de O-A próximos das observações assimiladas são **consistência do ajuste**, não validação independente de previsão.
 
-Relatórios históricos e a validação pós-refatoração estão organizados no [projeto institucional](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026). Uma nova execução só será considerada concluída quando seus próprios logs, métricas e relatórios estiverem disponíveis.
+Relatórios históricos e a validação pós-refatoração estão organizados no [projeto institucional](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026). O caso de janeiro de 2026 tem [evidências documentadas](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/M3_7dias_2026-01.md). Novas execuções devem produzir registros próprios.
 
 ## 10. Referências e restrições da beta
 
@@ -345,19 +345,19 @@ Relatórios históricos e a validação pós-refatoração estão organizados no
 - [Diagnóstico de erros](diagnostics.md) — informações adicionais e JSON.
 - [Configuração de campanhas](configuration/campaign.md) — semântica de calendários e configurações.
 - [Teste artificial de instalação](../examples/beta/manual.sh) — fixture artificial e validação de contratos.
-- [Campanhas M3 de 3/7 dias](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps) — preparador externo específico da receita.
+- [Relatório científico de 7 dias na JACI](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/M3_7dias_2026-01.md) — 29 ciclos e diagnósticos.
 
-Antes de promover esta versão a release estável ainda é necessário: consolidar onboarding sem paths pessoais como dependência, testar instalação fora do checkout, validar generalidade das resoluções/meshes, garantir diagnósticos e retomada segura no `simpleWorkflow`, fixar revisões científicas e publicar os resultados das campanhas prolongadas.
+Antes da release estável ainda é necessário testar instalação limpa com outros perfis, validar outras resoluções/meshes e warm start, demonstrar retomada segura e realizar verificação independente de previsões. Essas restrições não invalidam o baseline de sete dias.
 
 
-## Diagnóstico científico após a execução
+## 11. Diagnóstico científico após a execução
 
 `experiment status workflow.yaml` e `diagnose .` comprovam a execução e
 ajudam a localizar falhas, mas **não medem a qualidade científica**.
 Para gerar figuras a partir dos arquivos de feedback JEDI O–B e O–A:
 
 ```bash
-python -m pip install -e '/p/projetos/monan_das/joao.gerd/projects/monan-jedi-workflow[plots]'
+python -m pip install -e '.[plots]'  # executar na raiz do checkout do repositório
 experiment plots .
 ```
 
