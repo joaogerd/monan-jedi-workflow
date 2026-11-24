@@ -23,7 +23,7 @@ Para consultas específicas:
 Requer Python 3.10 ou superior. A instalação do pacote **não compila nem instala** MPAS, MPAS-JEDI, WPS, conversores Obs2IODA ou o stack científico da JACI.
 
 ```bash
-git clone --branch feat/platform-domain-apps \
+git clone --branch develop \
   https://github.com/joaogerd/monan-jedi-workflow.git
 cd monan-jedi-workflow
 python -m pip install -e '.[dev,orchestration]'
