@@ -357,7 +357,7 @@ ajudam a localizar falhas, mas **não medem a qualidade científica**.
 Para gerar figuras a partir dos arquivos de feedback JEDI O–B e O–A:
 
 ```bash
-python -m pip install -e '.[plots]'  # executar na raiz do checkout do repositório
+python -m pip install 'matplotlib>=3.7'  # caso a dependência opcional ainda não esteja instalada
 experiment plots .
 ```
 
