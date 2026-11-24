@@ -81,7 +81,7 @@ Os arquivos em `examples/`, `monan_jedi_workflow/catalog/smoke/` e `monan_jedi_w
 - [x] Verificação de links Markdown, testes Python e empacotamento incluídos na CI do branch.
 - [ ] Validação independente de previsão, perfis de resolução alternativos e warm start ainda não demonstrados; são requisitos científicos futuros, não evidência do baseline MPAS de 240 km.
 - [ ] Verificação de retomada segura após interrupção real e mudanças de ambiente permanece pendente.
-- [ ] O branch `develop` ainda não existia no repositório no momento desta auditoria; há PR #72 em draft contra `main`.
+- [x] O branch `develop` foi criado em 24/11/2026 a partir da revisão aprovada de `feat/platform-domain-apps`. O PR #72 continua em rascunho contra `main` e não faz parte desta promoção.
 
 A documentação histórica abaixo registra o estado em 23/11/2026 e **não substitui** este resumo posterior.
 
