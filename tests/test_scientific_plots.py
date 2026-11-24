@@ -38,8 +38,8 @@ def feedback(root, cycle, name="obsout_3dvar_sondes.nc4", qc=True):
             var = ds.createGroup(group).createVariable(
                 "airTemperature", "f8", ("Location",)
             )
-            if group not in ("EffectiveQC0", "EffectiveQC1"):
-                var.units = "K"
+            if group == "ObsValue":
+                var.units = "K"  # Real JEDI obsout may omit HofX units.
             var[:] = values
     return path
 
