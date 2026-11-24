@@ -90,3 +90,15 @@ The manifest's `operational_and_variational` section reports coverage,
 monotonicity and the mean cost reduction. **Cost convergence does not imply
 forecast quality.** Check all gaps before interpreting the campaign as
 scientifically validated.
+
+## Padrão visual institucional M3
+
+Todas as figuras são renderizadas com a identidade visual descrita em
+[padrao_figuras.md](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/padrao_figuras.md):
+fundo branco, DejaVu Sans, títulos alinhados à esquerda, metadados da campanha
+em subtítulos cinza, datas UTC com dia/mês e horário Z, eixos discretos e
+arquivos **PNG (200 dpi), PDF e SVG**. O RMSE usa azul para O–B e verde-água
+para O–A, médias tracejadas e preenchimento meramente visual entre as curvas.
+A convergência usa viridis por ciclo e linha preta para a mediana, sempre
+calculada com os dados do próprio experimento. O estilo não modifica os CSVs
+nem os filtros científicos.
