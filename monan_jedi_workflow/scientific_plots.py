@@ -155,7 +155,20 @@ def render(report: dict, output: Path) -> list[str]:
             fig.savefig(output / filename, dpi=150)
             plt.close(fig)
             generated.append(filename)
+    from .campaign_evidence import collect_evidence, render_evidence
+    evidence = collect_evidence(Path(report["experiment"]), report["cycles"])
+    generated.extend(render_evidence(evidence, output))
     summary = {key: val for key, val in report.items() if key != "rows"}
+    summary["operational_and_variational"] = {
+        "campaign_complete": evidence["campaign_complete"],
+        "workflow": evidence["workflow"],
+        "cycles_with_cost": len(evidence["convergence"]),
+        "cycles_monotonic": sum(row["monotonic"] for row in evidence["convergence"]),
+        "mean_J_reduction_percent": (
+            sum(row["reduction_percent"] for row in evidence["convergence"])
+            / len(evidence["convergence"]) if evidence["convergence"] else None),
+        "gaps": evidence["gaps"],
+    }
     summary["figures"] = generated
     summary["paired_records"] = len(report["rows"])
     (output / "manifest.json").write_text(
@@ -187,6 +200,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[INFO] Arquivos ausentes: {len(report['missing'])}; "
           f"variáveis/arquivos ignorados: {len(report['skipped'])}")
     print(f"[INFO] CSV e manifesto: {destination}")
+    op = json.loads((destination / "manifest.json").read_text())["operational_and_variational"]
+    print(f"[INFO] Convergência J: {op['cycles_with_cost']}/{report['cycles_expected']} ciclos; "
+          f"continuidade validada: {op['campaign_complete']}")
     if not figures:
         print("[AVISO] Nenhuma figura gerada: feedback O-B/O-A utilizável não encontrado. "
               "Consulte manifest.json para lacunas e erros.", file=sys.stderr)
