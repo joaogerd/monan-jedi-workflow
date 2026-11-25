@@ -27,6 +27,7 @@ _PATH_KEYS = frozenset({
 _ENV_KINDS = frozenset({"native", "modules"})
 _BACKENDS = frozenset({"local", "pbs", "slurm"})
 _SCIENCE_STAGES = frozenset({"jedi", "mpas", "mpas_init", "wps", "obs2ioda"})
+_OPTIONAL_STAGES = frozenset({"mpas_initial"})
 _STAGE_RESOURCES = frozenset({
     "queue", "walltime", "select", "ncpus", "mpiprocs", "launcher",
 })
@@ -164,7 +165,7 @@ def load_machine_profile(
                 )
     if "stages" in execution:
         stages = _mapping(execution["stages"], "execution.stages")
-        unknown_stages = set(stages) - _SCIENCE_STAGES
+        unknown_stages = set(stages) - (_SCIENCE_STAGES | _OPTIONAL_STAGES)
         if unknown_stages:
             raise MachineProfileError(
                 "Unsupported execution stages: " + ", ".join(sorted(unknown_stages))
@@ -285,8 +286,8 @@ def machine_to_legacy_site(profile: MachineProfile) -> dict[str, Any]:
             "A PBS scientific case requires explicit execution.stages for: "
             + ", ".join(missing_stages)
         )
-    for stage_name in sorted(_SCIENCE_STAGES):
-        required = _STAGE_RESOURCES if stage_name in {"jedi", "mpas", "mpas_init"} else (_STAGE_RESOURCES - {"launcher"})
+    for stage_name in sorted(_SCIENCE_STAGES | (set(stages) & _OPTIONAL_STAGES)):
+        required = _STAGE_RESOURCES if stage_name in {"jedi", "mpas", "mpas_init", "mpas_initial"} else (_STAGE_RESOURCES - {"launcher"})
         missing_fields = required - set(stages[stage_name])
         if missing_fields:
             raise MachineProfileError(
