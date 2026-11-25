@@ -42,6 +42,16 @@ execution:
       ncpus: 128
       mpiprocs: 128
       launcher: /opt/cray/pals/1.6/bin/mpiexec
+    # Optional: initial forecast with mpas_atmosphere, separate from
+    # the mpas_init_atmosphere preparation stage below. Without this block
+    # the first MPAS forecast inherits stages.mpas for compatibility.
+    mpas_initial:
+      queue: pesqmidi
+      walltime: '01:00:00'
+      select: 1
+      ncpus: 128
+      mpiprocs: 128
+      launcher: /opt/cray/pals/1.6/bin/mpiexec
     mpas_init:
       queue: pesqmini
       walltime: '00:30:00'
