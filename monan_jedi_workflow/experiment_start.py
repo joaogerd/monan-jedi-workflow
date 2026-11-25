@@ -180,7 +180,13 @@ def create_experiment(destination, *, pbs_queue=None, pbs_walltime=None, runtime
         if machine_profile is not None:
             # Apply computing resources only, without editing scientific
             # cycle, observations, namelists, mesh or background settings.
-            stage_name = 'mpas_init' if key == 'mpas_init' else key
+            # mpas_init_atmosphere is a different executable/stage from
+            # the initial mpas_atmosphere forecast. The latter inherits
+            # the regular MPAS resources for existing machine.yaml files,
+            # but may be configured independently as "mpas_initial".
+            stage_name = ('mpas_initial' if relative == 'initialization/mpas.yaml'
+                          and 'mpas_initial' in machine_profile.execution['stages']
+                          else key)
             if stage_name == 'wps':
                 # The WPS PBS block is set below, after stage templating.
                 pass
