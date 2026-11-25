@@ -2,6 +2,8 @@
 
 > **Estado:** integração opt-in implementada para perfis **PBS completos**. `experiment create --machine` traduz o perfil computacional para o contrato legado de PBS, preservando os geradores científicos. **Execução local/Slurm ainda não foi implementada**; a JACI continua sendo a referência científica validada. A configuração PBS por estágio agora é obrigatória na rota `--machine`.
 
+**Guia operacional passo a passo para implantar um novo site:** [configuring-new-site.md](../installation/configuring-new-site.md). O presente documento descreve o contrato técnico e suas limitações.
+
 ## Objetivo
 
 Separar **ciência** (receitas, malha selecionada, método de assimilação, conjunto de observações e calendário) de **computação** (localização das instalações e dados, sistema de submissão e ambiente de módulos). Não é responsabilidade do perfil selecionar a matriz B ou a resolução; ele informa os diretórios onde esses recursos estão disponíveis.
@@ -89,11 +91,11 @@ A execução exige que o manifesto MONAN-JEDI v2 e o setup de módulos seleciona
 
 ## Critérios para a próxima etapa
 
-1. **Feito no código (a validar em CI/JACI):** adaptar perfis PBS completos ao runtime legado sem alterar a ciência.
+1. **Validado na JACI em 25/11/2026:** adaptar perfis PBS completos ao runtime legado sem alterar a receita científica; 382 testes automatizados e execução completa de duas análises (24 tarefas) aprovada.
 2. **Feito:** permitir `experiment create --machine`, mantendo `--site` compatível.
 3. **Feito para PBS:** gerar `environment.sh`, `science/site.yaml` e `machine-profile-lock.yaml`; teste de equivalência YAML adicionado.
-4. **Feito no caminho `--machine` (a validar):** recursos computacionais por estágio são obtidos do perfil, com verificação opcional dos limites de fila. **Pendente:** retirar os defaults JACI do caminho legado após migração e homologação.
+4. **Validado na JACI em 25/11/2026:** recursos computacionais por estágio são obtidos do perfil; geração e execução de duas análises aprovadas. **Pendente:** retirar os defaults JACI do caminho legado após migração e homologação.
 5. **Pendente:** implementar e testar backend `local` real para WPS/MPAS/JEDI/Obs2IODA, sem gerar PBS.
-6. **Pendente:** validar na JACI o caso completo contra o baseline, com hashes e resultados científicos; não modificar campanhas em execução.
+6. **Execução operacional concluída; comparação científica pendente:** o caso completo passou na JACI (9 tarefas de inicialização + 15 cíclicas, todas SUCCESS). Comparar os produtos contra o baseline com hashes, horários e diagnósticos; preservar os artefatos.
 
 A introdução do parser não constitui homologação da portabilidade da execução científica.
