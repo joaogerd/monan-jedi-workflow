@@ -178,6 +178,35 @@ def test_machine_stage_resources_override_jaci_recipe_defaults(tmp_path):
     assert yaml.safe_load((case / "science/obs2ioda.yaml").read_text())["obs2ioda"]["pbs"]["queue"] == "oq"
 
 
+def test_mpas_initial_and_mpas_init_are_distinct_stages(tmp_path):
+    """First forecast (mpas) and atmospheric initialization are independent."""
+    paths, setup = fake_runtime(tmp_path)
+    document = machine_document(paths, setup)
+    # This extra policy must affect ONLY initialization/mpas.yaml.
+    document["execution"]["stages"]["mpas_initial"] = {
+        "queue": "initialq",
+        "walltime": "01:45:00",
+        "select": 1,
+        "ncpus": 32,
+        "mpiprocs": 32,
+        "launcher": "/custom/initial-mpi",
+    }
+    profile = _write_machine(tmp_path, document)
+    case = tmp_path / "separate-initial-stages"
+    create_experiment(case, machine_profile=load_machine_profile(profile, require_existing=True))
+    cycling = yaml.safe_load((case / "science/mpas.yaml").read_text())["mpas"]["pbs"]
+    first_forecast = yaml.safe_load((case / "science/initialization/mpas.yaml").read_text())["mpas"]["pbs"]
+    atmosphere_init = yaml.safe_load((case / "science/initialization/mpas_init.yaml").read_text())["mpas_init"]["pbs"]
+    assert cycling["queue"] == "pesqmidi"
+    assert first_forecast["queue"] == "initialq"
+    assert first_forecast["walltime"] == "01:45:00"
+    assert first_forecast["mpiprocs"] == 32
+    assert first_forecast["launcher"] == "/custom/initial-mpi"
+    assert atmosphere_init["queue"] == "pesqmini"
+    assert atmosphere_init["walltime"] == "00:30:00"
+    assert atmosphere_init["mpiprocs"] == 128
+
+
 def test_missing_stage_policy_fails_before_creating_case(tmp_path):
     paths, setup = fake_runtime(tmp_path)
     document = machine_document(paths, setup)
