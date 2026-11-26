@@ -2,7 +2,7 @@
 
 Plataforma para criar, executar e diagnosticar experimentos de assimilação de dados com **MPAS-JEDI**, com orquestração por **simpleWorkflow** na JACI. O nome MONAN-JEDI identifica o projeto; a receita de referência atual ainda usa o núcleo MPAS, e a integração com o núcleo MONAN exige validação própria.
 
-> **Branch em consolidação:** `feat/platform-domain-apps`. Versão beta `0.3.0b1`. Não confundir resultados históricos com as campanhas pós-refatoração ainda em validação.
+> **Versão beta:** `0.3.0b1`. A receita científica atualmente validada na JACI é MPAS-JEDI 3DVar/FGAT (240 km, 55 níveis); outros perfis requerem validação própria.
 
 ## Por onde começar
 
@@ -12,6 +12,7 @@ Para consultas específicas:
 
 - [Configuração da campanha](docs/configuration/campaign.md): sintaxe **atual** de `campaign.yaml`, datas inclusivas/exclusivas e exportação.
 - [Diagnóstico de falhas](docs/diagnostics.md): `diagnose`, causa raiz, logs, PBS e limites da retomada.
+- [Figuras científicas](docs/scientific-plots.md): `experiment plots`, O−B/O−A, custos variacionais, continuidade e exportação PNG/PDF/SVG.
 - [Referência arquitetural para desenvolvedores](docs/developer/architecture.md): fronteiras entre aplicativos, orquestrador e execução científica.
 - [Contribuição ao projeto](CONTRIBUTING.md): testes, mudanças e revisão.
 - [Registros de decisões](docs/developer/adr/README.md) e [evidências de validação](docs/validation/): histórico técnico, **não** instruções alternativas de execução.
@@ -22,7 +23,7 @@ Para consultas específicas:
 Requer Python 3.10 ou superior. A instalação do pacote **não compila nem instala** MPAS, MPAS-JEDI, WPS, conversores Obs2IODA ou o stack científico da JACI.
 
 ```bash
-git clone --branch feat/platform-domain-apps \
+git clone --branch develop \
   https://github.com/joaogerd/monan-jedi-workflow.git
 cd monan-jedi-workflow
 python -m pip install -e '.[dev,orchestration]'
@@ -81,7 +82,7 @@ experiment plan workflow.yaml
 experiment run workflow.yaml --ui plain
 ```
 
-O `experiment check-inputs .` da versão atual verifica **apenas a receita curta de dois ciclos**; não é suficiente para campanhas longas. O teste artificial em `examples/beta` verifica apenas contratos de software, não meteorologia.
+O `experiment check-inputs .` verifica o GFS inicial e as observações **de todos os ciclos declarados**, incluindo campanhas de sete dias. Isso não verifica isoladamente executáveis, disponibilidade PBS nem a qualidade científica. O teste artificial em `examples/beta` verifica somente contratos de software.
 
 ## Quando ocorrer uma falha
 
@@ -96,4 +97,6 @@ O diagnóstico é somente leitura. **Não apague** `.simpleworkflow/`, manifests
 
 ## Critérios para a integração
 
-Antes do merge em `develop` e, posteriormente, `main`: testar a instalação limpa, conferir documentação contra o código, executar testes automatizados, demonstrar idempotência e retomada segura, validar campanhas científicas independentes de 3/7 dias e registrar métricas, logs, proveniência e limitações. **Documentação atualizada não substitui testes reais na JACI.**
+**Evidência obtida:** campanha independente de sete dias na JACI (30/01–06/02/2026), com 29 análises, 28 previsões entre ciclos, 267 tarefas concluídas e diagnósticos de convergência/consistência observacional. [Relatório institucional M3/M4](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/blob/main/docs/relatorios/M3_7dias_2026-01.md).
+
+**Ainda fora desse escopo:** generalização científica para outras resoluções, warm start, retomada após falhas arbitrárias e verificação independente da previsão. A integração de branches exige testes automáticos e conferência dos comandos de instalação e documentação no commit integrado.

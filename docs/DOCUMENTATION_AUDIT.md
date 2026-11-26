@@ -73,7 +73,19 @@ As decisões científicas e de arquitetura que ainda têm relevância foram pres
 
 Os arquivos em `examples/`, `monan_jedi_workflow/catalog/smoke/` e `monan_jedi_workflow/recipes/` integram os artefatos de referência, mas **não** devem ser confundidos com defaults científicos universais. Os exemplos com `EDITAR` são templates incompletos.
 
-## Portões ainda abertos antes do merge
+## Situação após revisão de 24/11/2026
+
+- [x] Tutorial e README corrigidos para refletir a campanha independente de 29 ciclos na JACI.
+- [x] Referências obsoletas ao preflight limitado a dois ciclos e ao preparador externo como caminho principal removidas.
+- [x] Figuras científicas e relatório institucional vinculados à documentação operacional.
+- [x] Verificação de links Markdown, testes Python e empacotamento incluídos na CI do branch.
+- [ ] Validação independente de previsão, perfis de resolução alternativos e warm start ainda não demonstrados; são requisitos científicos futuros, não evidência do baseline MPAS de 240 km.
+- [ ] Verificação de retomada segura após interrupção real e mudanças de ambiente permanece pendente.
+- [x] O branch `develop` foi criado em 24/11/2026 a partir da revisão aprovada de `feat/platform-domain-apps`. O PR #72 continua em rascunho contra `main` e não faz parte desta promoção.
+
+A documentação histórica abaixo registra o estado em 23/11/2026 e **não substitui** este resumo posterior.
+
+## Portões registrados na auditoria de 23/11/2026 (estado histórico)
 
 - [ ] Executar `python scripts/check_docs_links.py` num checkout limpo do branch e corrigir qualquer quebra encontrada.
 - [ ] Executar `python -m pytest -q` com o ambiente de dependências instalado e registrar versões/resultados.

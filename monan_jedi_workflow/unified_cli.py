@@ -16,6 +16,7 @@ def _usage() -> int:
         "experiment — MONAN-JEDI campaign management\n\n"
         "  experiment create DEST --recipe NAME [--machine YAML | --site YAML] [--start UTC] [--duration P7D] [--resolution 240km] [--config YAML]\n"
         "  experiment recipes list|show NAME_OR_PATH\n"
+        "  experiment plots [CASE] [--output DIR] [--variables NAMES]\n"
         "  experiment check|export campaign.yaml\n"
         "  experiment validate|plan|run|status workflow.yaml\n"
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
@@ -33,6 +34,9 @@ def _experiment(argv: list[str]) -> int:
     if not argv or argv[0] in {"-h", "--help"}:
         return _usage()
     action, *args = argv
+    if action == "plots":
+        from .scientific_plots import main as plots_main
+        return plots_main(args)
     if action == "machine":
         parser = argparse.ArgumentParser(prog="experiment machine")
         actions = parser.add_subparsers(dest="machine_action", required=True)

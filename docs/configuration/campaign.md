@@ -1,6 +1,6 @@
 # Referência de configuração da campanha (interface atual)
 
-> **Branch:** `feat/platform-domain-apps`. Este arquivo descreve a estrutura consumida por `monan_jedi_workflow/platform_campaign.py` e **não** o antigo `campaign.duration`. Primeiro aprenda o fluxo completo no [tutorial](../tutorial.md).
+> **Branch:** `develop`. Este arquivo descreve a estrutura consumida por `monan_jedi_workflow/platform_campaign.py` e **não** o antigo `campaign.duration`. Primeiro aprenda o fluxo completo no [tutorial](../tutorial.md).
 
 ## O que é uma campanha?
 
@@ -63,7 +63,7 @@ experiment plan workflow.yaml
 
 ### Atenção a campanhas de 3 e 7 dias
 
-Com final **inclusivo** e passo de seis horas, 72 h representam **13 análises** e 168 h representam **29 análises**. Com final **exclusivo**, os mesmos limites representam 12 e 28 análises. Para a receita científica atual, também são necessários os backgrounds intermediários; o preparador específico encontra-se no [roteiro institucional M3](https://github.com/GAD-DIMNT-CPTEC/monan-jedi-2026/tree/main/experiments/M3/platform-domain-apps). `experiment check-inputs`, na implementação atual, cobre somente os **dois primeiros ciclos**.
+Com final **inclusivo** e passo de seis horas, 72 h representam **13 análises** e 168 h representam **29 análises**. Com final **exclusivo**, os mesmos limites representam 12 e 28 análises. Para a receita científica atual, `experiment create --duration P3D` ou `--duration P7D` gera os vínculos de background intermediários conforme a receita. `experiment check-inputs .` verifica o GFS de inicialização e os arquivos observacionais de **todos os ciclos** declarados, sem substituir a verificação do ambiente científico e PBS.
 
 ## Interface antiga
 

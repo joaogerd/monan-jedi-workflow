@@ -26,8 +26,13 @@ def paired_feedback(path: str | Path, variable: str) -> dict:
             arrays.append(np.ma.asarray(var[:], dtype=np.float64))
             units.append(getattr(var, 'units', None))
             dimensions.append(var.dimensions)
-        if not units[0] or len(set(units)) != 1:
-            raise ValueError(f'Missing or inconsistent units: {units}')
+        # IODA/JEDI obsout often stores units on ObsValue only; HofX
+        # variables share the observed quantity but may omit the attribute.
+        # Never interpret an explicitly different unit as compatible.
+        if not isinstance(units[0], str) or not units[0].strip():
+            raise ValueError(f'Missing ObsValue units: {units}')
+        if any(unit is not None and unit != units[0] for unit in units[1:]):
+            raise ValueError(f'Inconsistent explicit units: {units}')
         shape = arrays[0].shape
         if any(a.shape != shape for a in arrays) or any(d != dimensions[0] for d in dimensions):
             raise ValueError('Feedback dimensions/shapes differ')
@@ -55,6 +60,7 @@ def paired_feedback(path: str | Path, variable: str) -> dict:
         omb, oma = observed - background, observed - analysis
         return {'variable': variable, 'units': units[0], 'n': n, 'qc_groups': qcs,
                 'selection': 'paired finite unmasked values; intersection of available QC=0',
+                'units_source': 'ObsValue' if any(u is None for u in units[1:]) else 'all groups',
                 'omb_bias': float(omb.mean()), 'oma_bias': float(oma.mean()),
                 'omb_rmse': float(np.sqrt(np.mean(omb**2))),
                 'oma_rmse': float(np.sqrt(np.mean(oma**2)))}

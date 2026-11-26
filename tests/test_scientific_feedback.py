@@ -50,3 +50,56 @@ def test_unattributed_ioda_missing_sentinel_is_excluded(tmp_path):
             var.units = 'K'
             var[:] = [280, 3.36879526e38] if group == 'ObsValue' else [0, 0] if group == 'EffectiveQC' else [279, 279]
     assert paired_feedback(path, 'airTemperature')['n'] == 1
+
+
+def test_missing_hofx_unit_attributes_uses_observation_unit(tmp_path):
+    """Real JEDI obsout writes units on ObsValue but can omit them on HofX."""
+    path = tmp_path / "obsout.nc4"
+    with Dataset(path, "w") as ds:
+        ds.createDimension("Location", 3)
+        for group, values in {
+            "ObsValue": [280.0, 281.0, 282.0],
+            "hofx0": [279.0, 280.0, 283.0],
+            "hofx1": [279.5, 280.5, 282.5],
+            "EffectiveQC0": [0, 0, 0],
+            "EffectiveQC1": [0, 0, 1],
+        }.items():
+            variable = ds.createGroup(group).createVariable("airTemperature", "f8", ("Location",))
+            if group == "ObsValue":
+                variable.units = "K"
+            variable[:] = values
+    result = paired_feedback(path, "airTemperature")
+    assert result["n"] == 2
+    assert result["units"] == "K"
+    assert result["units_source"] == "ObsValue"
+    assert result["omb_bias"] == pytest.approx(1)
+    assert result["oma_bias"] == pytest.approx(0.5)
+
+
+def test_explicit_hofx_unit_mismatch_still_fails(tmp_path):
+    path = tmp_path / "obsout.nc4"
+    with Dataset(path, "w") as ds:
+        ds.createDimension("Location", 1)
+        for group, value, units in (
+            ("ObsValue", 280.0, "K"),
+            ("hofx0", 279.0, None),
+            ("hofx1", 278.0, "degC"),
+            ("EffectiveQC", 0, None),
+        ):
+            var = ds.createGroup(group).createVariable("airTemperature", "f8", ("Location",))
+            var[:] = [value]
+            if units:
+                var.units = units
+    with pytest.raises(ValueError, match="units"):
+        paired_feedback(path, "airTemperature")
+
+
+def test_missing_observation_unit_still_fails(tmp_path):
+    path = tmp_path / "obsout.nc4"
+    with Dataset(path, "w") as ds:
+        ds.createDimension("Location", 1)
+        for group in ("ObsValue", "hofx0", "hofx1", "EffectiveQC"):
+            var = ds.createGroup(group).createVariable("airTemperature", "f8", ("Location",))
+            var[:] = [0]
+    with pytest.raises(ValueError, match="ObsValue units"):
+        paired_feedback(path, "airTemperature")
