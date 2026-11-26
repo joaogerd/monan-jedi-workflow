@@ -99,3 +99,9 @@ A execução exige que o manifesto MONAN-JEDI v2 e o setup de módulos seleciona
 6. **Execução operacional concluída; comparação científica pendente:** o caso completo passou na JACI (9 tarefas de inicialização + 15 cíclicas, todas SUCCESS). Comparar os produtos contra o baseline com hashes, horários e diagnósticos; preservar os artefatos.
 
 A introdução do parser não constitui homologação da portabilidade da execução científica.
+
+## Evolução incremental: ambiente explícito
+
+Na rota `experiment create --machine`, a geração de `environment.sh` agora desativa a busca implícita de diretórios e do loader histórico da JACI (`allow_legacy_discovery=False`). Os diretórios necessários são obtidos do perfil computacional validado e da ponte temporária para `site.yaml`; a criação deve falhar, em vez de inventar diretórios, quando não houver configuração suficiente. A rota legada continua preservando a descoberta anterior, para não interromper usuários existentes.
+
+Esta mudança **não** implementa execução científica local/Slurm e **não** elimina ainda o código legado de inicialização de site. Esse trabalho permanece previsto para etapas futuras.
