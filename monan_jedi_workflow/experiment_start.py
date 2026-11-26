@@ -292,7 +292,10 @@ def create_experiment(destination, *, pbs_queue=None, pbs_walltime=None, runtime
         (folder / 'state.nc').symlink_to(
             forecast / ('mpasout.' + _mpas_file_time(analysis) + '.nc')
         )
-    (root / 'environment.sh').write_text(render_environment(root, site_profile=site_profile))
+    (root / 'environment.sh').write_text(render_environment(
+        root, site_profile=site_profile,
+        allow_legacy_discovery=machine_profile is None,
+    ))
     # Legacy optional worker wrapper kept for compatibility. The exported
     # simpleWorkflow DAG now runs native stage apps on the login node and does
     # not invoke this wrapper from PBS.
