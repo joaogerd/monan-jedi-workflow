@@ -353,7 +353,7 @@ def test_explicit_machine_environment_does_not_probe_jaci_defaults(tmp_path, mon
     }
     result = environment.render_environment(
         tmp_path / "case",
-        environ={},
+        environ={"MONAN_JACI_LOADER": "/legacy/jaci/loader.sh"},
         site_profile=profile,
         allow_legacy_discovery=False,
     )
@@ -361,3 +361,34 @@ def test_explicit_machine_environment_does_not_probe_jaci_defaults(tmp_path, mon
     assert "export MONAN_JEDI_INSTALL_ROOT=/declared/install" in result
     assert "/p/projetos" not in result
     assert "MONAN_JACI_LOADER optional" in result
+    assert "/legacy/jaci/loader.sh" not in result
+
+
+def test_explicit_machine_environment_rejects_missing_roots_even_if_inherited(tmp_path):
+    """Missing machine roots may not be silently borrowed from login exports."""
+    from monan_jedi_workflow.experiment_environment import render_environment
+
+    profile = {
+        "stack": {"root": "/declared/stack"},
+        "jedi": {"install_root": "/declared/install"},
+        "environment": {},
+    }
+    inherited = {name: "/legacy/path" for name in REQUIRED}
+    with pytest.raises(ValueError, match="Explicit machine environment is incomplete"):
+        render_environment(
+            tmp_path / "new-case",
+            site_profile=profile,
+            environ=inherited,
+            allow_legacy_discovery=False,
+        )
+
+
+def test_legacy_environment_still_honors_declared_loader(tmp_path):
+    """Do not change the contract of existing site.yaml users."""
+    from monan_jedi_workflow.experiment_environment import render_environment
+
+    output = render_environment(
+        tmp_path / "legacy-case",
+        environ={"MONAN_JACI_LOADER": "/legacy/jaci/setup.sh"},
+    )
+    assert "/legacy/jaci/setup.sh" in output
