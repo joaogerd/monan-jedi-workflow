@@ -102,6 +102,6 @@ A introdução do parser não constitui homologação da portabilidade da execu�
 
 ## Evolução incremental: ambiente explícito
 
-Na rota `experiment create --machine`, a geração de `environment.sh` agora desativa a busca implícita de diretórios e do loader histórico da JACI (`allow_legacy_discovery=False`). Os diretórios necessários são obtidos do perfil computacional validado e da ponte temporária para `site.yaml`; a criação deve falhar, em vez de inventar diretórios, quando não houver configuração suficiente. A rota legada continua preservando a descoberta anterior, para não interromper usuários existentes.
+Na rota `experiment create --machine`, a geração de `environment.sh` agora desativa a busca implícita de diretórios e do loader histórico da JACI (`allow_legacy_discovery=False`). Os diretórios necessários são obtidos do perfil computacional validado e da ponte temporária para `site.yaml`; a criação deve falhar, em vez de inventar diretórios, quando não houver configuração suficiente. A rota legada continua preservando a descoberta anterior, para não interromper usuários existentes. A renderização explícita também rejeita imediatamente raízes obrigatórias ausentes, mesmo que a sessão de login exporte valores antigos, e não herda `MONAN_JACI_LOADER`.
 
 Esta mudança **não** implementa execução científica local/Slurm e **não** elimina ainda o código legado de inicialização de site. Esse trabalho permanece previsto para etapas futuras.
