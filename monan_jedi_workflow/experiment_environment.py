@@ -367,6 +367,16 @@ def render_environment(root: Path, *, environ: dict[str, str] | None = None,
             **{k: Path(v) for k, v in site_profile.get("environment", {}).items()},
         }
         defaults.update(profile_values)
+    if not allow_legacy_discovery:
+        # Fail before writing a misleading environment.sh: explicitly
+        # configured machine cases may not inherit missing scientific roots
+        # from the login shell or JACI filesystem guesses.
+        missing = sorted(set(REQUIRED) - set(profile_values))
+        if missing:
+            raise ValueError(
+                "Explicit machine environment is incomplete; missing: "
+                + ", ".join(missing)
+            )
     lines = [
         "#!/usr/bin/env bash",
         "# Generated scientific input/runtime configuration for this experiment.",
@@ -399,7 +409,10 @@ def render_environment(root: Path, *, environ: dict[str, str] | None = None,
     workspace = _workspace(root) if allow_legacy_discovery else None
     loader = (workspace / "projects/mpas-bmatrix-global/scripts/load_jaci_env.sh"
               if workspace is not None else None)
-    loader_value = env.get("MONAN_JACI_LOADER", "").strip()
+    loader_value = (
+        env.get("MONAN_JACI_LOADER", "").strip()
+        if allow_legacy_discovery else ""
+    )
     if not loader_value and loader is not None and loader.is_file():
         loader_value = str(loader)
     if loader_value:
