@@ -328,3 +328,36 @@ def test_explicit_site_bypasses_implicit_workspace_resolution(tmp_path, monkeypa
     create_experiment(case, site_config=site)
     assert yaml.safe_load((case / "science/site.yaml").read_text())["stack"]["root"] == paths["STACK_ROOT"]
     assert not (tmp_path / "site.yaml").exists()
+
+
+def test_explicit_machine_environment_does_not_probe_jaci_defaults(tmp_path, monkeypatch):
+    """A declared machine runtime must not depend on JACI autodiscovery."""
+    from monan_jedi_workflow import experiment_environment as environment
+
+    def unexpected_discovery(*args, **kwargs):
+        raise AssertionError("JACI-specific discovery must be disabled for machine.yaml")
+
+    monkeypatch.setattr(environment, "_workspace", unexpected_discovery)
+    monkeypatch.setattr(environment, "_defaults", unexpected_discovery)
+    profile = {
+        "stack": {"root": "/declared/stack"},
+        "jedi": {"install_root": "/declared/install"},
+        "environment": {
+            "MONAN_MESH_ROOT": "/declared/mesh",
+            "MONAN_PHYSICS_ROOT": "/declared/physics",
+            "MONAN_BMATRIX_ROOT": "/declared/bmatrix",
+            "MONAN_INPUT_ROOT": "/declared/input",
+            "MONAN_GFS_ROOT": "/declared/gfs",
+            "MONAN_LIBFABRIC_ROOT": "/declared/libfabric",
+        },
+    }
+    result = environment.render_environment(
+        tmp_path / "case",
+        environ={},
+        site_profile=profile,
+        allow_legacy_discovery=False,
+    )
+    assert "export STACK_ROOT=/declared/stack" in result
+    assert "export MONAN_JEDI_INSTALL_ROOT=/declared/install" in result
+    assert "/p/projetos" not in result
+    assert "MONAN_JACI_LOADER optional" in result
