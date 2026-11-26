@@ -349,10 +349,16 @@ def save_project_site(root: Path, *, environ: dict[str, str] | None = None) -> P
 
 
 def render_environment(root: Path, *, environ: dict[str, str] | None = None,
-                       site_profile: dict | None = None) -> str:
-    """Only select defaults actually present, never claim an unknown path exists."""
+                       site_profile: dict | None = None,
+                       allow_legacy_discovery: bool = True) -> str:
+    """Render explicit site values without relying on JACI discovery.
+
+    The legacy route retains historical JACI heuristics by default.
+    A machine.yaml-backed case sets allow_legacy_discovery=False: the
+    validated machine profile must supply its runtime and data roots.
+    """
     env = dict(os.environ if environ is None else environ)
-    defaults = _defaults(root)
+    defaults = _defaults(root) if allow_legacy_discovery else {}
     profile_values = {}
     if site_profile:
         profile_values = {
@@ -390,7 +396,7 @@ def render_environment(root: Path, *, environ: dict[str, str] | None = None,
             lines.append(f'# {key}: not discovered; export an existing path first')
     # Optional existing JACI module loader. Do not require external repositories
     # when the user operates on another HPC site.
-    workspace = _workspace(root)
+    workspace = _workspace(root) if allow_legacy_discovery else None
     loader = (workspace / "projects/mpas-bmatrix-global/scripts/load_jaci_env.sh"
               if workspace is not None else None)
     loader_value = env.get("MONAN_JACI_LOADER", "").strip()
