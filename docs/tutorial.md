@@ -175,6 +175,8 @@ Os valores científicos da receita de referência (resolução, malha, número d
 
 **Posso reutilizar o nome de um experimento antigo?** Não para criar um caso novo no mesmo destino. Preserve o histórico e escolha outro nome. Para continuar uma execução já existente, use sua pasta original e o estado persistido, observando as regras de retomada da seção 7.
 
+**Novo site PBS / configuração por `machine.yaml`:** consulte o [guia de instalação e aceitação de um novo site](installation/configuring-new-site.md). O fluxo `--machine` é opt-in e não altera o tutorial legado com `--workspace`. Perfis local e Slurm ainda não executam a ciência nesta versão.
+
 ## 4. Criar o primeiro experimento científico — dois ciclos
 
 Escolha uma data realmente coberta por observações e pelo GFS de inicialização. A data abaixo é a do caso que serviu aos testes operacionais; **não é um default obrigatório**.

@@ -1,0 +1,15 @@
+# Computational profile v1 (independent of scientific recipe).
+# Replace this root with a writable directory on your machine.
+schema_version: 1
+machine:
+  name: local
+paths:
+  work_root: ${HOME}/monan-jedi-work
+  # installation_root: /opt/monan-jedi
+  # mesh_root: /data/meshes
+  # observations_root: /data/observations
+execution:
+  backend: local
+  max_cores: 4
+environment:
+  kind: native

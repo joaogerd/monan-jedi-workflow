@@ -1,0 +1,76 @@
+# Computational profile v1 — example, NOT an operational JACI setup.
+# Change paths and verify against the installed scientific runtime.
+# The existing site.yaml.example is a legacy native-PBS site profile.
+schema_version: 1
+machine:
+  name: jaci
+paths:
+  work_root: /p/projetos/SEU_GRUPO/SEU_USUARIO
+  scratch_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/scratch
+  installation_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/build/monan-jedi
+  stack_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/work/spack-stack
+  mesh_root: /p/projetos/SEU_GRUPO/share/MONAN-JEDI-Data/meshes
+  bmatrix_root: /p/projetos/SEU_GRUPO/share/MONAN-JEDI-Data/covariance
+  physics_root: /p/projetos/SEU_GRUPO/share/MONAN-JEDI-Data/physics
+  observations_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/external-inputs
+  gfs_root: /p/projetos/SEU_GRUPO/SEU_USUARIO/data/gfs
+  libfabric_root: /opt/cray/libfabric/1.22.0/lib64
+execution:
+  backend: pbs
+  # Queue limits in minutes are site policy, not scientific code.
+  # Recheck against live PBS configuration before submitting jobs.
+  queue_limits:
+    pesqmini: 30
+    pesqmidi: 120
+    pesqhigh: 360
+    pesqextra: 480
+    oper: 480
+    preoper: 480
+  # Resources are selected independently for each scientific stage.
+  stages:
+    jedi:
+      queue: pesqmini
+      walltime: '00:30:00'
+      select: 1
+      ncpus: 128
+      mpiprocs: 128
+      launcher: /opt/cray/pals/1.6/bin/mpiexec
+    mpas:
+      queue: pesqmidi
+      walltime: '01:00:00'
+      select: 1
+      ncpus: 128
+      mpiprocs: 128
+      launcher: /opt/cray/pals/1.6/bin/mpiexec
+    # Optional: initial forecast with mpas_atmosphere, separate from
+    # the mpas_init_atmosphere preparation stage below. Without this block
+    # the first MPAS forecast inherits stages.mpas for compatibility.
+    mpas_initial:
+      queue: pesqmidi
+      walltime: '01:00:00'
+      select: 1
+      ncpus: 128
+      mpiprocs: 128
+      launcher: /opt/cray/pals/1.6/bin/mpiexec
+    mpas_init:
+      queue: pesqmini
+      walltime: '00:30:00'
+      select: 1
+      ncpus: 128
+      mpiprocs: 128
+      launcher: /opt/cray/pals/1.6/bin/mpiexec
+    wps:
+      queue: pesqmini
+      walltime: '00:30:00'
+      select: 1
+      ncpus: 1
+      mpiprocs: 1
+    obs2ioda:
+      queue: pesqmidi
+      walltime: '01:00:00'
+      select: 1
+      ncpus: 1
+      mpiprocs: 1
+environment:
+  kind: modules
+  setup: /p/projetos/SEU_GRUPO/SEU_USUARIO/work/spack-stack/configs/sites/tier2/jaci/setup.sh

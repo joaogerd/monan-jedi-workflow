@@ -14,7 +14,7 @@ import sys
 def _usage() -> int:
     print(
         "experiment — MONAN-JEDI campaign management\n\n"
-        "  experiment create DEST --recipe NAME [--start UTC] [--duration P7D] [--resolution 240km] [--config YAML]\n"
+        "  experiment create DEST --recipe NAME [--machine YAML | --site YAML] [--start UTC] [--duration P7D] [--resolution 240km] [--config YAML]\n"
         "  experiment recipes list|show NAME_OR_PATH\n"
         "  experiment plots [CASE] [--output DIR] [--variables NAMES]\n"
         "  experiment check|export campaign.yaml\n"
@@ -22,7 +22,9 @@ def _usage() -> int:
         "  experiment suggest-dates [--case EXISTING_CASE]\n"
         "  experiment check-inputs CASE\n"
         "  experiment site init [--stack PATH] [--install PATH]\n"
-        "  experiment site save     # preserve a proven environment\n\n"
+        "  experiment site save     # preserve a proven environment\n"
+        "  experiment machine validate PROFILE [--check-paths]\n"
+        "  experiment machine show PROFILE\n\n"
         "Other independent commands: wps, obs, mpas, jedi, diagnostic, diagnose.\n"
         "Each command is installed by the monan-jedi-workflow package."
     )
@@ -35,6 +37,30 @@ def _experiment(argv: list[str]) -> int:
     if action == "plots":
         from .scientific_plots import main as plots_main
         return plots_main(args)
+    if action == "machine":
+        parser = argparse.ArgumentParser(prog="experiment machine")
+        actions = parser.add_subparsers(dest="machine_action", required=True)
+        validate = actions.add_parser("validate", help="validate a computational profile")
+        validate.add_argument("profile", type=Path)
+        validate.add_argument("--check-paths", action="store_true",
+                              help="verify declared directories and module setup exist")
+        show = actions.add_parser("show", help="print normalized computational profile")
+        show.add_argument("profile", type=Path)
+        try:
+            opt = parser.parse_args(args)
+            from .machine_profile import load_machine_profile
+            profile = load_machine_profile(
+                opt.profile, require_existing=bool(getattr(opt, "check_paths", False))
+            )
+        except (ValueError, OSError) as error:
+            print(f"[ERRO] Perfil computacional invalido: {error}", file=sys.stderr)
+            return 2
+        if opt.machine_action == "show":
+            import yaml
+            print(yaml.safe_dump(profile.describe(), sort_keys=False), end="")
+        else:
+            print(f"[OK] Perfil computacional valido: {profile.name} ({profile.backend})")
+        return 0
     if action == "recipes":
         from .recipe_config import BUILTIN, load_recipe
         if len(args) == 1 and args[0] == "list":
@@ -95,10 +121,12 @@ def _experiment(argv: list[str]) -> int:
                             default="2025-09-01T00:00:00Z")
         parser.add_argument("--site", type=Path,
                             help="Persistent site YAML; otherwise read workspace/site.yaml")
+        parser.add_argument("--machine", type=Path,
+                            help="Explicit machine.yaml v1; PBS backend supported for scientific case creation")
         parser.add_argument("--workspace", type=Path,
                             help="Existing isolated site-profile directory; HPC paths remain unchanged")
-        parser.add_argument("--pbs-queue", default="pesqmidi")
-        parser.add_argument("--pbs-walltime", default="01:00:00")
+        parser.add_argument("--pbs-queue", default=None)
+        parser.add_argument("--pbs-walltime", default=None)
         parser.add_argument("--runtime-bin", type=Path)
         # The mode flag is intentionally omitted while scientific warm start
         # is unimplemented. Never silently interpret a warm request as cold.
@@ -135,12 +163,26 @@ def _experiment(argv: list[str]) -> int:
                 settings["duration"] = "PT" + str(hours) + "H"
             settings["recipe"] = descriptor["name"]
             science = select_science(opt.recipe, settings, science)
+            machine_profile = None
+            if opt.machine is not None:
+                if opt.site is not None or opt.workspace is not None:
+                    raise ValueError("--machine cannot be combined with --site or --workspace")
+                if opt.pbs_queue is not None or opt.pbs_walltime is not None:
+                    raise ValueError(
+                        "--machine defines PBS resources by stage; "
+                        "do not combine it with --pbs-queue or --pbs-walltime"
+                    )
+                from .machine_profile import load_machine_profile, machine_to_legacy_site
+                machine_profile = load_machine_profile(opt.machine, require_existing=True)
+                # Fail before creating the destination for unsupported backends.
+                machine_to_legacy_site(machine_profile)
             create_experiment(
                 opt.destination, start=opt.start,
-                pbs_queue=opt.pbs_queue, pbs_walltime=opt.pbs_walltime,
+                pbs_queue=opt.pbs_queue,
+                pbs_walltime=opt.pbs_walltime,
                 runtime_bin=opt.runtime_bin, site_config=opt.site,
                 workspace=opt.workspace, recipe_source=science,
-                settings=settings,
+                settings=settings, machine_profile=machine_profile,
             )
         except (ValueError, OSError) as error:
             print(f"[ERRO] Experimento não criado: {error}", file=sys.stderr)
